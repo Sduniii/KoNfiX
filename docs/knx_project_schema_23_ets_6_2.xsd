@@ -1,0 +1,840 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:knx="http://knx.org/xml/project/23"
+           targetNamespace="http://knx.org/xml/project/23"
+           elementFormDefault="qualified"
+           attributeFormDefault="unqualified"
+           version="2.3">
+
+    <!-- ================================================================= -->
+    <!-- ROOT ELEMENT                                                      -->
+    <!-- ================================================================= -->
+    <xs:element name="KNX">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="MasterData" type="xs:anyType" minOccurs="0"/>
+                <xs:element name="ManufacturerData" type="xs:anyType" minOccurs="0"/>
+                <xs:element name="Project" type="knx:Project_t" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="CreatedBy" type="xs:string" use="optional"/>
+            <xs:attribute name="ToolVersion" type="xs:string" use="optional"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- ================================================================= -->
+    <!-- SIMPLE TYPES & ENUMERATIONS                                       -->
+    <!-- ================================================================= -->
+    <xs:simpleType name="IDREF">
+        <xs:restriction base="xs:NCName"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="IDREFS">
+        <xs:list itemType="knx:IDREF"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="RELIDREF">
+        <xs:restriction base="xs:NCName"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="RELIDREFS">
+        <xs:list itemType="knx:RELIDREF"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="String20_t">
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="20"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="String50_t">
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="50"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="String255_t">
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="255"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="Ipv4Address_t">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="Guid_t">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="Aes128Key_t">
+        <xs:restriction base="xs:string">
+            <xs:maxLength value="40"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="RepeatIndex_t">
+        <xs:restriction base="xs:string">
+            <xs:pattern value="\d+x\d+"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="RepeatIndexList_t">
+        <xs:list itemType="knx:RepeatIndex_t"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="Value_t">
+        <xs:restriction base="xs:string"/>
+    </xs:simpleType>
+
+    <xs:simpleType name="GroupAddressStyle_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="TwoLevel"/>
+            <xs:enumeration value="ThreeLevel"/>
+            <xs:enumeration value="Free"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="SpaceType_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Building"/>
+            <xs:enumeration value="BuildingPart"/>
+            <xs:enumeration value="Floor"/>
+            <xs:enumeration value="Stairway"/>
+            <xs:enumeration value="Room"/>
+            <xs:enumeration value="RoomPart"/>
+            <xs:enumeration value="Corridor"/>
+            <xs:enumeration value="DistributionBoard"/>
+            <xs:enumeration value="Area"/>
+            <xs:enumeration value="Ground"/>
+            <xs:enumeration value="Segment"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="ComObjectPriority_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Low"/>
+            <xs:enumeration value="High"/>
+            <xs:enumeration value="Alert"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="Enable_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Enabled"/>
+            <xs:enumeration value="Disabled"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="CompletionStatus_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Undefined"/>
+            <xs:enumeration value="Editing"/>
+            <xs:enumeration value="FinishedDesign"/>
+            <xs:enumeration value="FinishedCommissioning"/>
+            <xs:enumeration value="Tested"/>
+            <xs:enumeration value="Accepted"/>
+            <xs:enumeration value="Locked"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="SecurityMode_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Auto"/>
+            <xs:enumeration value="On"/>
+            <xs:enumeration value="Off"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="ProjectTracingLevel_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="None"/>
+            <xs:enumeration value="OperationUsed"/>
+            <xs:enumeration value="Detailed"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="IPConfigAssign_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Fixed"/>
+            <xs:enumeration value="Auto"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="ToDoStatus_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Open"/>
+            <xs:enumeration value="Accomplished"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="TextEncoding_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="us-ascii"/>
+            <xs:enumeration value="iso-8859-1"/>
+            <xs:enumeration value="iso-8859-2"/>
+            <xs:enumeration value="iso-8859-3"/>
+            <xs:enumeration value="iso-8859-4"/>
+            <xs:enumeration value="iso-8859-5"/>
+            <xs:enumeration value="iso-8859-6"/>
+            <xs:enumeration value="iso-8859-7"/>
+            <xs:enumeration value="iso-8859-8"/>
+            <xs:enumeration value="iso-8859-9"/>
+            <xs:enumeration value="iso-8859-10"/>
+            <xs:enumeration value="iso-8859-13"/>
+            <xs:enumeration value="iso-8859-15"/>
+            <xs:enumeration value="utf-8"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="ProjectType_t">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="Apartment"/>
+            <xs:enumeration value="Family House"/>
+            <xs:enumeration value="Villa"/>
+            <xs:enumeration value="Other (Residential)"/>
+            <xs:enumeration value="Hotel"/>
+            <xs:enumeration value="Airport"/>
+            <xs:enumeration value="Office Building"/>
+            <xs:enumeration value="Educational"/>
+            <xs:enumeration value="Leisure"/>
+            <xs:enumeration value="Entertainment"/>
+            <xs:enumeration value="Public Building"/>
+            <xs:enumeration value="Health Care"/>
+            <xs:enumeration value="Other (Commercial)"/>
+            <xs:enumeration value="Manufacturer"/>
+            <xs:enumeration value="City Project"/>
+            <xs:enumeration value="Transportation"/>
+            <xs:enumeration value="Other (Other)"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- ================================================================= -->
+    <!-- PROJECT & GENERAL INFO                                            -->
+    <!-- ================================================================= -->
+    <xs:complexType name="Project_t">
+        <xs:sequence>
+            <xs:element name="ProjectInformation" type="knx:ProjectInformation_t" minOccurs="0"/>
+            <xs:element name="Installations" type="knx:Installations_t" minOccurs="0"/>
+            <xs:element name="AddinData" type="knx:AddinDataList_t" minOccurs="0"/>
+            <xs:element name="UserFiles" type="knx:Userfiles_t" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="ProjectInformation_t">
+        <xs:sequence>
+            <xs:element name="Tags" type="knx:Tags_t" minOccurs="0"/>
+            <xs:element name="HistoryEntries" type="knx:HistoryEntries_t" minOccurs="0"/>
+            <xs:element name="ToDoItems" type="knx:ToDoItems_t" minOccurs="0"/>
+            <xs:element name="ProjectTraces" type="knx:ProjectTraces_t" minOccurs="0"/>
+            <xs:element name="DeviceCertificates" type="knx:DeviceCertificates_t" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="Name" type="knx:String50_t" use="required"/>
+        <xs:attribute name="GroupAddressStyle" type="knx:GroupAddressStyle_t" use="required"/>
+        <xs:attribute name="ProjectNumber" type="knx:String50_t" use="optional"/>
+        <xs:attribute name="ContractNumber" type="knx:String50_t" use="optional"/>
+        <xs:attribute name="LastModified" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="ArchivedVersion" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="ProjectStart" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="ProjectEnd" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="ProjectType" type="knx:ProjectType_t" default="Other (Commercial)"/>
+        <xs:attribute name="ProjectId" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="ProjectTracingLevel" type="knx:ProjectTracingLevel_t" default="None"/>
+        <xs:attribute name="ProjectTracingPassword" type="knx:String20_t" use="optional"/>
+        <xs:attribute name="Hide16BitGroupsFromLegacyPlugins" type="xs:boolean" default="false"/>
+        <xs:attribute name="CodePage" type="knx:TextEncoding_t" use="optional"/>
+        <xs:attribute name="BusAccessLegacyMode" type="xs:boolean" default="false"/>
+        <xs:attribute name="Guid" type="xs:string" use="required"/>
+        <xs:attribute name="LastUsedPuid" type="xs:int" use="required"/>
+        <xs:attribute name="Security" type="knx:SecurityMode_t" default="Auto"/>
+    </xs:complexType>
+
+    <xs:complexType name="Tags_t">
+        <xs:sequence>
+            <xs:element name="Tag" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="Text" type="knx:String20_t" use="required"/>
+                    <xs:attribute name="Color" type="xs:string" use="required"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="HistoryEntries_t">
+        <xs:sequence>
+            <xs:element name="HistoryEntry" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="Date" type="xs:dateTime" use="required"/>
+                    <xs:attribute name="User" type="knx:String255_t" use="optional"/>
+                    <xs:attribute name="Text" type="xs:string" use="required"/>
+                    <xs:attribute name="Detail" type="xs:string" use="optional"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ToDoItems_t">
+        <xs:sequence>
+            <xs:element name="ToDoItem" type="knx:ToDoItem_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ToDoItem_t">
+        <xs:attribute name="Description" type="xs:string" use="required"/>
+        <xs:attribute name="ObjectPath" type="xs:string" use="optional"/>
+        <xs:attribute name="Status" type="knx:ToDoStatus_t" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="ProjectTraces_t">
+        <xs:sequence>
+            <xs:element name="ProjectTrace" type="knx:ProjectTrace_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ProjectTrace_t">
+        <xs:attribute name="Date" type="xs:dateTime" use="required"/>
+        <xs:attribute name="UserName" type="xs:string" use="required"/>
+        <xs:attribute name="Comment" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="DeviceCertificates_t">
+        <xs:sequence>
+            <xs:element name="DeviceCertificate" type="knx:DeviceCertificate_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="DeviceCertificate_t">
+        <xs:attribute name="SerialNumber" type="xs:base64Binary" use="required"/>
+        <xs:attribute name="FDSK" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="Password" type="xs:string" use="optional"/>
+    </xs:complexType>
+
+    <xs:complexType name="AddinDataList_t">
+        <xs:sequence>
+            <xs:element name="AddinData" type="knx:AddinData_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="AddinData_t">
+        <xs:attribute name="Name" type="knx:String50_t" use="required"/>
+        <xs:attribute name="AddinId" type="xs:ID" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="Userfiles_t">
+        <xs:sequence>
+            <xs:element name="UserFile" type="knx:UserFile_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="UserFile_t">
+        <xs:attribute name="Filename" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- INSTALLATION CONTAINER                                            -->
+    <!-- ================================================================= -->
+    <xs:complexType name="Installations_t">
+        <xs:sequence>
+            <xs:element name="Installation" type="knx:Installation_t" minOccurs="1" maxOccurs="16"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="Installation_t">
+        <xs:sequence>
+            <xs:element name="Topology" type="knx:Topology_t" minOccurs="0"/>
+            <xs:element name="Locations" type="knx:Locations_t" minOccurs="0"/>
+            <xs:element name="GroupAddresses" type="knx:GroupAddresses_t" minOccurs="0"/>
+            <xs:element name="Trades" type="knx:Trades_t" minOccurs="0"/>
+            <xs:element name="SplitInfos" type="knx:SplitInfos_t" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="Name" type="knx:String50_t" use="required"/>
+        <xs:attribute name="InstallationId" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="BCUKey" type="xs:unsignedLong" default="4294967295"/>
+        <xs:attribute name="IPRoutingMulticastAddress" type="knx:Ipv4Address_t" default="224.0.23.12"/>
+        <xs:attribute name="MulticastTTL" type="xs:byte" default="16"/>
+        <xs:attribute name="IPRoutingBackboneKey" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="IPRoutingLatencyTolerance" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="IPSyncLatencyFraction" type="xs:float" default="0.1"/>
+        <xs:attribute name="IPRoutingBackboneSecurity" type="knx:SecurityMode_t" default="Auto"/>
+        <xs:attribute name="DefaultLine" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="SplitType" type="xs:string" use="optional"/>
+        <xs:attribute name="Context" type="xs:string" use="optional"/>
+        <xs:attribute name="Ipv6InstallationId" type="xs:unsignedLong" use="optional"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- TOPOLOGY                                                          -->
+    <!-- ================================================================= -->
+    <xs:complexType name="Topology_t">
+        <xs:sequence>
+            <xs:element name="Area" type="knx:Area_t" minOccurs="0" maxOccurs="16"/>
+            <xs:element name="UnassignedDevices" type="knx:UnassignedDevices_t" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="Area_t">
+        <xs:sequence>
+            <xs:element name="Line" type="knx:Line_t" minOccurs="0" maxOccurs="16"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Address" type="xs:int" use="required"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:int" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="Line_t">
+        <xs:sequence>
+            <xs:element name="Segment" type="knx:Segment_t" minOccurs="0" maxOccurs="128"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Address" type="xs:int" use="required"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="Segment_t">
+        <xs:sequence>
+            <xs:element name="DeviceInstance" type="knx:DeviceInstance_t" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="AdditionalGroupAddresses" type="knx:AdditionalGroupAddresses_t" minOccurs="0"/>
+            <xs:element name="BusAccess" type="knx:BusAccess_t" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Number" type="xs:int" use="required"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="MediumTypeRefId" type="knx:IDREF" use="required"/>
+        <xs:attribute name="DomainAddress" type="xs:unsignedLong" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="UnassignedDevices_t">
+        <xs:sequence>
+            <xs:element name="DeviceInstance" type="knx:DeviceInstance_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="AdditionalGroupAddresses_t">
+        <xs:sequence>
+            <xs:element name="GroupAddress" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="Address" type="xs:unsignedShort" use="required"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="BusAccess_t">
+        <xs:attribute name="Name" type="xs:string" use="required"/>
+        <xs:attribute name="Edi" type="knx:Guid_t" use="optional"/>
+        <xs:attribute name="Parameter" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- DEVICE DATA                                                       -->
+    <!-- ================================================================= -->
+    <xs:complexType name="DeviceInstance_t">
+        <xs:sequence>
+            <xs:element name="ParameterInstanceRefs" type="knx:ParameterInstanceRefs_t" minOccurs="0"/>
+            <xs:element name="ComObjectInstanceRefs" type="knx:ComObjectInstanceRefs_t" minOccurs="0"/>
+            <xs:element name="ChannelInstances" type="knx:ChannelInstances_t" minOccurs="0"/>
+            <xs:element name="ModuleInstances" type="knx:ModuleInstances_t" minOccurs="0"/>
+            <xs:element name="GroupObjectTree" type="knx:GroupObjectTree_t" minOccurs="0"/>
+            <xs:element name="AdditionalAddresses" type="knx:AdditionalAddresses_t" minOccurs="0"/>
+            <xs:element name="BinaryData" type="knx:DeviceBinaryDataContainer_t" minOccurs="0"/>
+            <xs:element name="IPConfig" type="knx:IPConfig_t" minOccurs="0"/>
+            <xs:element name="Security" type="knx:Security_t" minOccurs="0"/>
+            <xs:element name="BusInterfaces" type="knx:BusInterfaces_t" minOccurs="0"/>
+            <xs:element name="RfFastAckSlots" type="knx:RfFastAckSlots_t" minOccurs="0"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="ProductRefId" type="knx:IDREF" use="required"/>
+        <xs:attribute name="Hardware2ProgramRefId" type="knx:IDREF" use="optional"/>
+        <xs:attribute name="Address" type="xs:int" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="LastModified" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="LastDownload" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="LastUsedAPDULength" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="ReadMaxAPDULength" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="ReadMaxRoutingAPDULength" type="xs:unsignedShort" use="optional"/>
+        <xs:attribute name="InstallationHints" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="IndividualAddressLoaded" type="xs:boolean" default="false"/>
+        <xs:attribute name="ApplicationProgramLoaded" type="xs:boolean" default="false"/>
+        <xs:attribute name="ParametersLoaded" type="xs:boolean" default="false"/>
+        <xs:attribute name="CommunicationPartLoaded" type="xs:boolean" default="false"/>
+        <xs:attribute name="MediumConfigLoaded" type="xs:boolean" default="false"/>
+        <xs:attribute name="LoadedImage" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="CheckSums" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="DownloadCounter" type="xs:unsignedInt" use="optional"/>
+        <xs:attribute name="IsActivityCalculated" type="xs:boolean" use="optional"/>
+        <xs:attribute name="Broken" type="xs:boolean" default="false"/>
+        <xs:attribute name="SerialNumber" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="UniqueId" type="knx:Guid_t" use="optional"/>
+        <xs:attribute name="IsRFRetransmitter" type="xs:boolean" default="false"/>
+        <xs:attribute name="IsSlowResender" type="xs:boolean" default="false"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+        <xs:attribute name="InitialValueLanguage" type="xs:language" use="optional"/>
+    </xs:complexType>
+
+    <!-- Parameters & ComObjects -->
+    <xs:complexType name="ParameterInstanceRefs_t">
+        <xs:sequence>
+            <xs:element name="ParameterInstanceRef" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="Id" type="xs:ID" use="optional"/>
+                    <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
+                    <xs:attribute name="Value" type="knx:Value_t" use="optional"/>
+                    <xs:attribute name="GrantUseByCustomer" type="xs:boolean" default="false"/>
+                    <xs:attribute name="CustomizedText" type="xs:string" use="optional"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ComObjectInstanceRefs_t">
+        <xs:sequence>
+            <xs:element name="ComObjectInstanceRef" type="knx:ComObjectInstanceRef_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ComObjectInstanceRef_t">
+        <xs:attribute name="Id" type="xs:ID" use="optional"/>
+        <xs:attribute name="RefId" type="knx:RELIDREF" use="required"/>
+        <xs:attribute name="Text" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="FunctionText" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Priority" type="knx:ComObjectPriority_t" use="optional"/>
+        <xs:attribute name="ReadFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="WriteFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="CommunicationFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="TransmitFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="UpdateFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="ReadOnInitFlag" type="knx:Enable_t" use="optional"/>
+        <xs:attribute name="DatapointType" type="knx:IDREFS" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="ChannelId" type="knx:IDREF" use="optional"/>
+        <xs:attribute name="Links" type="knx:RELIDREFS" use="optional"/>
+        <xs:attribute name="Acknowledges" type="knx:RELIDREFS" use="optional"/>
+    </xs:complexType>
+
+    <!-- Channels & Modules -->
+    <xs:complexType name="ChannelInstances_t">
+        <xs:sequence>
+            <xs:element name="ChannelInstance" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="Id" type="xs:ID" use="required"/>
+                    <xs:attribute name="RefId" type="knx:RELIDREF" use="optional"/>
+                    <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+                    <xs:attribute name="Description" type="knx:String255_t" use="optional"/>
+                    <xs:attribute name="IsActive" type="xs:boolean" use="optional"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ModuleInstances_t">
+        <xs:sequence>
+            <xs:element name="ModuleInstance" type="knx:ModuleInstance_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="ModuleInstance_t">
+        <xs:sequence>
+            <xs:element name="Arguments" minOccurs="0">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Argument" minOccurs="0" maxOccurs="unbounded">
+                            <xs:complexType>
+                                <xs:attribute name="RefId" type="knx:RELIDREF" use="required"/>
+                                <xs:attribute name="Value" type="knx:Value_t" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="Id" type="knx:RELIDREF" use="required"/>
+        <xs:attribute name="RefId" type="knx:String255_t" use="required"/>
+        <xs:attribute name="RepeatIndex" type="knx:RepeatIndexList_t" use="optional"/>
+    </xs:complexType>
+
+    <!-- Group Object Tree -->
+    <xs:complexType name="GroupObjectTree_t">
+        <xs:sequence>
+            <xs:element name="Node" type="knx:Node_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="GroupObjectInstances" type="knx:RELIDREFS" use="optional"/>
+    </xs:complexType>
+
+    <xs:complexType name="Node_t">
+        <xs:sequence>
+            <xs:element name="Nodes" minOccurs="0">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Node" type="knx:Node_t" minOccurs="0" maxOccurs="unbounded"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="Type" type="xs:string" use="required"/>
+        <xs:attribute name="RefId" type="knx:RELIDREF" use="required"/>
+        <xs:attribute name="GroupObjectInstances" type="knx:RELIDREFS" use="optional"/>
+    </xs:complexType>
+
+    <!-- Device Details: Addresses, BinaryData, IP, Security, BusInterfaces -->
+    <xs:complexType name="AdditionalAddresses_t">
+        <xs:sequence>
+            <xs:element name="Address" minOccurs="0" maxOccurs="254">
+                <xs:complexType>
+                    <xs:attribute name="Address" type="xs:unsignedByte" use="optional"/>
+                    <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+                    <xs:attribute name="Description" type="xs:string" use="optional"/>
+                    <xs:attribute name="Comment" type="xs:string" use="optional"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="DeviceBinaryDataContainer_t">
+        <xs:sequence>
+            <xs:element name="BinaryData" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Data" type="xs:base64Binary" minOccurs="0"/>
+                    </xs:sequence>
+                    <xs:attribute name="Id" type="xs:string" use="optional"/>
+                    <xs:attribute name="RefId" type="knx:IDREF" use="optional"/>
+                    <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
+                    <xs:attribute name="DoNotCopy" type="xs:boolean" default="false"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="IPConfig_t">
+        <xs:attribute name="Assign" type="knx:IPConfigAssign_t" default="Auto"/>
+        <xs:attribute name="IPAddress" type="knx:Ipv4Address_t" use="optional"/>
+        <xs:attribute name="SubnetMask" type="knx:Ipv4Address_t" use="optional"/>
+        <xs:attribute name="DefaultGateway" type="knx:Ipv4Address_t" use="optional"/>
+        <xs:attribute name="MACAddress" type="knx:String50_t" use="optional"/>
+    </xs:complexType>
+
+    <xs:complexType name="Security_t">
+        <xs:sequence>
+            <xs:element name="Role" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
+                    <xs:attribute name="Address" type="xs:unsignedByte" use="required"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="LoadedIPRoutingBackboneKey" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="DeviceAuthenticationCode" type="knx:String20_t" use="optional"/>
+        <xs:attribute name="DeviceAuthenticationCodeHash" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="LoadedDeviceAuthenticationCodeHash" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="DeviceManagementPassword" type="knx:String20_t" use="optional"/>
+        <xs:attribute name="DeviceManagementPasswordHash" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="LoadedDeviceManagementPasswordHash" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="ToolKey" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="LoadedToolKey" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="SequenceNumber" type="xs:unsignedLong" use="optional"/>
+        <xs:attribute name="SequenceNumberTimestamp" type="xs:dateTime" use="optional"/>
+        <xs:attribute name="UnicastBroadcastBlocking" type="knx:SecurityMode_t" default="Auto"/>
+    </xs:complexType>
+
+    <xs:complexType name="BusInterfaces_t">
+        <xs:sequence>
+            <xs:element name="BusInterface" type="knx:BusInterface_t" minOccurs="1" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="BusInterface_t">
+        <xs:sequence>
+            <xs:element name="Connectors" minOccurs="0">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Connector" minOccurs="0" maxOccurs="unbounded">
+                            <xs:complexType>
+                                <xs:attribute name="GroupAddressRefId" type="knx:IDREF" use="required"/>
+                            </xs:complexType>
+                        </xs:element>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
+        <xs:attribute name="Name" type="xs:string" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="Password" type="knx:String20_t" use="optional"/>
+        <xs:attribute name="PasswordHash" type="xs:base64Binary" use="optional"/>
+        <xs:attribute name="IsSecureEnabled" type="xs:boolean" default="false"/>
+    </xs:complexType>
+
+    <xs:complexType name="RfFastAckSlots_t">
+        <xs:sequence>
+            <xs:element name="Slot" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                    <xs:attribute name="GroupAddressRefId" type="knx:IDREF" use="required"/>
+                    <xs:attribute name="Number" type="xs:unsignedByte" use="required"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- BUILDING STRUCTURE (LOCATIONS)                                    -->
+    <!-- ================================================================= -->
+    <xs:complexType name="Locations_t">
+        <xs:sequence>
+            <xs:element name="Space" type="knx:Space_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="Space_t">
+        <xs:sequence>
+            <xs:element name="Space" type="knx:Space_t" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="DeviceInstanceRef" type="knx:DeviceInstanceRef_t" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="Function" type="knx:Function_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Type" type="knx:SpaceType_t" use="required"/>
+        <xs:attribute name="Usage" type="knx:IDREF" use="optional"/>
+        <xs:attribute name="Number" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="DefaultLine" type="xs:string" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="DeviceInstanceRef_t">
+        <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="Function_t">
+        <xs:sequence>
+            <xs:element name="GroupAddressRef" type="knx:GroupAddressRef_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Type" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Implements" type="knx:IDREFS" use="optional"/>
+        <xs:attribute name="Number" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="DefaulGroupRange" type="knx:IDREF" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <xs:complexType name="GroupAddressRef_t">
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Role" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- TRADES STRUCTURE                                                  -->
+    <!-- ================================================================= -->
+    <xs:complexType name="Trades_t">
+        <xs:sequence>
+            <xs:element name="Trade" type="knx:Trade_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="Trade_t">
+        <xs:sequence>
+            <xs:element name="Trade" type="knx:Trade_t" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="DeviceInstanceRef" type="knx:DeviceInstanceRef_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="optional"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Number" type="knx:String255_t" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" default="Undefined"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- GROUP ADDRESSES                                                   -->
+    <!-- ================================================================= -->
+    <xs:complexType name="GroupAddresses_t">
+        <xs:sequence>
+            <xs:element name="GroupRanges" minOccurs="0">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="GroupRange" type="knx:GroupRange_t" minOccurs="0" maxOccurs="unbounded"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="GroupRange_t">
+        <xs:sequence>
+            <xs:element name="GroupRange" type="knx:GroupRange_t" minOccurs="0" maxOccurs="unbounded"/>
+            <xs:element name="GroupAddress" type="knx:GroupAddress_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="RangeStart" type="xs:unsignedShort" use="required"/>
+        <xs:attribute name="RangeEnd" type="xs:unsignedShort" use="required"/>
+        <xs:attribute name="Unfiltered" type="xs:boolean" default="false"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+        <xs:attribute name="Security" type="knx:SecurityMode_t" default="Auto"/>
+    </xs:complexType>
+
+    <xs:complexType name="GroupAddress_t">
+        <xs:attribute name="Id" type="xs:ID" use="required"/>
+        <xs:attribute name="Address" type="xs:unsignedInt" use="required"/>
+        <xs:attribute name="Name" type="knx:String255_t" use="required"/>
+        <xs:attribute name="Unfiltered" type="xs:boolean" default="false"/>
+        <xs:attribute name="Central" type="xs:boolean" default="false"/>
+        <xs:attribute name="Global" type="xs:boolean" default="false"/>
+        <xs:attribute name="Description" type="xs:string" use="optional"/>
+        <xs:attribute name="Comment" type="xs:string" use="optional"/>
+        <xs:attribute name="DatapointType" type="knx:IDREF" use="optional"/>
+        <xs:attribute name="Puid" type="xs:string" use="required"/>
+        <xs:attribute name="Key" type="knx:Aes128Key_t" use="optional"/>
+        <xs:attribute name="Security" type="knx:SecurityMode_t" default="Auto"/>
+    </xs:complexType>
+
+    <!-- ================================================================= -->
+    <!-- SPLIT INFOS                                                       -->
+    <!-- ================================================================= -->
+    <xs:complexType name="SplitInfos_t">
+        <xs:sequence>
+            <xs:element name="SplitInfo" type="knx:SplitInfo_t" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="SplitInfo_t">
+        <xs:attribute name="ObjectPath" type="xs:string" use="required"/>
+        <xs:attribute name="Cookie" type="xs:string" use="required"/>
+    </xs:complexType>
+
+</xs:schema>

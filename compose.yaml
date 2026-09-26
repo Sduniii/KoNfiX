@@ -1,0 +1,49 @@
+services:
+  konfix:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: konfix:latest
+    container_name: konfix
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - KONFIX_DATA_DIR=/data
+      - RUST_LOG=knx_core=info,tower_http=info
+      # Optional: IP des physischen KNXnet/IP Gateways oder Routers
+      # - KONFIX_GATEWAY_IP=192.168.1.120
+      # Optional: Initiales ETS-Projekt beim ersten Start importieren
+      # - KONFIX_INITIAL_PROJECT=/data/projects/mein_projekt.knxproj
+      # - KONFIX_PROJECT_PASSWORD=geheim
+    volumes:
+      - konfix_data:/data
+      # Alternativ: Lokales Host-Verzeichnis mounten
+      # - ~/.konfix:/data
+
+    # Hinweis: Falls KNXnet/IP Multicast Auto-Discovery (224.0.23.12:3671) auf Linux
+    # genutzt werden soll, kann 'network_mode: host' anstelle von 'ports' verwendet werden:
+    # network_mode: host
+
+  sniffer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: konfix:latest
+    container_name: konfix-sniffer
+    network_mode: host
+    entrypoint: ["/app/knx_sniffer"]
+    environment:
+      - KONFIX_GATEWAY_IP=${KONFIX_GATEWAY_IP:-}
+      - KONFIX_GATEWAY_PORT=${KONFIX_GATEWAY_PORT:-3671}
+      - KONFIX_KEYRING_PATH=${KONFIX_KEYRING_PATH:-}
+      - KONFIX_KEYRING_PASSWORD=${KONFIX_KEYRING_PASSWORD:-}
+    volumes:
+      - konfix_data:/data
+      - ~/.konfix:/root/.konfix
+    profiles:
+      - sniffer
+
+volumes:
+  konfix_data:

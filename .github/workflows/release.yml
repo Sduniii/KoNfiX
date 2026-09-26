@@ -1,0 +1,184 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_name: linux-x86_64
+            use_cross: false
+            is_windows: false
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            archive_name: linux-arm64
+            use_cross: true
+            is_windows: false
+
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive_name: macos-arm64
+            use_cross: false
+            is_windows: false
+
+          - os: macos-14
+            target: x86_64-apple-darwin
+            archive_name: macos-x86_64
+            use_cross: false
+            is_windows: false
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_name: windows-x86_64
+            use_cross: false
+            is_windows: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js (for tools)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Web Frontend
+        shell: bash
+        run: |
+          cd apps/web
+          bun install
+          bun run build
+
+      - name: Build MCP Server
+        shell: bash
+        run: |
+          cd tools/knx-mcp
+          bun install
+          bun run build
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (for ARM64 cross-compilation)
+        if: matrix.use_cross
+        uses: taiki-e/install-action@cross
+
+      - name: Build Rust Backend Binary
+        shell: bash
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --target ${{ matrix.target }} -p knx-core
+          else
+            cargo build --release --target ${{ matrix.target }} -p knx-core
+          fi
+
+      - name: Package Release Archive (Unix)
+        if: "!matrix.is_windows"
+        shell: bash
+        run: |
+          RELEASE_DIR="konfix-${{ github.ref_name }}-${{ matrix.archive_name }}"
+          mkdir -p "$RELEASE_DIR"
+          
+          # Copy Binary
+          cp "target/${{ matrix.target }}/release/konfix" "$RELEASE_DIR/konfix"
+          chmod +x "$RELEASE_DIR/konfix"
+          
+          # Copy Built Web Frontend
+          mkdir -p "$RELEASE_DIR/dist"
+          cp -r apps/web/dist/* "$RELEASE_DIR/dist/"
+          
+          # Copy Built MCP Server
+          mkdir -p "$RELEASE_DIR/tools/knx-mcp/build"
+          cp tools/knx-mcp/build/index.js "$RELEASE_DIR/tools/knx-mcp/build/"
+          cp tools/knx-mcp/package.json "$RELEASE_DIR/tools/knx-mcp/"
+          
+          # Copy Docs & License
+          cp LICENSE "$RELEASE_DIR/"
+          cp README.md "$RELEASE_DIR/"
+          
+          # Archive & Checksum
+          ARCHIVE_NAME="konfix-${{ github.ref_name }}-${{ matrix.archive_name }}.tar.gz"
+          tar -czf "$ARCHIVE_NAME" "$RELEASE_DIR"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+          else
+            shasum -a 256 "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+          fi
+          
+          echo "ARCHIVE_PATH=$ARCHIVE_NAME" >> $GITHUB_ENV
+          echo "CHECKSUM_PATH=${ARCHIVE_NAME}.sha256" >> $GITHUB_ENV
+
+      - name: Package Release Archive (Windows)
+        if: matrix.is_windows
+        shell: pwsh
+        run: |
+          $ReleaseDir = "konfix-${{ github.ref_name }}-${{ matrix.archive_name }}"
+          New-Item -ItemType Directory -Force -Path $ReleaseDir | Out-Null
+          
+          # Copy Binary
+          Copy-Item "target/${{ matrix.target }}/release/konfix.exe" -Destination "$ReleaseDir/konfix.exe"
+          
+          # Copy Built Web Frontend
+          New-Item -ItemType Directory -Force -Path "$ReleaseDir/dist" | Out-Null
+          Copy-Item -Recurse "apps/web/dist/*" -Destination "$ReleaseDir/dist"
+          
+          # Copy Built MCP Server
+          New-Item -ItemType Directory -Force -Path "$ReleaseDir/tools/knx-mcp/build" | Out-Null
+          Copy-Item "tools/knx-mcp/build/index.js" -Destination "$ReleaseDir/tools/knx-mcp/build/index.js"
+          Copy-Item "tools/knx-mcp/package.json" -Destination "$ReleaseDir/tools/knx-mcp/package.json"
+          
+          # Copy Docs & License
+          Copy-Item "LICENSE" -Destination "$ReleaseDir/"
+          Copy-Item "README.md" -Destination "$ReleaseDir/"
+          
+          # Archive & Checksum
+          $ArchiveName = "konfix-${{ github.ref_name }}-${{ matrix.archive_name }}.zip"
+          Compress-Archive -Path $ReleaseDir -DestinationPath $ArchiveName
+          
+          $Hash = (Get-FileHash -Path $ArchiveName -Algorithm SHA256).Hash.ToLower()
+          "$Hash  $ArchiveName" | Out-File -Encoding ascii "${ArchiveName}.sha256"
+          
+          echo "ARCHIVE_PATH=$ArchiveName" >> $env:GITHUB_ENV
+          echo "CHECKSUM_PATH=${ArchiveName}.sha256" >> $env:GITHUB_ENV
+
+      - name: Extract Release Notes from CHANGELOG
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { flag=1; next }
+            flag && /^## \[/ { flag=0 }
+            flag { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+
+          if [ ! -s RELEASE_NOTES.md ]; then
+            cp CHANGELOG.md RELEASE_NOTES.md
+          fi
+
+      - name: Upload Artifact to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            ${{ env.ARCHIVE_PATH }}
+            ${{ env.CHECKSUM_PATH }}

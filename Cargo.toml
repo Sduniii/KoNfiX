@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "crates/knx-core",
+]
+resolver = "2"

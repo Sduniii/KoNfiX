@@ -1,0 +1,16 @@
+.git
+.github
+target
+crates/**/target
+node_modules
+apps/web/dist
+tools/knx-mcp/build
+.konfix
+*.knxkeys
+*.knxproj
+*.db
+*.db-wal
+*.db-shm
+*.log
+.DS_Store
+Thumbs.db
