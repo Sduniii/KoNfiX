@@ -13,6 +13,12 @@ A modern, cross-platform, open-source alternative to classical ETS (Engineering 
 
 **KoNfiX** combines the uncompromised reliability and interoperability of the worldwide **KNX industry standard** with an intuitive visual function block architecture and native filesystem persistence in `~/.konfix/`. Instead of manually entering thousands of group addresses into abstract tabular matrices, you wire your installation visually with **intelligent function blocks**, utilize a **studio lighting console**, enjoy **autonomous astro solar tracking**, manage your installation with a comprehensive **topology & filter table manager**, leverage a **differential flashing engine with KNX Data Secure**, and communicate directly via **KNX IP Secure live bus connection**.
 
+<p align="center">
+  <img src="docs/screenshots/hero_canvas.png" alt="KoNfiX — Visual KNX Configurator Blueprint Canvas, Room Portals & Live Bus Monitor" width="100%" />
+</p>
+
+> **Visual Blueprint Canvas in Action:** Direct hardware KO wiring (e.g. MDT Glass Push Button II), climate controllers, inter-room signal portals (`AUS RAUM` / `NACH RAUM` with 1-click jump navigation), 24/7 real-time bus monitor with live cEMI telegram decoding, and instant workspace switching (*Project & Canvas*, *Topology & Filter*, *ETS Diagnostics*).
+
 ---
 
 ## Table of Contents
