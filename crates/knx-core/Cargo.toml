@@ -1,6 +1,6 @@
 [package]
 name = "knx-core"
-version = "2026.9.1"
+version = "2026.9.2"
 edition = "2021"
 default-run = "konfix"
 license = "AGPL-3.0-or-later"

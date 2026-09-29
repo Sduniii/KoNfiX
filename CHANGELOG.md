@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.9.2] - 2026-09-29 (Non-Destructive Flash Verification & Live QR-Code Commissioning)
+
+### Non-Destructive Flash Verification & Dry-Run Mode
+- **100% Read-Only Safety Guarantee (`programming.rs`):** Point-to-Point diagnostic & memory read workflow (`A_PropertyValue_Read`, `A_Memory_Read`) querying System B GAT (Obj 1), AT (Obj 3), and Parameter segments (Obj 4) without writing a single byte or rebooting devices. Eliminates all risk of corrupting actuator memory.
+- **Bitwise & Semantic Diff Analysis:** Computes exact byte differences between live physical actuator memory and target KoNfiX engineering state, categorizing modified parameters (e.g. blind drive times, dimming speeds, threshold values).
+- **Offline / Simulation Fallback:** Automatic diff verification against project `loaded_image` baseline when gateway is disconnected or during automated testing.
+- **Interactive Audit Inspector (`ProgrammingJobDrawer.tsx`):** Expandable Hex and Parameter diff table with safe-to-flash assessment, safety scoring, and 1-click execution ("Jetzt übertragen").
+- **Inspector Quick Action (`RightSidebar.tsx`):** Dedicated "Trockenlauf / Prüfen (Dry-Run)" button alongside the smart flash split-button.
+
+### Live Webcam & Smartphone QR-Code Scanner for KNX Data Secure
+- **Hardware-Accelerated Viewfinder (`KnxQrScanner.tsx`):** Real-time camera stream supporting mobile back cameras (`facingMode: 'environment'`), Mac Continuity Camera, and desktop webcams with animated scanning reticle, camera switcher, and photo upload fallback.
+- **Automated KNX Certificate Parsing (`knxQrParser.ts`):** Decodes official KNX QR standard strings (`KNX:S:<serial>;F:<fdsk>`), raw hex strings, and extracts MAC-formatted serial numbers (`00:83:7B:40:02:85`) and 32-character FDSKs.
+- **1-Click Secure Commissioning (`DeviceSecurityModal.tsx`):** Auto-fills device hardware ID and factory key while immediately toggling KNX Data Secure encryption on TP.
+
 ## [2026.9.1] - 2026-09-26 (Initial Multi-Platform Release)
 
 ### Internationalization (i18n) & Multilingual Support
