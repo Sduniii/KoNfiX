@@ -20,9 +20,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY crates/knx-core/Cargo.toml crates/knx-core/
 
-RUN mkdir -p crates/knx-core/src && \
+RUN mkdir -p crates/knx-core/src/bin && \
     echo "pub fn dummy() {}" > crates/knx-core/src/lib.rs && \
     echo "fn main() {}" > crates/knx-core/src/main.rs && \
+    echo "fn main() {}" > crates/knx-core/src/bin/knx_sniffer.rs && \
     cargo build --release -p knx-core && \
     rm -rf crates/knx-core/src target/release/deps/knx* target/release/deps/konfix* target/release/.fingerprint/knx* target/release/.fingerprint/konfix*
 
