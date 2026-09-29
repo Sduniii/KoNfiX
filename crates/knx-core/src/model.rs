@@ -617,6 +617,7 @@ pub enum ProgrammingJobType {
     PhysicalAddress, // Only individual address (A_IndividualAddress_Write)
     FilterTable,     // 8192-byte binary bitmask for line couplers
     Restart,         // Device reboot (A_Restart)
+    Verify,          // Non-destructive read & bitwise memory/parameter verification (Dry-Run)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -628,10 +629,34 @@ pub enum ProgrammingJobStatus {
     WritingAT,
     WritingParameters,
     WritingFilterTable,
+    Verifying,
     Restarting,
     Success,
     Failed,
     Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryDiffChunk {
+    pub address: u16,
+    pub segment_name: String,     // e.g. "GAT (Obj 1)", "AT (Obj 3)", "Parameter (Obj 4)"
+    pub device_bytes_hex: String, // Value on physical device / baseline
+    pub target_bytes_hex: String, // Target value in KoNfiX project
+    pub byte_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationReport {
+    pub device_id: Uuid,
+    pub address: String,
+    pub mask_version: String,
+    pub is_identical: bool,
+    pub safe_to_flash: bool,
+    pub total_bytes_checked: usize,
+    pub diff_bytes_count: usize,
+    pub diff_chunks: Vec<MemoryDiffChunk>,
+    pub parameter_diffs: Vec<ParameterDiff>,
+    pub summary_message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -647,5 +672,7 @@ pub struct ProgrammingJob {
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub log_messages: Vec<String>,
+    pub verification_report: Option<VerificationReport>,
 }
+
 

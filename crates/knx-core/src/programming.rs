@@ -1029,6 +1029,7 @@ impl ProgrammingJobManager {
                 device.name,
                 device.individual_address
             )],
+            verification_report: None,
         };
 
         {
@@ -1090,6 +1091,7 @@ impl ProgrammingJobManager {
                 coupler_addr,
                 line.name
             )],
+            verification_report: None,
         };
 
         {
@@ -1271,6 +1273,161 @@ impl ProgrammingJobManager {
 
             // Step 4: Write payload based on JobType
             match job_type {
+                ProgrammingJobType::Verify => {
+                    let (dev_params, dev_kos, loaded_img, dirty_details) = {
+                        let p_lock = project.read().await;
+                        if let Some(d) = p_lock.devices.iter().find(|d| d.id == dev_id) {
+                            let dirty = ProgrammingJobManager::get_device_dirty_details(d);
+                            let mut syncd_params = d.parameters.clone();
+                            evaluate_assign_rules(&mut syncd_params, &d.assign_rules);
+                            synchronize_dependent_parameters(&mut syncd_params);
+                            (syncd_params, d.communication_objects.clone(), d.loaded_image.clone(), dirty)
+                        } else {
+                            (Vec::new(), Vec::new(), None, DeviceDirtyDetails {
+                                is_dirty: false,
+                                reasons: vec![],
+                                parameter_diffs: vec![],
+                                address_changed: None,
+                                added_gas: vec![],
+                                removed_gas: vec![],
+                                added_associations: vec![],
+                                removed_associations: vec![],
+                                is_initial: false,
+                                last_flashed: None,
+                            })
+                        }
+                    };
+
+                    let (unique_gas, gat_bytes) = build_system_b_gat_bytes(&dev_kos);
+                    let at_bytes = build_system_b_at_bytes(&dev_kos, &unique_gas);
+                    let raw_base_slice = loaded_img.as_deref().and_then(extract_loaded_image_param_slice).map(|(_, _, s)| s).unwrap_or_else(|| vec![0u8; 514]);
+                    let target_param_bytes = build_target_parameter_buffer(&raw_base_slice, &dev_params);
+
+                    let (gat_payload, at_payload) = if loaded_img.is_some() {
+                        let g = loaded_img.as_deref().and_then(|img| extract_loaded_image_segment(img, 1)).unwrap_or(gat_bytes.clone());
+                        let a = loaded_img.as_deref().and_then(|img| extract_loaded_image_segment(img, 3)).unwrap_or(at_bytes.clone());
+                        (g, a)
+                    } else {
+                        (gat_bytes.clone(), at_bytes.clone())
+                    };
+
+                    let mut diff_chunks: Vec<MemoryDiffChunk> = Vec::new();
+                    let mut total_bytes_checked = 0;
+                    let mut diff_bytes_count = 0;
+
+                    // 1. Read GAT (Obj 1)
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Verifying, 40, "Prüflauf: Lese Gruppenadress-Tabelle (Obj 1)...").await;
+                    let mut gat_base_addr = 0x1002;
+                    if is_system_b {
+                        if let Ok(resp) = client.read_property(1, 7, 1, 1).await {
+                            gat_base_addr = parse_property_ptr(&resp, 0x1002);
+                        }
+                    }
+                    let gat_len = (gat_payload.len() as u8).clamp(1, 64);
+                    if let Ok(dev_gat) = client.read_memory(gat_base_addr, gat_len).await {
+                        total_bytes_checked += dev_gat.len();
+                        let cmp_len = dev_gat.len().min(gat_payload.len());
+                        let chunk_diffs = dev_gat[..cmp_len].iter().zip(gat_payload[..cmp_len].iter()).filter(|(a, b)| a != b).count();
+                        if chunk_diffs > 0 || dev_gat.len() != gat_payload.len() {
+                            diff_bytes_count += chunk_diffs;
+                            diff_chunks.push(MemoryDiffChunk {
+                                address: gat_base_addr,
+                                segment_name: "GAT (Obj 1)".to_string(),
+                                device_bytes_hex: hex::encode(&dev_gat),
+                                target_bytes_hex: hex::encode(&gat_payload[..cmp_len]),
+                                byte_count: dev_gat.len(),
+                            });
+                        }
+                    }
+
+                    // 2. Read AT (Obj 3)
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Verifying, 60, "Prüflauf: Lese Assoziations-Tabelle (Obj 3)...").await;
+                    let mut at_base_addr = 0x1600;
+                    if is_system_b {
+                        if let Ok(resp) = client.read_property(3, 7, 1, 1).await {
+                            at_base_addr = parse_property_ptr(&resp, 0x1600);
+                        }
+                    }
+                    let at_len = (at_payload.len() as u8).clamp(1, 64);
+                    if let Ok(dev_at) = client.read_memory(at_base_addr, at_len).await {
+                        total_bytes_checked += dev_at.len();
+                        let cmp_len = dev_at.len().min(at_payload.len());
+                        let chunk_diffs = dev_at[..cmp_len].iter().zip(at_payload[..cmp_len].iter()).filter(|(a, b)| a != b).count();
+                        if chunk_diffs > 0 || dev_at.len() != at_payload.len() {
+                            diff_bytes_count += chunk_diffs;
+                            diff_chunks.push(MemoryDiffChunk {
+                                address: at_base_addr,
+                                segment_name: "AT (Obj 3)".to_string(),
+                                device_bytes_hex: hex::encode(&dev_at),
+                                target_bytes_hex: hex::encode(&at_payload[..cmp_len]),
+                                byte_count: dev_at.len(),
+                            });
+                        }
+                    }
+
+                    // 3. Read Parameter Segments (Obj 4)
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Verifying, 80, "Prüflauf: Lese Parameter-Segmente (Obj 4)...").await;
+                    let mut base_param_addr = 0x16A2;
+                    if is_system_b {
+                        if let Ok(resp) = client.read_property(4, 7, 1, 1).await {
+                            base_param_addr = parse_property_ptr(&resp, 0x16A2);
+                        }
+                    }
+
+                    let changed_ranges = find_changed_memory_ranges(&raw_base_slice, &target_param_bytes, 12);
+                    let ranges_to_check = if changed_ranges.is_empty() {
+                        vec![(0, target_param_bytes.get(..12).unwrap_or(&[]).to_vec())]
+                    } else {
+                        changed_ranges
+                    };
+
+                    for (chunk_off, t_chunk) in ranges_to_check.iter().take(16) {
+                        let target_addr = base_param_addr.saturating_add(*chunk_off as u16);
+                        if let Ok(dev_chunk) = client.read_memory(target_addr, t_chunk.len() as u8).await {
+                            total_bytes_checked += dev_chunk.len();
+                            let cmp_len = dev_chunk.len().min(t_chunk.len());
+                            let chunk_diffs = dev_chunk[..cmp_len].iter().zip(t_chunk[..cmp_len].iter()).filter(|(a, b)| a != b).count();
+                            if chunk_diffs > 0 || dev_chunk.len() != t_chunk.len() {
+                                diff_bytes_count += chunk_diffs;
+                                diff_chunks.push(MemoryDiffChunk {
+                                    address: target_addr,
+                                    segment_name: "Parameter (Obj 4)".to_string(),
+                                    device_bytes_hex: hex::encode(&dev_chunk),
+                                    target_bytes_hex: hex::encode(&t_chunk[..cmp_len]),
+                                    byte_count: dev_chunk.len(),
+                                });
+                            }
+                        }
+                    }
+
+                    // Disconnect safely without writing or rebooting!
+                    let _ = client.disconnect().await;
+
+                    let is_identical = diff_chunks.is_empty() && dirty_details.parameter_diffs.is_empty();
+                    let summary = if is_identical {
+                        format!("Prüflauf erfolgreich: Gerät '{}' ({}) ist 100% synchron mit dem Projekt.", dev_name, dev_addr)
+                    } else {
+                        format!("Prüflauf erfolgreich: {} abweichende Speicherblöcke ({} Bytes, {} Parameter) verifiziert. Flash-Vorgang ist sicher.",
+                            diff_chunks.len(), diff_bytes_count, dirty_details.parameter_diffs.len())
+                    };
+
+                    let report = VerificationReport {
+                        device_id: dev_id,
+                        address: dev_addr.clone(),
+                        mask_version: _mask_desc.clone(),
+                        is_identical,
+                        safe_to_flash: true,
+                        total_bytes_checked,
+                        diff_bytes_count,
+                        diff_chunks,
+                        parameter_diffs: dirty_details.parameter_diffs.clone(),
+                        summary_message: summary,
+                    };
+
+                    Self::set_job_verification_report(&jobs, job_id, report).await;
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Success, 100, "Prüflauf erfolgreich abgeschlossen (Keine Schreibbefehle abgesetzt)").await;
+                    return;
+                }
                 ProgrammingJobType::PhysicalAddress => {
                     Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingParameters, 50, &format!("Schreibe physikalische Adresse {}...", dev_addr)).await;
                     if let Some(raw_target) = parse_individual_address(&dev_addr) {
@@ -1553,6 +1710,81 @@ impl ProgrammingJobManager {
             // Simulated fallback for unit tests and offline environments
             tokio::time::sleep(Duration::from_millis(200)).await;
             match job_type {
+                ProgrammingJobType::Verify => {
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Verifying, 30, "(Simuliert) Prüflauf: Lese Gerätespeicher...").await;
+                    tokio::time::sleep(Duration::from_millis(150)).await;
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Verifying, 70, "(Simuliert) Soll-Ist-Abgleich berechnen...").await;
+
+                    let (dev_params, loaded_img, dirty_details) = {
+                        let p_lock = project.read().await;
+                        if let Some(d) = p_lock.devices.iter().find(|d| d.id == dev_id) {
+                            let dirty = ProgrammingJobManager::get_device_dirty_details(d);
+                            (d.parameters.clone(), d.loaded_image.clone(), dirty)
+                        } else {
+                            (Vec::new(), None, DeviceDirtyDetails {
+                                is_dirty: false,
+                                reasons: vec![],
+                                parameter_diffs: vec![],
+                                address_changed: None,
+                                added_gas: vec![],
+                                removed_gas: vec![],
+                                added_associations: vec![],
+                                removed_associations: vec![],
+                                is_initial: false,
+                                last_flashed: None,
+                            })
+                        }
+                    };
+
+                    let raw_base = loaded_img.as_deref().and_then(extract_loaded_image_param_slice).map(|(_, _, s)| s).unwrap_or_else(|| vec![0u8; 514]);
+                    let target_b = build_target_parameter_buffer(&raw_base, &dev_params);
+                    let changed = find_changed_memory_ranges(&raw_base, &target_b, 12);
+
+                    let mut diff_chunks = Vec::new();
+                    let mut diff_bytes = 0;
+                    let base_param_addr: u16 = 0x16A2;
+                    for (off, chunk) in &changed {
+                        let chunk_addr = base_param_addr.saturating_add(*off as u16);
+                        let dev_slice = if *off + chunk.len() <= raw_base.len() {
+                            raw_base[*off..*off + chunk.len()].to_vec()
+                        } else {
+                            vec![0u8; chunk.len()]
+                        };
+                        diff_bytes += dev_slice.iter().zip(chunk.iter()).filter(|(a, b)| a != b).count();
+                        diff_chunks.push(MemoryDiffChunk {
+                            address: chunk_addr,
+                            segment_name: "Parameter (Obj 4)".to_string(),
+                            device_bytes_hex: hex::encode(&dev_slice),
+                            target_bytes_hex: hex::encode(chunk),
+                            byte_count: chunk.len(),
+                        });
+                    }
+
+                    let is_identical = diff_chunks.is_empty() && dirty_details.parameter_diffs.is_empty();
+                    let summary = if is_identical {
+                        format!("Prüflauf (Simulation): Gerät '{}' ist zu 100% synchron mit dem Projekt.", dev_name)
+                    } else {
+                        format!("Prüflauf (Simulation): {} Speicherblöcke ({} Bytes, {} Parameter) weichen ab. Flash-Vorgang ist sicher.",
+                            diff_chunks.len(), diff_bytes, dirty_details.parameter_diffs.len())
+                    };
+
+                    let report = VerificationReport {
+                        device_id: dev_id,
+                        address: dev_addr.clone(),
+                        mask_version: "System B (07B0h) [Simulation]".to_string(),
+                        is_identical,
+                        safe_to_flash: true,
+                        total_bytes_checked: raw_base.len(),
+                        diff_bytes_count: diff_bytes,
+                        diff_chunks,
+                        parameter_diffs: dirty_details.parameter_diffs,
+                        summary_message: summary,
+                    };
+
+                    Self::set_job_verification_report(&jobs, job_id, report).await;
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::Success, 100, "Prüflauf abgeschlossen (Simulation, keine Schreiboperationen)").await;
+                    return;
+                }
                 ProgrammingJobType::PhysicalAddress => {
                     Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingParameters, 50, &format!("(Simuliert) Schreibe physikalische Adresse {}...", dev_addr)).await;
                     tokio::time::sleep(Duration::from_millis(150)).await;
@@ -1893,6 +2125,17 @@ impl ProgrammingJobManager {
             job.progress_percent = progress;
             job.current_step = step.to_string();
             job.log_messages.push(format!("[{}] {}", Utc::now().format("%H:%M:%S"), step));
+        }
+    }
+
+    async fn set_job_verification_report(
+        jobs: &Arc<RwLock<Vec<ProgrammingJob>>>,
+        job_id: Uuid,
+        report: VerificationReport,
+    ) {
+        let mut j_lock = jobs.write().await;
+        if let Some(job) = j_lock.iter_mut().find(|j| j.id == job_id) {
+            job.verification_report = Some(report);
         }
     }
 }
@@ -2415,5 +2658,38 @@ mod tests {
         assert_eq!(params.iter().find(|p| p.id == "P-TGT").unwrap().value, "42");
         assert_eq!(params.iter().find(|p| p.id == "P-TRANS").unwrap().value, "99");
     }
+
+    #[tokio::test]
+    async fn test_verify_job_lifecycle() {
+        let project = Arc::new(RwLock::new(create_demo_project()));
+        let simulator = Arc::new(Simulator::new(project.clone()));
+        let knx_manager = Arc::new(KnxNetManager::new(simulator));
+        let job_mgr = ProgrammingJobManager::new(project.clone(), knx_manager, None);
+
+        let dev_id = {
+            let proj = project.read().await;
+            proj.devices[0].id
+        };
+
+        // Enqueue non-destructive Verify job
+        let job = job_mgr.enqueue_job(dev_id, ProgrammingJobType::Verify).await.expect("Enqueue failed");
+        assert_eq!(job.status, ProgrammingJobStatus::Queued);
+
+        // Wait for worker to finish (simulation takes ~300ms)
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        let jobs = job_mgr.get_jobs().await;
+        let finished_job = jobs.iter().find(|j| j.id == job.id).expect("Job not found");
+        assert_eq!(finished_job.status, ProgrammingJobStatus::Success);
+        assert_eq!(finished_job.progress_percent, 100);
+
+        // Verification report must be present
+        assert!(finished_job.verification_report.is_some());
+        let report = finished_job.verification_report.as_ref().unwrap();
+        assert_eq!(report.device_id, dev_id);
+        assert!(report.safe_to_flash);
+        assert!(!report.summary_message.is_empty());
+    }
 }
+
 

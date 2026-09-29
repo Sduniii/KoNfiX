@@ -4,6 +4,7 @@ export type ProgrammingJobType =
   | 'PhysicalAddress'
   | 'FilterTable'
   | 'Restart'
+  | 'Verify'
 
 export type ProgrammingJobStatus =
   | 'Queued'
@@ -13,10 +14,32 @@ export type ProgrammingJobStatus =
   | 'WritingAT'
   | 'WritingParameters'
   | 'WritingFilterTable'
+  | 'Verifying'
   | 'Restarting'
   | 'Success'
   | 'Failed'
   | 'Cancelled'
+
+export interface MemoryDiffChunk {
+  address: number
+  segment_name: string
+  device_bytes_hex: string
+  target_bytes_hex: string
+  byte_count: number
+}
+
+export interface VerificationReport {
+  device_id: string
+  address: string
+  mask_version: string
+  is_identical: boolean
+  safe_to_flash: boolean
+  total_bytes_checked: number
+  diff_bytes_count: number
+  diff_chunks: MemoryDiffChunk[]
+  parameter_diffs: ParameterDiff[]
+  summary_message: string
+}
 
 export interface ProgrammingJob {
   id: string
@@ -30,6 +53,7 @@ export interface ProgrammingJob {
   created_at: string
   completed_at?: string | null
   log_messages: string[]
+  verification_report?: VerificationReport | null
 }
 
 export interface ParameterDiff {

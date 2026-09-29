@@ -819,9 +819,33 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     </button>
                   </div>
 
+                  <button
+                    type="button"
+                    disabled={isStartingJob}
+                    onClick={() => handleStartProgramming('Verify')}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 bg-cyan-950/50 hover:bg-cyan-900/70 border border-cyan-700/40 text-cyan-300 rounded-lg text-xs font-semibold transition-colors shadow-sm mt-1.5 cursor-pointer"
+                    title="Führt einen gefahrlosen Soll-Ist-Speicherabgleich ohne Schreibbefehle durch (100% Lese-Modus)"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Trockenlauf / Prüfen (Dry-Run)</span>
+                  </button>
+
                   {/* Dropdown for other flash actions */}
                   {isProgrammingDropdownOpen && (
                     <div className="absolute right-0 left-0 mt-1.5 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-1.5 z-30 space-y-1 animate-in fade-in duration-150">
+                      <button
+                        type="button"
+                        onClick={() => handleStartProgramming('Verify')}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-cyan-300 text-xs flex items-center gap-2 border-b border-slate-800/80 pb-1.5 mb-1"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <div>
+                          <div className="font-semibold text-slate-100">Trockenlauf / Prüfen (Dry-Run)</div>
+                          <div className="text-[10px] text-slate-400">
+                            100% Schreibschutz: Speicher auslesen & Diff prüfen
+                          </div>
+                        </div>
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleStartProgramming('Partial')}
