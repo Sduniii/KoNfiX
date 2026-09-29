@@ -11,9 +11,13 @@ import {
   Info,
   Check,
   X,
+  Camera,
+  QrCode,
 } from 'lucide-react'
 import { KnxDevice } from '../../types/knx'
 import { updateDeviceSecurity } from '../../services/api'
+import { KnxQrScanner } from './KnxQrScanner'
+import { KnxCertificateQrResult } from '../../utils/knxQrParser'
 
 interface DeviceSecurityModalProps {
   isOpen: boolean
@@ -35,6 +39,7 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [isScannerOpen, setIsScannerOpen] = useState(false)
 
   // Sync state when device changes or modal opens
   useEffect(() => {
@@ -57,6 +62,17 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
   // FDSK validation helper: FDSK is either 32 hex chars or 36 chars with hyphens (e.g. 112233-445566-...)
   const cleanFdsk = fdsk.replace(/[^0-9a-fA-F]/g, '')
   const isValidFdskLength = cleanFdsk.length === 32
+
+  const handleQrDetected = (result: KnxCertificateQrResult) => {
+    if (result.serialNumber) {
+      setSerialNumber(result.serialNumber)
+    }
+    if (result.fdsk) {
+      setFdsk(result.fdsk)
+      setIsEnabled(true)
+    }
+    setSuccessMessage('Gerätezertifikat erkannt: Seriennummer & FDSK automatisch übernommen!')
+  }
 
   const handleSave = async () => {
     setError(null)
@@ -138,6 +154,29 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
               <span>{successMessage}</span>
             </div>
           )}
+
+          {/* Quick Scanner Action Banner */}
+          <div className="p-3 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-transparent rounded-xl border border-emerald-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <QrCode className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-slate-100">Gerätezertifikat scannen</div>
+                <div className="text-[10px] text-slate-400">
+                  QR-Code am Aktor per Kamera oder Foto einlesen
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(true)}
+              className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-emerald-600/30 transition-colors"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>Scannen</span>
+            </button>
+          </div>
 
           {/* Hardware Serial Number Input */}
           <div className="space-y-1.5">
@@ -292,6 +331,13 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* QR Scanner Modal */}
+      <KnxQrScanner
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onDetected={handleQrDetected}
+      />
     </div>
   )
 }
