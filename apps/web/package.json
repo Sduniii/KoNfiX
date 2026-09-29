@@ -1,7 +1,7 @@
 {
   "name": "web",
   "private": true,
-  "version": "2026.9.2",
+  "version": "2026.9.3",
   "license": "AGPL-3.0-or-later",
   "packageManager": "bun@1.4.2",
   "type": "module",
@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bump": "../../tools/bump-version.sh"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",

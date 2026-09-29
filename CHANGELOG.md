@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.9.3] - 2026-09-29
+
+### Geändert
+- Wartung und Versionsanhebung auf 2026.9.3.
+
 ## [2026.9.2] - 2026-09-29 (Non-Destructive Flash Verification & Live QR-Code Commissioning)
 
 ### Non-Destructive Flash Verification & Dry-Run Mode
