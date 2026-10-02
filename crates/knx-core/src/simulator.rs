@@ -170,12 +170,10 @@ impl Simulator {
                             is_moving = false;
                             changed_outputs.push(("pos".to_string(), serde_json::json!(pos), "5.001".to_string()));
                         }
-                    } else if pin == "alarm" || pin == "wind_alarm" {
-                        if value.as_bool() == Some(true) {
-                            pos = 0; // Security position: fully UP
-                            is_moving = true;
-                            changed_outputs.push(("pos".to_string(), serde_json::json!(0), "5.001".to_string()));
-                        }
+                    } else if (pin == "alarm" || pin == "wind_alarm") && value.as_bool() == Some(true) {
+                        pos = 0; // Security position: fully UP
+                        is_moving = true;
+                        changed_outputs.push(("pos".to_string(), serde_json::json!(0), "5.001".to_string()));
                     }
 
                     block.state = serde_json::json!({
@@ -497,7 +495,7 @@ impl Simulator {
                 });
 
                 if let Some(ga) = target_ga {
-                    let formatted = crate::dpt::format_dpt_json_value(&dpt, out_val);
+                    let formatted = crate::dpt::format_dpt_json_value(dpt, out_val);
 
                     emitted.push(KnxTelegram {
                         id: Uuid::new_v4(),
@@ -608,6 +606,7 @@ mod tests {
             connections: vec![conn],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         }));
 
         let sim = Simulator::new(project.clone());
@@ -658,6 +657,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         }));
 
         let sim = Simulator::new(project.clone());
@@ -757,6 +757,7 @@ mod tests {
             connections: vec![conn],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         }));
 
         let sim = Simulator::new(project.clone());
@@ -824,6 +825,7 @@ mod tests {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         };
 
         let light_block = FunctionBlock {
@@ -868,6 +870,7 @@ mod tests {
             connections: vec![conn],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         }));
 
         let sim = Simulator::new(project.clone());

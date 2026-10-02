@@ -301,6 +301,14 @@ pub struct KnxDevice {
     pub loaded_image: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checksums: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_device_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product_ref_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hardware2program_ref_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_puid: Option<u32>,
 }
 
 impl KnxDevice {
@@ -355,7 +363,7 @@ impl GaScheme {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct GroupAddress {
     pub id: Uuid,
     pub address: String, // "1/1/10"
@@ -369,6 +377,10 @@ pub struct GroupAddress {
     pub origin_pin_name: Option<String>,
     #[serde(default)]
     pub is_custom: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_ga_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_puid: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -506,7 +518,20 @@ pub struct KnxTelegram {
     pub telegram_type: String, // "Write", "Read", "Response"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectTraceInfo {
+    pub date: String,
+    pub user_name: String,
+    pub comment: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceCertificateInfo {
+    pub serial_number: String,
+    pub fdsk: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Project {
     pub id: Uuid,
     pub name: String,
@@ -521,6 +546,16 @@ pub struct Project {
     pub group_addresses: Vec<GroupAddress>,
     #[serde(default)]
     pub topology: Option<ProjectTopology>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_guid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ets_last_used_puid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ets_traces: Vec<ProjectTraceInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ets_device_certificates: Vec<DeviceCertificateInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

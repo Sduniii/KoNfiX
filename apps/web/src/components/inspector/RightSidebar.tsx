@@ -265,7 +265,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               ? 'Kanal-Eigenschaften'
               : selectedDevice
               ? 'Geräte-Eigenschaften'
-              : 'Projekt-Inspektor'}
+              : t('inspector.projectInspector')}
           </span>
         </div>
         {selectedBlock && (
@@ -1300,15 +1300,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           <div className="space-y-5">
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Projektübersicht
+                {t('inspector.projectOverview')}
               </div>
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Projekt:</span>
+                  <span className="text-slate-400">{t('inspector.projectLabel')}</span>
                   <span className="font-semibold text-slate-200">{project?.name}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400">GA-Schema:</span>
+                  <span className="text-slate-400">{t('inspector.gaSchemaLabel')}</span>
                   <span className="font-mono text-emerald-400 font-semibold text-[11px]">
                     {project?.ga_scheme === 'TradeRoomFunction'
                       ? 'Gewerk / Raum / Fkt'
@@ -1318,7 +1318,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Sicherheit:</span>
+                  <span className="text-slate-400">{t('inspector.securityLabel')}</span>
                   <span className="text-emerald-400 flex items-center gap-1 font-semibold">
                     <ShieldCheck className="w-3.5 h-3.5" /> KNX Data Secure
                   </span>
@@ -1330,7 +1330,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     className="w-full mt-2 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-colors"
                   >
                     <Network className="w-3.5 h-3.5" />
-                    <span>GA-Manager & Schema öffnen</span>
+                    <span>{t('inspector.openGaManager')}</span>
                   </button>
                 )}
               </div>
@@ -1338,9 +1338,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <span>Gesamte Gruppenadressen</span>
+                <span>{t('inspector.allGasTitle')}</span>
                 <span className="font-mono text-emerald-400 text-[10px]">
-                  {project?.group_addresses.length ?? 0} aktiv
+                  {t('inspector.activeGasCount', { count: project?.group_addresses.length ?? 0 })}
                 </span>
               </div>
               <div className="max-h-72 overflow-y-auto space-y-1 pr-1 font-mono">

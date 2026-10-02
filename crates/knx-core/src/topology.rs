@@ -322,7 +322,7 @@ impl TopologyManager {
 
         let coupler_device_addr = line.coupler_device_id.and_then(|cid| {
             project.devices.iter().find(|d| d.id == cid).map(|d| d.individual_address.clone())
-        }).or_else(|| Some(coupler_addr_str));
+        }).or(Some(coupler_addr_str));
 
         Ok(FilterTableSummary {
             line_address: line.address.clone(),
@@ -492,6 +492,7 @@ mod tests {
                     security: None,
                     loaded_image: None,
                     checksums: None,
+                    ..Default::default()
                 },
                 KnxDevice {
                     id: Uuid::new_v4(),
@@ -514,12 +515,14 @@ mod tests {
                     security: None,
                     loaded_image: None,
                     checksums: None,
+                    ..Default::default()
                 },
             ],
             blocks: vec![],
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         TopologyManager::ensure_topology(&mut project);
@@ -593,6 +596,7 @@ mod tests {
                     security: None,
                     loaded_image: None,
                     checksums: None,
+                    ..Default::default()
                 },
                 // Local Aktor on Line 1.1 listening to local GA
                 KnxDevice {
@@ -629,6 +633,7 @@ mod tests {
                     security: None,
                     loaded_image: None,
                     checksums: None,
+                    ..Default::default()
                 },
                 // External Aktor on Line 1.2 listening to shared GA
                 KnxDevice {
@@ -665,6 +670,7 @@ mod tests {
                     security: None,
                     loaded_image: None,
                     checksums: None,
+                    ..Default::default()
                 },
             ],
             blocks: vec![],
@@ -682,6 +688,7 @@ mod tests {
                     origin_block_id: None,
                     origin_pin_name: None,
                     is_custom: false,
+                    ..Default::default()
                 },
                 GroupAddress {
                     id: ga_id_local,
@@ -695,9 +702,11 @@ mod tests {
                     origin_block_id: None,
                     origin_pin_name: None,
                     is_custom: false,
+                    ..Default::default()
                 },
             ],
             topology: None,
+            ..Default::default()
         };
 
         TopologyManager::ensure_topology(&mut project);

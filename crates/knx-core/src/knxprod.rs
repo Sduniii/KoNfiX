@@ -35,6 +35,9 @@ pub fn format_knxprod_dpt(raw: &str) -> String {
     }
 }
 
+/// Maximum allowed decompressed size for a single XML file in an archive (64 MB)
+const MAX_DECOMPRESSED_ENTRY_SIZE: u64 = 64 * 1024 * 1024;
+
 /// Parses a .knxprod ZIP file and returns all catalog products contained within it
 pub fn parse_knxprod(bytes: &[u8]) -> Result<Vec<CatalogProduct>, String> {
     let reader = Cursor::new(bytes);
@@ -50,14 +53,22 @@ pub fn parse_knxprod(bytes: &[u8]) -> Result<Vec<CatalogProduct>, String> {
             if name.ends_with("Hardware.xml") || name.ends_with("hardware.xml") {
                 let mut content = String::new();
                 use std::io::Read;
-                if file.read_to_string(&mut content).is_ok() {
-                    hardware_xmls.push(content);
+                if file.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok() {
+                    if content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
+                        hardware_xmls.push(content);
+                    } else {
+                        return Err(format!("Hardware-XML '{}' überschreitet Sicherheitsgrenze von 64 MB (mögliche Decompression-Bomb)", name));
+                    }
                 }
             } else if (name.contains("_A-") || name.contains("ApplicationProgram")) && name.ends_with(".xml") {
                 let mut content = String::new();
                 use std::io::Read;
-                if file.read_to_string(&mut content).is_ok() {
-                    app_program_xmls.insert(name, content);
+                if file.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok() {
+                    if content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
+                        app_program_xmls.insert(name, content);
+                    } else {
+                        return Err(format!("AppProgram-XML '{}' überschreitet Sicherheitsgrenze von 64 MB (mögliche Decompression-Bomb)", name));
+                    }
                 }
             }
         }
@@ -71,8 +82,14 @@ pub fn parse_knxprod(bytes: &[u8]) -> Result<Vec<CatalogProduct>, String> {
                 if name.ends_with(".xml") && !name.contains("Catalog") && !name.contains("knx_master") {
                     let mut content = String::new();
                     use std::io::Read;
-                    if file.read_to_string(&mut content).is_ok() && content.contains("<Hardware") {
-                        hardware_xmls.push(content);
+                    if file.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok()
+                        && content.contains("<Hardware")
+                    {
+                        if content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
+                            hardware_xmls.push(content);
+                        } else {
+                            return Err(format!("Hardware-XML '{}' überschreitet Sicherheitsgrenze von 64 MB", name));
+                        }
                     }
                 }
             }
@@ -270,32 +287,28 @@ fn parse_hardware_xml(
                             }
                         }
                     }
-                    "TranslationElement" => {
-                        if current_lang_prio > 0 {
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"RefId" {
-                                    current_tr_ref = String::from_utf8_lossy(&attr.value).to_string();
-                                }
+                    "TranslationElement" if current_lang_prio > 0 => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"RefId" {
+                                current_tr_ref = String::from_utf8_lossy(&attr.value).to_string();
                             }
                         }
                     }
-                    "Translation" => {
-                        if current_lang_prio > 0 && !current_tr_ref.is_empty() {
-                            let mut attr_name = String::new();
-                            let mut text_val = String::new();
-                            for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"AttributeName" {
-                                    attr_name = String::from_utf8_lossy(&attr.value).to_string();
-                                } else if attr.key.as_ref() == b"Text" {
-                                    text_val = String::from_utf8_lossy(&attr.value).to_string();
-                                }
+                    "Translation" if current_lang_prio > 0 && !current_tr_ref.is_empty() => {
+                        let mut attr_name = String::new();
+                        let mut text_val = String::new();
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"AttributeName" {
+                                attr_name = String::from_utf8_lossy(&attr.value).to_string();
+                            } else if attr.key.as_ref() == b"Text" {
+                                text_val = String::from_utf8_lossy(&attr.value).to_string();
                             }
-                            if attr_name == "Text" && !text_val.is_empty() {
-                                match translations.get(&current_tr_ref) {
-                                    Some((prio, _)) if *prio >= current_lang_prio => {}
-                                    _ => {
-                                        translations.insert(current_tr_ref.clone(), (current_lang_prio, text_val));
-                                    }
+                        }
+                        if attr_name == "Text" && !text_val.is_empty() {
+                            match translations.get(&current_tr_ref) {
+                                Some((prio, _)) if *prio >= current_lang_prio => {}
+                                _ => {
+                                    translations.insert(current_tr_ref.clone(), (current_lang_prio, text_val));
                                 }
                             }
                         }
@@ -326,7 +339,7 @@ fn parse_hardware_xml(
     let mut sorted_app_keys: Vec<String> = app_xmls.keys().cloned().collect();
     sorted_app_keys.sort();
 
-    let mut app_cache: HashMap<String, (Vec<CommunicationObject>, Vec<DeviceParameter>, Option<String>, Option<String>, HashMap<String, String>, Vec<ParameterAssignRule>)> = HashMap::new();
+    let mut app_cache: HashMap<String, ParsedAppProgram> = HashMap::new();
 
     let mut catalog_products = Vec::new();
 
@@ -445,16 +458,16 @@ fn clean_knx_template(text: &str) -> String {
     cleaned
 }
 
-pub fn parse_app_program_xml(
-    xml: &str,
-) -> (
+pub type ParsedAppProgram = (
     Vec<CommunicationObject>,
     Vec<DeviceParameter>,
     Option<String>,
     Option<String>,
     HashMap<String, String>,
     Vec<ParameterAssignRule>,
-) {
+);
+
+pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
     // PASS 1: Extract translations (with progressive language priority), ParameterTypes, and ParameterRefs
     let mut reader1 = Reader::from_str(xml);
     reader1.config_mut().trim_text(true);
@@ -963,7 +976,7 @@ pub fn parse_app_program_xml(
                             .get(&ch_id)
                             .and_then(|m| m.get("Text"))
                             .cloned()
-                            .unwrap_or_else(|| if !ch_text.is_empty() { ch_text } else { ch_name });
+                            .unwrap_or(if !ch_text.is_empty() { ch_text } else { ch_name });
                         let clean = clean_knx_template(&raw);
                         current_channel = if clean.is_empty() { None } else { Some(clean) };
                         current_block = None;
@@ -990,7 +1003,7 @@ pub fn parse_app_program_xml(
                             .get(&pb_id)
                             .and_then(|m| m.get("Text"))
                             .cloned()
-                            .unwrap_or_else(|| if !pb_text.is_empty() { pb_text } else { pb_name });
+                            .unwrap_or(if !pb_text.is_empty() { pb_text } else { pb_name });
                         let clean = clean_knx_template(&raw);
                         if !clean.is_empty() {
                             current_block = Some(clean);
@@ -1548,6 +1561,12 @@ pub fn infer_channels_from_product(
 #[derive(Clone)]
 pub struct CatalogManager {
     conn: Arc<Mutex<Connection>>,
+}
+
+impl Default for CatalogManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CatalogManager {
@@ -2361,6 +2380,7 @@ impl CatalogManager {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         })
     }
 }
@@ -2550,6 +2570,7 @@ mod tests {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         };
 
         CatalogManager::enrich_device_with_catalog(&mut device, &cat_prod);
@@ -2613,6 +2634,7 @@ mod tests {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         };
 
         let matched = mgr.find_matching_product(&dev).await.expect("Must match product");

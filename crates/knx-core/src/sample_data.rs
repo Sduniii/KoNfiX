@@ -236,6 +236,7 @@ pub fn create_demo_project() -> Project {
         security: None,
         loaded_image: None,
         checksums: None,
+        ..Default::default()
     };
 
     let dev_jal_id = Uuid::new_v4();
@@ -376,6 +377,7 @@ pub fn create_demo_project() -> Project {
         security: None,
         loaded_image: None,
         checksums: None,
+        ..Default::default()
     };
 
     let ch_t1_id = Uuid::new_v4();
@@ -503,6 +505,7 @@ pub fn create_demo_project() -> Project {
         security: None,
         loaded_image: None,
         checksums: None,
+        ..Default::default()
     };
 
     // Preconfigured Function Blocks
@@ -688,6 +691,7 @@ pub fn create_demo_project() -> Project {
         group_addresses: vec![],
         ga_scheme: GaScheme::FloorTradeFunction,
         topology: None,
+        ..Default::default()
     };
 
     // Run Auto-GA router to immediately initialize valid KNX group addresses!

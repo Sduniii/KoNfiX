@@ -36,6 +36,7 @@ import {
   DeviceParameter,
   GroupAddress,
   DeviceLiveStateResult,
+  DeviceChannel,
 } from '../../types/knx'
 import {
   linkKoToGroupAddress,
@@ -53,6 +54,11 @@ interface DeviceKoParamModalProps {
   project: Project | null
   onUpdateDevice: (updatedDevice: KnxDevice) => void
 }
+
+const EMPTY_KOS: CommunicationObject[] = []
+const EMPTY_PARAMS: DeviceParameter[] = []
+const EMPTY_CHANNELS: DeviceChannel[] = []
+const EMPTY_GAS: GroupAddress[] = []
 
 export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
   isOpen,
@@ -111,10 +117,10 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
     }
   }
 
-  const kos = device?.communication_objects ?? []
-  const params = device?.parameters ?? []
-  const channels = device?.channels ?? []
-  const allGas = project?.group_addresses ?? []
+  const kos = device?.communication_objects ?? EMPTY_KOS
+  const params = device?.parameters ?? EMPTY_PARAMS
+  const channels = device?.channels ?? EMPTY_CHANNELS
+  const allGas = project?.group_addresses ?? EMPTY_GAS
 
   // Detailed status for parameter dependencies (hierarchical choose/when)
   interface ParamConditionStatus {

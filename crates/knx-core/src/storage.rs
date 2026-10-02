@@ -42,6 +42,58 @@ pub fn default_data_dir() -> PathBuf {
     }
 }
 
+/// Sanitizes a user-supplied project or view name, preventing path traversal attacks,
+/// null bytes, control characters, and limiting length.
+pub fn sanitize_project_name(raw: &str) -> Result<String, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("Name darf nicht leer sein".to_string());
+    }
+    // Disallow path traversal components and path separators
+    if trimmed == "." || trimmed == ".." || trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err("Ungültiger Name: Pfadtraversierung und Pfadtrennzeichen sind nicht erlaubt".to_string());
+    }
+    // Disallow null bytes and control characters
+    if trimmed.chars().any(|c| c.is_control() || c == '\0') {
+        return Err("Ungültiger Name: Steuerzeichen sind nicht erlaubt".to_string());
+    }
+
+    let mut safe = String::with_capacity(trimmed.len());
+    for c in trimmed.chars() {
+        if c.is_alphanumeric() || c == '_' || c == '-' {
+            safe.push(c);
+        } else {
+            safe.push('_');
+        }
+    }
+
+    // Collapse multiple consecutive underscores
+    let mut collapsed = String::with_capacity(safe.len());
+    let mut last_was_underscore = false;
+    for c in safe.chars() {
+        if c == '_' {
+            if !last_was_underscore {
+                collapsed.push(c);
+                last_was_underscore = true;
+            }
+        } else {
+            collapsed.push(c);
+            last_was_underscore = false;
+        }
+    }
+
+    let cleaned = collapsed.trim_matches('_');
+    if cleaned.is_empty() {
+        return Err("Name enthält keine gültigen alphanumerischen Zeichen".to_string());
+    }
+
+    let mut result = cleaned.to_string();
+    if result.len() > 100 {
+        result.truncate(100);
+    }
+    Ok(result)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMetadata {
     pub name: String,
@@ -58,6 +110,12 @@ pub struct ProjectMetadata {
 #[derive(Clone)]
 pub struct StorageManager {
     settings: Arc<RwLock<StorageSettings>>,
+}
+
+impl Default for StorageManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StorageManager {
@@ -143,9 +201,26 @@ impl StorageManager {
 
     /// Updates data directory and optionally migrates projects
     pub async fn update_data_dir(&self, new_dir: &str, migrate: bool) -> Result<StorageSettings, String> {
-        let new_path = PathBuf::from(new_dir.trim());
-        if new_dir.trim().is_empty() {
+        let trimmed = new_dir.trim();
+        if trimmed.is_empty() {
             return Err("Verzeichnispfad darf nicht leer sein".to_string());
+        }
+
+        let new_path = PathBuf::from(trimmed);
+
+        // Security check: Block critical operating system root directories
+        let forbidden_roots = [
+            "/", "/etc", "/bin", "/sbin", "/usr", "/var", "/boot", "/sys", "/proc", "/dev", "/root",
+            "C:\\", "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)",
+        ];
+        let normalized = new_path.to_string_lossy().to_string();
+        for forbidden in &forbidden_roots {
+            if normalized == *forbidden || (normalized.starts_with(&format!("{}/", forbidden)) && *forbidden != "/") {
+                return Err(format!("Verzeichnis '{}' ist ein geschütztes Systemverzeichnis und kann nicht als KoNfiX-Speicherort verwendet werden", trimmed));
+            }
+        }
+        if normalized == "/" {
+            return Err("Wurzelverzeichnis '/' kann nicht als KoNfiX-Speicherort verwendet werden".to_string());
         }
 
         fs::create_dir_all(&new_path).map_err(|e| format!("Kann Verzeichnis nicht erstellen: {}", e))?;
@@ -271,9 +346,7 @@ impl StorageManager {
         fs::create_dir_all(&backups_dir).map_err(|e| e.to_string())?;
 
         let raw_name = custom_name.unwrap_or(&project.name).trim();
-        let safe_name = raw_name
-            .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '], "_");
-        let name = if safe_name.is_empty() { "default".to_string() } else { safe_name };
+        let name = sanitize_project_name(raw_name).unwrap_or_else(|_| "default".to_string());
 
         let file_path = projects_dir.join(format!("{}.konfix", name));
 
@@ -333,7 +406,7 @@ impl StorageManager {
         };
         let projects_dir = data_dir.join("projects");
 
-        let safe_name = name.trim().replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '], "_");
+        let safe_name = sanitize_project_name(name)?;
         let konfix_path = projects_dir.join(format!("{}.konfix", safe_name));
         let json_path = projects_dir.join(format!("{}.json", safe_name));
 
@@ -371,7 +444,7 @@ impl StorageManager {
             if let Ok(entries) = std::fs::read_dir(&data_dir) {
                 for entry in entries.flatten() {
                     let p = entry.path();
-                    if p.extension().map_or(false, |ext| ext == "knxproj") {
+                    if p.extension().is_some_and(|ext| ext == "knxproj") {
                         knxproj_candidates.push(p);
                     }
                 }
@@ -415,6 +488,49 @@ impl StorageManager {
         Ok(project)
     }
 
+    /// Saves the raw asset archive (M-* manufacturer catalogs, signatures, knx_master.xml)
+    /// to `<data_dir>/projects/<name>.assets.zip`
+    pub fn save_project_assets_sync(&self, project_name: &str, assets_zip_bytes: &[u8]) -> Result<(), String> {
+        let data_dir = {
+            let s = self.settings.read().unwrap();
+            PathBuf::from(&s.data_dir)
+        };
+        let projects_dir = data_dir.join("projects");
+        let _ = fs::create_dir_all(&projects_dir);
+        let safe_name = sanitize_project_name(project_name).unwrap_or_else(|_| "default".to_string());
+        let path = projects_dir.join(format!("{}.assets.zip", safe_name));
+        fs::write(&path, assets_zip_bytes)
+            .map_err(|e| format!("Fehler beim Schreiben von Assets {}: {}", path.display(), e))?;
+        Ok(())
+    }
+
+    /// Loads project asset archive if exists
+    pub fn load_project_assets_sync(&self, project_name: &str) -> Option<Vec<u8>> {
+        let data_dir = {
+            let s = self.settings.read().unwrap();
+            PathBuf::from(&s.data_dir)
+        };
+        let projects_dir = data_dir.join("projects");
+        let safe_name = sanitize_project_name(project_name).ok()?;
+
+        let path = projects_dir.join(format!("{}.assets.zip", safe_name));
+        if path.exists() {
+            if let Ok(bytes) = fs::read(&path) {
+                return Some(bytes);
+            }
+        }
+
+        None
+    }
+
+    pub async fn save_project_assets(&self, project_name: &str, assets_zip_bytes: &[u8]) -> Result<(), String> {
+        self.save_project_assets_sync(project_name, assets_zip_bytes)
+    }
+
+    pub async fn load_project_assets(&self, project_name: &str) -> Option<Vec<u8>> {
+        self.load_project_assets_sync(project_name)
+    }
+
     /// Saves view state (active workspace, zoom, pan, active room)
     pub async fn save_view(&self, project_name: &str, view_data: serde_json::Value) -> Result<(), String> {
         let data_dir = {
@@ -424,7 +540,7 @@ impl StorageManager {
         let views_dir = data_dir.join("views");
         fs::create_dir_all(&views_dir).map_err(|e| e.to_string())?;
 
-        let safe_name = project_name.trim().replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '], "_");
+        let safe_name = sanitize_project_name(project_name).unwrap_or_else(|_| "default".to_string());
         let view_path = views_dir.join(format!("{}.view.json", safe_name));
 
         let json = serde_json::to_string_pretty(&view_data).map_err(|e| e.to_string())?;
@@ -439,7 +555,7 @@ impl StorageManager {
             PathBuf::from(&s.data_dir)
         };
         let views_dir = data_dir.join("views");
-        let safe_name = project_name.trim().replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|', ' '], "_");
+        let safe_name = sanitize_project_name(project_name).ok()?;
         let view_path = views_dir.join(format!("{}.view.json", safe_name));
 
         if view_path.exists() {
@@ -556,6 +672,33 @@ mod tests {
 
         assert!(dev11.loaded_image.is_some()); // LoadedImage auto-populated!
         assert_eq!(dev11.get_serial_number(), Some("00:83:76:8A:0C:65")); // SerialNumber auto-populated!
+    }
+
+    #[test]
+    fn test_sanitize_project_name() {
+        assert_eq!(sanitize_project_name("Villa Marienthal").unwrap(), "Villa_Marienthal");
+        assert_eq!(sanitize_project_name("Mein-Projekt_2026").unwrap(), "Mein-Projekt_2026");
+        assert_eq!(sanitize_project_name("Haus_äöü_EG").unwrap(), "Haus_äöü_EG");
+
+        // Path traversal attempts must be rejected
+        assert!(sanitize_project_name("..").is_err());
+        assert!(sanitize_project_name("../evil").is_err());
+        assert!(sanitize_project_name("../../etc/passwd").is_err());
+        assert!(sanitize_project_name("sub/dir").is_err());
+        assert!(sanitize_project_name("sub\\dir").is_err());
+        assert!(sanitize_project_name("").is_err());
+        assert!(sanitize_project_name("   ").is_err());
+        assert!(sanitize_project_name("\0malicious").is_err());
+    }
+
+    #[tokio::test]
+    async fn test_update_data_dir_blocks_system_roots() {
+        let storage = StorageManager::new();
+        assert!(storage.update_data_dir("/", false).await.is_err());
+        assert!(storage.update_data_dir("/etc", false).await.is_err());
+        assert!(storage.update_data_dir("/bin", false).await.is_err());
+        assert!(storage.update_data_dir("/usr", false).await.is_err());
+        assert!(storage.update_data_dir("", false).await.is_err());
     }
 }
 

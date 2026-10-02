@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Room, Floor, FunctionBlock } from '../../types/knx'
+import { useTranslation } from '../../i18n/I18nContext'
 import {
   Layers,
   Plus,
@@ -52,6 +53,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
   onSelectRoom,
   onAddRoom,
 }) => {
+  const { t } = useTranslation()
   const [isAdding, setIsAdding] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
   const [selectedFloorId, setSelectedFloorId] = useState<string>(
@@ -139,10 +141,10 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950/40'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-transparent'
           }`}
-          title="Zentralfunktionen & Hausübersicht (Alle Räume)"
+          title={t('rooms.centralOverviewTooltip')}
         >
           <Layers className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Zentral / Alle</span>
+          <span>{t('rooms.centralOverview')}</span>
           <span
             className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
               selectedRoomId === null
@@ -226,7 +228,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
             <input
               type="text"
               autoFocus
-              placeholder="Raumname..."
+              placeholder={t('rooms.newRoomPlaceholder')}
               value={newRoomName}
               onChange={(e) => setNewRoomName(e.target.value)}
               className="bg-transparent text-slate-200 text-xs outline-none w-28 placeholder:text-slate-600"
@@ -247,7 +249,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
             <button
               type="submit"
               className="p-1 rounded text-emerald-400 hover:bg-emerald-500/20"
-              title="Raum erstellen"
+              title={t('common.confirm')}
             >
               <Check className="w-3.5 h-3.5" />
             </button>
@@ -255,7 +257,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
               type="button"
               onClick={() => setIsAdding(false)}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/20"
-              title="Abbrechen"
+              title={t('common.cancel')}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -264,10 +266,10 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
           <button
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-800/80 transition-colors"
-            title="Neuen Raum hinzufügen"
+            title={t('rooms.addRoomTooltip')}
           >
             <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Neuer Raum</span>
+            <span className="hidden sm:inline">{t('rooms.newRoom')}</span>
           </button>
         )}
       </div>

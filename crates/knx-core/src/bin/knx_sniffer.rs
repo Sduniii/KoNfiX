@@ -96,9 +96,10 @@ fn parse_socket_addr(s: &str) -> Result<SocketAddr, String> {
 
 /// Dynamically locates active gateway IP in ~/.konfix/projects/*.konfix or /data/projects/*.konfix
 fn find_gateway_in_konfix_projects() -> Option<SocketAddr> {
-    let mut candidate_dirs = Vec::new();
-    candidate_dirs.push(dirs_or_home_konfix().join("projects"));
-    candidate_dirs.push(PathBuf::from("/data/projects"));
+    let candidate_dirs = vec![
+        dirs_or_home_konfix().join("projects"),
+        PathBuf::from("/data/projects"),
+    ];
 
     for dir in candidate_dirs {
         if let Ok(entries) = std::fs::read_dir(&dir) {
@@ -598,14 +599,15 @@ fn handle_device_management_cemi(cemi: &[u8], assigned_ia: u16) -> Option<Vec<u8
     let count_start_hi = cemi[5];
     let count_start_lo = cemi[6];
 
-    let mut con = Vec::new();
-    con.push(0xFB); // M_PropRead.con
-    con.push(obj_type_hi);
-    con.push(obj_type_lo);
-    con.push(obj_inst);
-    con.push(prop_id);
-    con.push(count_start_hi);
-    con.push(count_start_lo);
+    let mut con = vec![
+        0xFB, // M_PropRead.con
+        obj_type_hi,
+        obj_type_lo,
+        obj_inst,
+        prop_id,
+        count_start_hi,
+        count_start_lo,
+    ];
 
     match prop_id {
         56 => {

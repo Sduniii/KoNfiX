@@ -35,6 +35,9 @@ export interface Translations {
     offline: string
     online: string
     test: string
+    devices: string
+    create: string
+    groupAddresses: string
   }
   header: {
     brandingSub: string
@@ -49,6 +52,7 @@ export interface Translations {
     storageSettings: string
     etsDataExchange: string
     exportKnxproj: string
+    importEtsProject: string
     exportCsv: string
     exportXml: string
     groupAddressesCsv: string
@@ -91,20 +95,37 @@ export interface Translations {
     diagnosticsDesc: string
     diagnosticsTitle: string
   }
+  canvas: {
+    autoLayout: string
+    autoLayoutTooltip: string
+    fitViewTooltip: string
+    gridPattern: string
+    snap: string
+  }
   rooms: {
+    title: string
     allRooms: string
+    centralOverview: string
+    centralOverviewTooltip: string
+    newRoom: string
     addRoom: string
+    addRoomTooltip: string
     newRoomPlaceholder: string
     floors: string
     noRooms: string
     room: string
     devicesCount: string
     blocksCount: string
+    buildingHierarchy: string
   }
   sidebar: {
     tabRooms: string
     tabDevices: string
     tabBlocks: string
+    rooms: string
+    blocks: string
+    devices: string
+    project: string
     searchPlaceholder: string
     unassignedDevices: string
     addDeviceToCanvas: string
@@ -121,6 +142,14 @@ export interface Translations {
   }
   inspector: {
     title: string
+    projectInspector: string
+    projectOverview: string
+    projectLabel: string
+    gaSchemaLabel: string
+    securityLabel: string
+    openGaManager: string
+    allGasTitle: string
+    activeGasCount: string
     noSelection: string
     noSelectionDesc: string
     deviceDetails: string
@@ -164,6 +193,7 @@ export interface Translations {
   }
   diagnostics: {
     title: string
+    subtitle: string
     lineScan: string
     scanAll: string
     scanLine: string
@@ -217,6 +247,17 @@ export interface Translations {
   storage: {
     title: string
     subtitle: string
+    openProjectTitle: string
+    openProjectSubtitle: string
+    newProject: string
+    newProjectPlaceholder: string
+    noProjectsFound: string
+    settingsTitle: string
+    settingsSubtitle: string
+    dataDirectory: string
+    dataDirectoryHint: string
+    migrateProjects: string
+    migrateProjectsDesc: string
     tabFileSystem: string
     tabMcp: string
     dataDirLabel: string
@@ -251,6 +292,7 @@ export interface Translations {
     title: string
     clear: string
     pause: string
+    paused: string
     resume: string
     autoScroll: string
     sendTelegram: string
@@ -264,6 +306,14 @@ export interface Translations {
     valueCol: string
     timeCol: string
     emptyLog: string
+    liveBusActive: string
+    telegramsCount: string
+    filterPlaceholder: string
+    clearLog: string
+    assignedNameCol: string
+    dptCol: string
+    testCol: string
+    emptyLogMessage: string
   }
   programming: {
     drawerTitle: string
@@ -287,7 +337,10 @@ export interface Translations {
     passwordLabel: string
     passwordPlaceholder: string
     downloadButton: string
+    exportButton: string
     exporting: string
+    exported: string
+    passwordProtection: string
     statsDevices: string
     statsGas: string
     statsRooms: string

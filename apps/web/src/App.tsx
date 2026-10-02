@@ -3,13 +3,13 @@ import {
   Project,
   FunctionBlockType,
   FunctionBlock,
-  BlockPin,
   WireConnection,
   KnxDevice,
   GroupAddress,
   GaScheme,
   GatewayConnectionStatus,
 } from './types/knx'
+import { createDefaultFunctionBlock } from './utils/blockFactory'
 import {
   fetchAppVersion,
   fetchProject,
@@ -31,21 +31,32 @@ import { LeftSidebar } from './components/sidebar/LeftSidebar'
 import { RightSidebar } from './components/inspector/RightSidebar'
 import { FlowCanvas } from './components/canvas/FlowCanvas'
 import { BusMonitor } from './components/monitor/BusMonitor'
-import { AddDeviceModal } from './components/devices/AddDeviceModal'
-import { DeviceKoParamModal } from './components/devices/DeviceKoParamModal'
-import { GaManagementModal } from './components/ga/GaManagementModal'
-import { GatewayModal } from './components/gateway/GatewayModal'
-import { ImportModal } from './components/import/ImportModal'
-import { SceneMixerModal } from './components/scenes/SceneMixerModal'
-import { DiagnosticsWorkspace } from './components/diagnostics/DiagnosticsWorkspace'
-import { TopologyWorkspace } from './components/topology/TopologyWorkspace'
-import { DeviceSecurityModal } from './components/devices/DeviceSecurityModal'
-import { ExportKnxprojModal } from './components/export/ExportKnxprojModal'
-import { ProgrammingJobDrawer } from './components/programming/ProgrammingJobDrawer'
-import { OpenProjectModal } from './components/storage/OpenProjectModal'
-import { StorageSettingsModal } from './components/storage/StorageSettingsModal'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { Loader2 } from 'lucide-react'
+
+// On-demand lazy-loaded workspaces and modals for optimal initial bundle size
+const AddDeviceModal = React.lazy(() => import('./components/devices/AddDeviceModal').then(m => ({ default: m.AddDeviceModal })))
+const DeviceKoParamModal = React.lazy(() => import('./components/devices/DeviceKoParamModal').then(m => ({ default: m.DeviceKoParamModal })))
+const GaManagementModal = React.lazy(() => import('./components/ga/GaManagementModal').then(m => ({ default: m.GaManagementModal })))
+const GatewayModal = React.lazy(() => import('./components/gateway/GatewayModal').then(m => ({ default: m.GatewayModal })))
+const ImportModal = React.lazy(() => import('./components/import/ImportModal').then(m => ({ default: m.ImportModal })))
+const SceneMixerModal = React.lazy(() => import('./components/scenes/SceneMixerModal').then(m => ({ default: m.SceneMixerModal })))
+const DiagnosticsWorkspace = React.lazy(() => import('./components/diagnostics/DiagnosticsWorkspace').then(m => ({ default: m.DiagnosticsWorkspace })))
+const TopologyWorkspace = React.lazy(() => import('./components/topology/TopologyWorkspace').then(m => ({ default: m.TopologyWorkspace })))
+const DeviceSecurityModal = React.lazy(() => import('./components/devices/DeviceSecurityModal').then(m => ({ default: m.DeviceSecurityModal })))
+const ExportKnxprojModal = React.lazy(() => import('./components/export/ExportKnxprojModal').then(m => ({ default: m.ExportKnxprojModal })))
+const ProgrammingJobDrawer = React.lazy(() => import('./components/programming/ProgrammingJobDrawer').then(m => ({ default: m.ProgrammingJobDrawer })))
+const OpenProjectModal = React.lazy(() => import('./components/storage/OpenProjectModal').then(m => ({ default: m.OpenProjectModal })))
+const StorageSettingsModal = React.lazy(() => import('./components/storage/StorageSettingsModal').then(m => ({ default: m.StorageSettingsModal })))
+
+function WorkspaceFallback({ label }: { label: string }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+      <Loader2 className="w-8 h-8 animate-spin text-sky-500" />
+      <span className="text-sm">{label} wird geladen...</span>
+    </div>
+  )
+}
 
 export function App() {
   const [project, setProject] = useState<Project | null>(null)
@@ -525,438 +536,12 @@ export function App() {
       if (!project) return
 
       const roomId = selectedRoomId || project.rooms[0]?.id || null
-      const blockId = crypto.randomUUID()
-      const blockCount = project.blocks.length
-
-      let name = 'Neue Lichtsteuerung'
-      let inputs: BlockPin[] = []
-      let outputs: BlockPin[] = []
-      let state: Record<string, any> = {}
-      let parameters: Record<string, any> = {}
-
-      if (type === 'LightController') {
-        name = `Licht ${blockCount + 1}`
-        inputs = [
-          {
-            id: 't',
-            name: 'T (Toggle)',
-            description: 'Taster-Eingang',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'sw',
-            name: 'SW (Schalten)',
-            description: 'Schaltbefehl',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'val',
-            name: 'VAL (Wert)',
-            description: 'Dimmwert',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'stat_sw',
-            name: 'STAT (Status)',
-            description: 'Status Schalten',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        state = { is_on: false, brightness: 0 }
-      } else if (type === 'BlindController') {
-        name = `Jalousie ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'up',
-            name: 'AUF',
-            description: 'Auf',
-            dpt: '1.008',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'down',
-            name: 'AB',
-            description: 'Ab',
-            dpt: '1.008',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'move',
-            name: 'MOVE',
-            description: 'Fahrt Auf/Ab',
-            dpt: '1.008',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'pos',
-            name: 'POS',
-            description: 'Position 0-100%',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        state = { position: 0, slat: 0 }
-      } else if (type === 'ClimateController') {
-        name = `Heizung ${blockCount + 1}`
-        inputs = [
-          {
-            id: 't_act',
-            name: 'T_IST',
-            description: 'Ist-Temperatur',
-            dpt: '9.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 't_set',
-            name: 'SOLL',
-            description: 'Soll-Temperatur',
-            dpt: '9.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'heat_val',
-            name: 'VENTIL',
-            description: 'Ventil PWM',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        state = { target_temp: 21.0, act_temp: 20.5, valve_pwm: 30 }
-      } else if (type === 'SceneController') {
-        name = `Lichtszenen ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'trig',
-            name: 'TRIG',
-            description: 'Szene weiterschalten',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'prev',
-            name: 'PREV',
-            description: 'Vorherige Szene',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'scene',
-            name: 'SCN',
-            description: 'Szene Direktanwahl',
-            dpt: '18.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'all_off',
-            name: 'AUS',
-            description: 'Alles Aus',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'scene_ctrl',
-            name: 'SCENE',
-            description: 'Szenensteuerung',
-            dpt: '18.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'all_off',
-            name: 'AUS',
-            description: 'Alles Aus Status',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'ch1_val',
-            name: 'CH1',
-            description: 'Kreis 1 Dimmwert (0-100%)',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'ch2_val',
-            name: 'CH2',
-            description: 'Kreis 2 Dimmwert (0-100%)',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'ch3_val',
-            name: 'CH3',
-            description: 'Kreis 3 Dimmwert (0-100%)',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = {
-          fade_time_sec: 1.5,
-          circuits: [
-            { id: 'c1', name: 'Decke', type: 'dimmer', color: '#f59e0b' },
-            { id: 'c2', name: 'Wand', type: 'dimmer', color: '#ec4899' },
-            { id: 'c3', name: 'Indirekt', type: 'dimmer', color: '#8b5cf6' },
-            { id: 'c4', name: 'Esstisch', type: 'dimmer', color: '#06b6d4' },
-          ],
-          scenes: [
-            { no: 1, name: 'Normal / Hell', icon: '☀️', fade_time: 1.5, values: { c1: 90, c2: 70, c3: 80, c4: 85 } },
-            { no: 2, name: 'Kochen / Essen', icon: '🍳', fade_time: 1.5, values: { c1: 100, c2: 80, c3: 40, c4: 100 } },
-            { no: 3, name: 'TV / Relax', icon: '🍿', fade_time: 2.0, values: { c1: 0, c2: 25, c3: 45, c4: 0 } },
-            { no: 4, name: 'Nacht / Orientierung', icon: '🌙', fade_time: 2.5, values: { c1: 0, c2: 10, c3: 15, c4: 0 } },
-            { no: 5, name: 'Alles Aus', icon: '🌑', fade_time: 1.0, values: { c1: 0, c2: 0, c3: 0, c4: 0 } },
-          ],
-        }
-        state = {
-          active_scene: 1,
-          scene_name: 'Normal / Hell',
-          scene_icon: '☀️',
-          fader_values: { c1: 90, c2: 70, c3: 80, c4: 85 },
-          is_all_off: false,
-        }
-      } else if (type === 'StaircaseTimer') {
-        name = `Treppenlicht ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'trig',
-            name: 'TRIG',
-            description: 'Taster-Eingang',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'sw',
-            name: 'SW',
-            description: 'Schaltbefehl',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = { duration_sec: 120 }
-        state = { is_on: false, remaining_sec: 0 }
-      } else if (type === 'LogicGate') {
-        name = `Logik ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'in1',
-            name: 'IN1',
-            description: 'Eingang 1',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'in2',
-            name: 'IN2',
-            description: 'Eingang 2',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'out',
-            name: 'OUT',
-            description: 'Ausgang',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = { gate_type: 'AND' }
-        state = { in1: false, in2: false, out: false }
-      } else if (type === 'AstroSunProtection') {
-        name = `Astro Sonnenschutz ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'wind_speed',
-            name: 'WIND',
-            description: 'Windgeschwindigkeit (m/s)',
-            dpt: '9.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'brightness',
-            name: 'LUX',
-            description: 'Helligkeit (Lux)',
-            dpt: '9.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'rain',
-            name: 'REGEN',
-            description: 'Regenstatus (Ja/Nein)',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-          {
-            id: 'lock',
-            name: 'SPERRE',
-            description: 'Manuelle Sperre',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'wind_alarm',
-            name: 'ALARM',
-            description: 'Windalarm (1=Alarm)',
-            dpt: '1.005',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'sun_active',
-            name: 'SONNE',
-            description: 'Sonnenschutz aktiv',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'target_pos',
-            name: 'POS',
-            description: 'Soll-Position Jalousie %',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-          {
-            id: 'target_blade',
-            name: 'LAMELLE',
-            description: 'Soll-Winkel Lamelle %',
-            dpt: '5.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = {
-          facade_orientation_deg: 180.0,
-          wind_alarm_threshold: 12.0,
-          sun_brightness_threshold: 35000.0,
-          sun_elevation_min: 10.0,
-          blind_protection_pos: 80,
-          blade_protection_pos: 45,
-        }
-        state = {
-          wind_speed: 3.2,
-          rain: false,
-          brightness: 42000,
-          temp: 22.4,
-          is_wind_alarm: false,
-          is_sun_protecting: false,
-          target_pos: 0,
-          target_blade: 0,
-        }
-      } else if (type === 'TimerScheduler') {
-        name = `Zeitschaltuhr ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'enable',
-            name: 'EN',
-            description: 'Freigabe',
-            dpt: '1.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'out',
-            name: 'OUT',
-            description: 'Schaltausgang',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = {
-          on_time: '07:00',
-          off_time: '22:00',
-          active_days: [1, 2, 3, 4, 5],
-        }
-        state = { enabled: true, is_active: false, current_time: '12:00' }
-      } else if (type === 'ThresholdSwitch') {
-        name = `Schwellwert ${blockCount + 1}`
-        inputs = [
-          {
-            id: 'in_val',
-            name: 'IN',
-            description: 'Analoger Messwert',
-            dpt: '9.001',
-            direction: 'Input',
-            group_address_id: null,
-          },
-        ]
-        outputs = [
-          {
-            id: 'out',
-            name: 'OUT',
-            description: 'Schaltausgang Hysterese',
-            dpt: '1.001',
-            direction: 'Output',
-            group_address_id: null,
-          },
-        ]
-        parameters = {
-          threshold_on: 24.0,
-          threshold_off: 22.0,
-          direction: 'Above',
-        }
-        state = { in_val: 21.5, out: false }
-      }
-
-      const newBlock: FunctionBlock = {
-        id: blockId,
-        name,
-        block_type: type,
-        room_id: roomId,
-        position: customPosition || { x: 380, y: 150 + blockCount * 180 },
-        inputs,
-        outputs,
-        parameters,
-        state,
-      }
+      const newBlock = createDefaultFunctionBlock(
+        type,
+        project.blocks.length,
+        roomId,
+        customPosition
+      )
 
       const updatedProject: Project = {
         ...project,
@@ -966,7 +551,7 @@ export function App() {
       try {
         const saved = await updateProject(updatedProject)
         setProject(saved)
-        setSelectedBlockId(blockId)
+        setSelectedBlockId(newBlock.id)
       } catch (err) {
         console.error('Failed to add block:', err)
       }
@@ -1015,6 +600,7 @@ export function App() {
     async (connectionIds: string[]) => {
       if (!project || connectionIds.length === 0) return
       let currentProj = project
+      const idSet = new Set(connectionIds)
       for (const id of connectionIds) {
         try {
           const res = await disconnectPins(id)
@@ -1022,17 +608,19 @@ export function App() {
             currentProj = res.project
           }
         } catch (err) {
-          console.error('Failed to disconnect via API:', err)
-          const idSet = new Set(connectionIds)
-          currentProj = {
+          console.error(`Failed to disconnect pin ${id} via API:`, err)
+        }
+      }
+      // Fallback: If any requested connection was not removed via API, clean up locally and sync once
+      const remainingUnwanted = currentProj.connections.some((c) => idSet.has(c.id))
+      if (remainingUnwanted) {
+        try {
+          currentProj = await updateProject({
             ...currentProj,
             connections: currentProj.connections.filter((c) => !idSet.has(c.id)),
-          }
-          try {
-            currentProj = await updateProject(currentProj)
-          } catch (updateErr) {
-            console.error('Failed to update project after delete:', updateErr)
-          }
+          })
+        } catch (updateErr) {
+          console.error('Failed to update project after fallback connection deletion:', updateErr)
         }
       }
       setProject(currentProj)
@@ -1570,29 +1158,33 @@ export function App() {
       {activeWorkspace === 'diagnostics' ? (
         <div className="flex-1 flex flex-col overflow-hidden relative w-full h-full">
           <ErrorBoundary fallbackTitle="Fehler im ETS-Diagnose-Workspace">
-            <DiagnosticsWorkspace
-              project={project}
-              onReloadProject={handleReloadProject}
-              initialAddress={diagnosticsInitialAddress}
-              onSwitchToCanvas={() => {
-                setActiveWorkspace('canvas')
-                setDiagnosticsInitialAddress(null)
-              }}
-            />
+            <React.Suspense fallback={<WorkspaceFallback label="Diagnose-Arbeitsbereich" />}>
+              <DiagnosticsWorkspace
+                project={project}
+                onReloadProject={handleReloadProject}
+                initialAddress={diagnosticsInitialAddress}
+                onSwitchToCanvas={() => {
+                  setActiveWorkspace('canvas')
+                  setDiagnosticsInitialAddress(null)
+                }}
+              />
+            </React.Suspense>
           </ErrorBoundary>
         </div>
       ) : activeWorkspace === 'topology' ? (
         <div className="flex-1 flex flex-col overflow-hidden relative w-full h-full">
           <ErrorBoundary fallbackTitle="Fehler im KNX Topologie & Filtertabellen-Workspace">
-            <TopologyWorkspace
-              project={project}
-              onReloadProject={handleReloadProject}
-              onSwitchToCanvas={() => setActiveWorkspace('canvas')}
-              onOpenDeviceModal={(dev) => {
-                setDeviceForKoModal(dev)
-                setIsDeviceKoModalOpen(true)
-              }}
-            />
+            <React.Suspense fallback={<WorkspaceFallback label="Topologie-Arbeitsbereich" />}>
+              <TopologyWorkspace
+                project={project}
+                onReloadProject={handleReloadProject}
+                onSwitchToCanvas={() => setActiveWorkspace('canvas')}
+                onOpenDeviceModal={(dev) => {
+                  setDeviceForKoModal(dev)
+                  setIsDeviceKoModalOpen(true)
+                }}
+              />
+            </React.Suspense>
           </ErrorBoundary>
         </div>
       ) : (
@@ -1696,119 +1288,121 @@ export function App() {
         />
       </ErrorBoundary>
 
-      {/* 4. Hardware Catalog & Device Management Modal */}
-      <AddDeviceModal
-        isOpen={isAddDeviceModalOpen}
-        onClose={() => setIsAddDeviceModalOpen(false)}
-        existingDevices={project?.devices ?? []}
-        rooms={project?.rooms ?? []}
-        currentRoomId={selectedRoomId}
-        onAddDevice={handleAddDevice}
-      />
+      <React.Suspense fallback={null}>
+        {/* 4. Hardware Catalog & Device Management Modal */}
+        <AddDeviceModal
+          isOpen={isAddDeviceModalOpen}
+          onClose={() => setIsAddDeviceModalOpen(false)}
+          existingDevices={project?.devices ?? []}
+          rooms={project?.rooms ?? []}
+          currentRoomId={selectedRoomId}
+          onAddDevice={handleAddDevice}
+        />
 
-      {/* 4b. KNX Device KOs & Parameter Modal */}
-      <ErrorBoundary fallbackTitle="Fehler im KO- & Parametertabellen-Dialog">
-        {isDeviceKoModalOpen && deviceForKoModal && (
-          <DeviceKoParamModal
-            isOpen={isDeviceKoModalOpen}
-            onClose={() => {
-              setIsDeviceKoModalOpen(false)
-              setDeviceForKoModal(null)
+        {/* 4b. KNX Device KOs & Parameter Modal */}
+        <ErrorBoundary fallbackTitle="Fehler im KO- & Parametertabellen-Dialog">
+          {isDeviceKoModalOpen && deviceForKoModal && (
+            <DeviceKoParamModal
+              isOpen={isDeviceKoModalOpen}
+              onClose={() => {
+                setIsDeviceKoModalOpen(false)
+                setDeviceForKoModal(null)
+              }}
+              device={deviceForKoModal}
+              project={project}
+              onUpdateDevice={handleUpdateDevice}
+            />
+          )}
+        </ErrorBoundary>
+
+        {/* 5. KNX Group Address Scheme & Management Modal */}
+        <GaManagementModal
+          isOpen={isGaModalOpen}
+          onClose={() => setIsGaModalOpen(false)}
+          project={project}
+          onSetScheme={handleSetGaScheme}
+          onUpdateGroupAddress={handleUpdateGroupAddress}
+        />
+
+        {/* 6. KNXnet/IP Live Gateway Connection Modal */}
+        <GatewayModal
+          isOpen={isGatewayModalOpen}
+          onClose={() => setIsGatewayModalOpen(false)}
+          connectionStatus={gatewayStatus}
+          onStatusChange={setGatewayStatus}
+        />
+
+        {/* 7. ETS Project Import Modal (.knxproj / .csv) */}
+        <ImportModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onImportSuccess={handleReloadProject}
+        />
+
+        {/* 7b. ETS Project Roundtrip Export Modal (.knxproj) */}
+        <ExportKnxprojModal
+          isOpen={isExportKnxprojModalOpen}
+          onClose={() => setIsExportKnxprojModalOpen(false)}
+          project={project}
+        />
+
+        {/* 8. Studio Light Mixer Modal (Loxone Stimmungen & KNX Szenen) */}
+        {mixerBlock && (
+          <SceneMixerModal
+            isOpen={Boolean(mixerBlock)}
+            onClose={() => setMixerBlock(null)}
+            block={mixerBlock}
+            onSaveBlock={async (updatedBlock) => {
+              setMixerBlock(updatedBlock)
+              if (!project) return
+              const updatedBlocks = project.blocks.map((b) =>
+                b.id === updatedBlock.id ? updatedBlock : b
+              )
+              const updatedProject = { ...project, blocks: updatedBlocks }
+              setProject(updatedProject)
+              try {
+                await updateProject(updatedProject)
+              } catch (err) {
+                console.error('Failed to save project with updated scene block:', err)
+              }
             }}
-            device={deviceForKoModal}
-            project={project}
-            onUpdateDevice={handleUpdateDevice}
+            onAction={async (pin, value) => {
+              if (mixerBlock) {
+                await handleBlockAction(mixerBlock.id, pin, value)
+              }
+            }}
+            roomName={project?.rooms.find((r) => r.id === mixerBlock.room_id)?.name}
           />
         )}
-      </ErrorBoundary>
 
-      {/* 5. KNX Group Address Scheme & Management Modal */}
-      <GaManagementModal
-        isOpen={isGaModalOpen}
-        onClose={() => setIsGaModalOpen(false)}
-        project={project}
-        onSetScheme={handleSetGaScheme}
-        onUpdateGroupAddress={handleUpdateGroupAddress}
-      />
-
-      {/* 6. KNXnet/IP Live Gateway Connection Modal */}
-      <GatewayModal
-        isOpen={isGatewayModalOpen}
-        onClose={() => setIsGatewayModalOpen(false)}
-        connectionStatus={gatewayStatus}
-        onStatusChange={setGatewayStatus}
-      />
-
-      {/* 7. ETS Project Import Modal (.knxproj / .csv) */}
-      <ImportModal
-        isOpen={isImportModalOpen}
-        onClose={() => setIsImportModalOpen(false)}
-        onImportSuccess={handleReloadProject}
-      />
-
-      {/* 7b. ETS Project Roundtrip Export Modal (.knxproj) */}
-      <ExportKnxprojModal
-        isOpen={isExportKnxprojModalOpen}
-        onClose={() => setIsExportKnxprojModalOpen(false)}
-        project={project}
-      />
-
-      {/* 8. Studio Light Mixer Modal (Loxone Stimmungen & KNX Szenen) */}
-      {mixerBlock && (
-        <SceneMixerModal
-          isOpen={Boolean(mixerBlock)}
-          onClose={() => setMixerBlock(null)}
-          block={mixerBlock}
-          onSaveBlock={async (updatedBlock) => {
-            setMixerBlock(updatedBlock)
-            if (!project) return
-            const updatedBlocks = project.blocks.map((b) =>
-              b.id === updatedBlock.id ? updatedBlock : b
-            )
-            const updatedProject = { ...project, blocks: updatedBlocks }
-            setProject(updatedProject)
-            try {
-              await updateProject(updatedProject)
-            } catch (err) {
-              console.error('Failed to save project with updated scene block:', err)
-            }
+        {/* 9. KNX Data Secure (TP) Configuration Modal */}
+        <DeviceSecurityModal
+          isOpen={isSecurityModalOpen}
+          onClose={() => {
+            setIsSecurityModalOpen(false)
+            setDeviceForSecurityModal(null)
           }}
-          onAction={async (pin, value) => {
-            if (mixerBlock) {
-              await handleBlockAction(mixerBlock.id, pin, value)
-            }
-          }}
-          roomName={project?.rooms.find((r) => r.id === mixerBlock.room_id)?.name}
+          device={deviceForSecurityModal}
+          onSecuritySaved={handleReloadProject}
         />
-      )}
 
-      {/* 9. KNX Data Secure (TP) Configuration Modal */}
-      <DeviceSecurityModal
-        isOpen={isSecurityModalOpen}
-        onClose={() => {
-          setIsSecurityModalOpen(false)
-          setDeviceForSecurityModal(null)
-        }}
-        device={deviceForSecurityModal}
-        onSecuritySaved={handleReloadProject}
-      />
+        {/* 10. Floating KNX Flash-Manager & Sequential Job Queue */}
+        <ProgrammingJobDrawer onJobsUpdated={handleReloadProject} />
 
-      {/* 10. Floating KNX Flash-Manager & Sequential Job Queue */}
-      <ProgrammingJobDrawer onJobsUpdated={handleReloadProject} />
+        {/* 11. Open / Switch / Create Project Modal */}
+        <OpenProjectModal
+          isOpen={isOpenProjectModalOpen}
+          onClose={() => setIsOpenProjectModalOpen(false)}
+          activeProjectName={project?.name}
+          onProjectLoaded={handleProjectLoaded}
+        />
 
-      {/* 11. Open / Switch / Create Project Modal */}
-      <OpenProjectModal
-        isOpen={isOpenProjectModalOpen}
-        onClose={() => setIsOpenProjectModalOpen(false)}
-        activeProjectName={project?.name}
-        onProjectLoaded={handleProjectLoaded}
-      />
-
-      {/* 12. Storage Directory & Settings Modal */}
-      <StorageSettingsModal
-        isOpen={isStorageSettingsModalOpen}
-        onClose={() => setIsStorageSettingsModalOpen(false)}
-      />
+        {/* 12. Storage Directory & Settings Modal */}
+        <StorageSettingsModal
+          isOpen={isStorageSettingsModalOpen}
+          onClose={() => setIsStorageSettingsModalOpen(false)}
+        />
+      </React.Suspense>
     </div>
   )
 }

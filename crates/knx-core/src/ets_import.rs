@@ -79,11 +79,18 @@ pub fn infer_dpt_from_name(name: &str) -> &'static str {
         "1.008"
     } else if lower.contains("stopp") || lower.contains("stop") {
         "1.010"
-    } else if lower.contains("schalten") || lower.contains("ein/aus") || lower.contains("status") && !lower.contains("wert") && !lower.contains("position") {
-        "1.001"
-    } else if lower.contains("präsenz") || lower.contains("bewegung") || lower.contains("kontakt") || lower.contains("fenster") {
-        "1.001"
-    } else if lower.contains("tag / nacht") || lower.contains("tag/nacht") || lower.contains("frost") || lower.contains("komfort") {
+    } else if lower.contains("schalten")
+        || lower.contains("ein/aus")
+        || (lower.contains("status") && !lower.contains("wert") && !lower.contains("position"))
+        || lower.contains("präsenz")
+        || lower.contains("bewegung")
+        || lower.contains("kontakt")
+        || lower.contains("fenster")
+        || lower.contains("tag / nacht")
+        || lower.contains("tag/nacht")
+        || lower.contains("frost")
+        || lower.contains("komfort")
+    {
         "1.001"
     } else if lower.contains("dimmen") && !lower.contains("wert") {
         "3.007"
@@ -155,8 +162,8 @@ fn canonicalize_room_name(raw: &str) -> (String, Option<String>) {
     ];
 
     for main in main_rooms {
-        if raw.starts_with(main) {
-            let sub = raw[main.len()..].trim();
+        if let Some(sub_slice) = raw.strip_prefix(main) {
+            let sub = sub_slice.trim();
             let sub_opt = if sub.is_empty() { None } else { Some(sub.to_string()) };
             let display_main = if main == "Heizungraum" { "Heizungsraum" } else { main };
             return (display_main.to_string(), sub_opt);
@@ -247,10 +254,10 @@ pub fn parse_ets_csv(content: &str, project_name: &str) -> Result<Project, Strin
             let dpt = infer_dpt_from_name(c2);
 
             // Extract room: |RoomName| FunctionName
-            let (room_name_opt, _func_name) = if c2.starts_with('|') {
-                if let Some(end_idx) = c2[1..].find('|') {
-                    let r_raw = &c2[1..1 + end_idx];
-                    let f_raw = c2[1 + end_idx + 1..].trim();
+            let (room_name_opt, _func_name) = if let Some(stripped) = c2.strip_prefix('|') {
+                if let Some(end_idx) = stripped.find('|') {
+                    let r_raw = &stripped[..end_idx];
+                    let f_raw = stripped[end_idx + 1..].trim();
                     (Some(r_raw.trim().to_string()), f_raw.to_string())
                 } else {
                     (None, c2.to_string())
@@ -304,6 +311,7 @@ pub fn parse_ets_csv(content: &str, project_name: &str) -> Result<Project, Strin
                 origin_block_id: None,
                 origin_pin_name: None,
                 is_custom: true, // Preserve real ETS addresses
+                ..Default::default()
             });
         }
     }
@@ -342,12 +350,12 @@ pub fn parse_ets_csv(content: &str, project_name: &str) -> Result<Project, Strin
     // Group rollos by room
     let mut rollos_by_room: HashMap<String, Vec<&GroupAddress>> = HashMap::new();
     for ga in &group_addresses {
-        if ga.main == 1 || ga.description.to_lowercase().contains("rollo") || ga.name.to_lowercase().contains("auf/ab") {
-            if ga.name.starts_with('|') {
-                if let Some(end) = ga.name[1..].find('|') {
-                    let r_raw = &ga.name[1..1 + end];
-                    rollos_by_room.entry(r_raw.trim().to_string()).or_default().push(ga);
-                }
+        if (ga.main == 1 || ga.description.to_lowercase().contains("rollo") || ga.name.to_lowercase().contains("auf/ab"))
+            && ga.name.starts_with('|')
+        {
+            if let Some(end) = ga.name[1..].find('|') {
+                let r_raw = &ga.name[1..1 + end];
+                rollos_by_room.entry(r_raw.trim().to_string()).or_default().push(ga);
             }
         }
     }
@@ -448,6 +456,7 @@ pub fn parse_ets_csv(content: &str, project_name: &str) -> Result<Project, Strin
         connections: Vec::new(),
         group_addresses,
         topology: None,
+        ..Default::default()
     };
     crate::topology::TopologyManager::ensure_topology(&mut project);
     Ok(project)
@@ -497,6 +506,9 @@ pub struct KnxprojCatalogContext {
     pub app_programs: HashMap<String, RawAppProgramInfo>,
 }
 
+/// Maximum allowed decompressed size for an XML entry in a project archive (64 MB)
+const MAX_DECOMPRESSED_ENTRY_SIZE: u64 = 64 * 1024 * 1024;
+
 fn extract_catalog_context(outer_zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]>>) -> KnxprojCatalogContext {
     use quick_xml::events::Event;
     use quick_xml::reader::Reader;
@@ -507,7 +519,7 @@ fn extract_catalog_context(outer_zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]
     // 1. Read knx_master.xml
     if let Ok(mut f) = outer_zip.by_name("knx_master.xml") {
         let mut content = String::new();
-        if f.read_to_string(&mut content).is_ok() {
+        if f.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok() && content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
             let mut reader = Reader::from_str(&content);
             reader.config_mut().trim_text(true);
             let mut buf = Vec::new();
@@ -547,7 +559,7 @@ fn extract_catalog_context(outer_zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]
         if name.ends_with("Hardware.xml") {
             let mut content = String::new();
             if let Ok(mut f) = outer_zip.by_name(name) {
-                if f.read_to_string(&mut content).is_ok() {
+                if f.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok() && content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
                     let mfr_id = name.split('/').next().unwrap_or("").to_string();
                     let mfr_name = ctx.manufacturers.get(&mfr_id).cloned().unwrap_or_else(|| {
                         crate::knxprod::lookup_knx_manufacturer(&mfr_id)
@@ -628,29 +640,25 @@ fn extract_catalog_context(outer_zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]
                                             }
                                         }
                                     }
-                                    "TranslationElement" => {
-                                        if in_de {
-                                            for attr in e.attributes().flatten() {
-                                                if attr.key.as_ref() == b"RefId" {
-                                                    current_tr_ref = String::from_utf8_lossy(&attr.value).to_string();
-                                                }
+                                    "TranslationElement" if in_de => {
+                                        for attr in e.attributes().flatten() {
+                                            if attr.key.as_ref() == b"RefId" {
+                                                current_tr_ref = String::from_utf8_lossy(&attr.value).to_string();
                                             }
                                         }
                                     }
-                                    "Translation" => {
-                                        if in_de && !current_tr_ref.is_empty() {
-                                            let mut attr_name = String::new();
-                                            let mut text_val = String::new();
-                                            for attr in e.attributes().flatten() {
-                                                if attr.key.as_ref() == b"AttributeName" {
-                                                    attr_name = String::from_utf8_lossy(&attr.value).to_string();
-                                                } else if attr.key.as_ref() == b"Text" {
-                                                    text_val = String::from_utf8_lossy(&attr.value).to_string();
-                                                }
+                                    "Translation" if in_de && !current_tr_ref.is_empty() => {
+                                        let mut attr_name = String::new();
+                                        let mut text_val = String::new();
+                                        for attr in e.attributes().flatten() {
+                                            if attr.key.as_ref() == b"AttributeName" {
+                                                attr_name = String::from_utf8_lossy(&attr.value).to_string();
+                                            } else if attr.key.as_ref() == b"Text" {
+                                                text_val = String::from_utf8_lossy(&attr.value).to_string();
                                             }
-                                            if attr_name == "Text" && !text_val.is_empty() {
-                                                de_trans.insert(current_tr_ref.clone(), text_val);
-                                            }
+                                        }
+                                        if attr_name == "Text" && !text_val.is_empty() {
+                                            de_trans.insert(current_tr_ref.clone(), text_val);
                                         }
                                     }
                                     _ => {}
@@ -681,7 +689,7 @@ fn extract_catalog_context(outer_zip: &mut zip::ZipArchive<std::io::Cursor<&[u8]
         } else if (name.contains("_A-") || name.contains("ApplicationProgram")) && name.ends_with(".xml") {
             let mut content = String::new();
             if let Ok(mut f) = outer_zip.by_name(name) {
-                if f.read_to_string(&mut content).is_ok() {
+                if f.by_ref().take(MAX_DECOMPRESSED_ENTRY_SIZE + 1).read_to_string(&mut content).is_ok() && content.len() as u64 <= MAX_DECOMPRESSED_ENTRY_SIZE {
                     let (mut cos, params, mask_version, app_name, pref_to_param, assign_rules) = parse_app_program_xml(&content);
 
                     // Also extract de-DE translations for KOs
@@ -804,6 +812,11 @@ fn extract_o_part(ref_id: &str) -> Option<String> {
     None
 }
 
+fn attr_unescaped(val: &[u8]) -> String {
+    let raw = String::from_utf8_lossy(val);
+    quick_xml::escape::unescape(&raw).unwrap_or(std::borrow::Cow::Borrowed(&raw)).to_string()
+}
+
 /// Decodes a KNX device serial number from ETS XML (base64Binary or hex string) into standard colon format "00:83:76:8A:0C:65"
 pub fn decode_ets_serial_number(s: &str) -> Option<String> {
     use base64::prelude::BASE64_STANDARD;
@@ -844,6 +857,7 @@ struct RawDeviceInstance {
     params: Vec<(String, String)>,
     loaded_image: Option<String>,
     checksums: Option<String>,
+    puid: Option<u32>,
 }
 
 #[derive(Default)]
@@ -860,6 +874,110 @@ struct RawComObjectInstanceRef {
     update_flag: Option<bool>,
 }
 
+/// Bundles all non-project files (M-*, *.signature, knx_master.xml) into an asset zip
+pub fn extract_project_assets<R: std::io::Read + std::io::Seek>(outer_zip: &mut zip::ZipArchive<R>) -> Vec<u8> {
+    use std::io::Write;
+    let mut buf = Vec::new();
+    {
+        let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        for i in 0..outer_zip.len() {
+            if let Ok(mut f) = outer_zip.by_index(i) {
+                let name = f.name().to_string();
+                if name == "knx_master.xml" || name.ends_with(".signature") || name.starts_with("M-") {
+                    let mut content = Vec::new();
+                    if std::io::copy(&mut f, &mut content).is_ok()
+                        && writer.start_file(&name, options).is_ok()
+                    {
+                        let _ = writer.write_all(&content);
+                    }
+                }
+            }
+        }
+        let _ = writer.finish();
+    }
+    buf
+}
+
+#[derive(Debug, Default)]
+pub struct RawProjectInfo {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub guid: Option<String>,
+    pub last_used_puid: Option<u32>,
+    pub traces: Vec<ProjectTraceInfo>,
+    pub certificates: Vec<DeviceCertificateInfo>,
+}
+
+pub fn parse_ets_project_info_xml(xml: &str) -> RawProjectInfo {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut info = RawProjectInfo::default();
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                if tag == "Project" {
+                    for attr in e.attributes().flatten() {
+                        if attr.key.as_ref() == b"Id" {
+                            info.id = Some(String::from_utf8_lossy(&attr.value).to_string());
+                        }
+                    }
+                } else if tag == "ProjectInformation" {
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"Name" => info.name = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                            b"Guid" => info.guid = Some(String::from_utf8_lossy(&attr.value).to_string()),
+                            b"LastUsedPuid" => {
+                                if let Ok(val) = String::from_utf8_lossy(&attr.value).parse::<u32>() {
+                                    info.last_used_puid = Some(val);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                } else if tag == "ProjectTrace" {
+                    let mut date = String::new();
+                    let mut user_name = String::new();
+                    let mut comment = String::new();
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"Date" => date = String::from_utf8_lossy(&attr.value).to_string(),
+                            b"UserName" => user_name = String::from_utf8_lossy(&attr.value).to_string(),
+                            b"Comment" => comment = String::from_utf8_lossy(&attr.value).to_string(),
+                            _ => {}
+                        }
+                    }
+                    info.traces.push(ProjectTraceInfo { date, user_name, comment });
+                } else if tag == "DeviceCertificate" {
+                    let mut serial_number = String::new();
+                    let mut fdsk = String::new();
+                    for attr in e.attributes().flatten() {
+                        match attr.key.as_ref() {
+                            b"SerialNumber" => serial_number = String::from_utf8_lossy(&attr.value).to_string(),
+                            b"FDSK" => fdsk = String::from_utf8_lossy(&attr.value).to_string(),
+                            _ => {}
+                        }
+                    }
+                    if !serial_number.is_empty() && !fdsk.is_empty() {
+                        info.certificates.push(DeviceCertificateInfo { serial_number, fdsk });
+                    }
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    info
+}
+
 /// Imports .knxproj archive, extracting project.xml and 0.xml
 pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &str) -> Result<Project, String> {
     use std::io::Cursor;
@@ -867,8 +985,9 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
     let mut outer_zip = zip::ZipArchive::new(reader)
         .map_err(|e| format!("Ungültiges .knxproj ZIP-Archiv: {}", e))?;
 
-    // Extract catalog metadata from outer zip (Hardware.xml, knx_master.xml, ApplicationPrograms)
+    // Extract catalog metadata and asset bundle from outer zip (Hardware.xml, knx_master.xml, ApplicationPrograms, signatures)
     let catalog_ctx = extract_catalog_context(&mut outer_zip);
+    let assets_bytes = extract_project_assets(&mut outer_zip);
 
     // Look for P-XXXX.zip
     let mut p_zip_name = None;
@@ -893,34 +1012,35 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
             .map_err(|e| format!("Fehler beim Extrahieren von {}: {}", p_zip_name, e))?;
     }
 
-    let mut xml_content = Vec::new();
+    let mut xml_0_content = Vec::new();
+    let mut xml_project_content = Vec::new();
     let mut decrypt_success = false;
 
     // 1. Try in-memory zip decryption with zip crate
     let p_reader = Cursor::new(&p_zip_bytes);
     if let Ok(mut inner_zip) = zip::ZipArchive::new(p_reader) {
-        if password.is_none() {
-            if let Ok(mut f) = inner_zip.by_name("0.xml") {
-                if std::io::copy(&mut f, &mut xml_content).is_ok() && !xml_content.is_empty() {
-                    decrypt_success = true;
-                }
+        let passwords: Vec<Option<String>> = if let Some(pwd) = password {
+            if !pwd.trim().is_empty() {
+                vec![Some(derive_ets6_key(pwd)), Some(pwd.to_string()), None]
+            } else {
+                vec![None]
             }
-        } else if let Some(pwd) = password {
-            // Attempt 1: ETS6 PBKDF2 derived Base64 key
-            let derived = derive_ets6_key(pwd);
-            if let Ok(mut f) = inner_zip.by_name_decrypt("0.xml", derived.as_bytes()) {
-                if std::io::copy(&mut f, &mut xml_content).is_ok() && !xml_content.is_empty() {
-                    decrypt_success = true;
-                }
-            }
+        } else {
+            vec![None]
+        };
 
-            // Attempt 2: Plain password (ETS5 / standard)
-            if !decrypt_success {
-                if let Ok(mut f) = inner_zip.by_name_decrypt("0.xml", pwd.as_bytes()) {
-                    if std::io::copy(&mut f, &mut xml_content).is_ok() && !xml_content.is_empty() {
-                        decrypt_success = true;
-                    }
-                }
+        for p_opt in passwords {
+            let res_0 = match &p_opt {
+                Some(p) => inner_zip.by_name_decrypt("0.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
+                None => inner_zip.by_name("0.xml").map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
+            };
+            if res_0.is_ok() && !xml_0_content.is_empty() {
+                decrypt_success = true;
+                let _ = match &p_opt {
+                    Some(p) => inner_zip.by_name_decrypt("project.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
+                    None => inner_zip.by_name("project.xml").map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
+                };
+                break;
             }
         }
     }
@@ -932,11 +1052,12 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
         if std::fs::write(&temp_file, &p_zip_bytes).is_ok() {
             let mut passwords_to_try = Vec::new();
             if let Some(pwd) = password {
-                passwords_to_try.push(derive_ets6_key(pwd));
-                passwords_to_try.push(pwd.to_string());
-            } else {
-                passwords_to_try.push(String::new());
+                if !pwd.trim().is_empty() {
+                    passwords_to_try.push(derive_ets6_key(pwd));
+                    passwords_to_try.push(pwd.to_string());
+                }
             }
+            passwords_to_try.push(String::new());
 
             for p in &passwords_to_try {
                 let mut cmd = std::process::Command::new("7z");
@@ -947,8 +1068,21 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
                 cmd.arg(&temp_file).arg("0.xml");
                 if let Ok(output) = cmd.output() {
                     if output.status.success() && !output.stdout.is_empty() {
-                        xml_content = output.stdout;
+                        xml_0_content = output.stdout;
                         decrypt_success = true;
+
+                        // Also extract project.xml
+                        let mut cmd_p = std::process::Command::new("7z");
+                        cmd_p.arg("e").arg("-so");
+                        if !p.is_empty() {
+                            cmd_p.arg(format!("-p{}", p));
+                        }
+                        cmd_p.arg(&temp_file).arg("project.xml");
+                        if let Ok(out_p) = cmd_p.output() {
+                            if out_p.status.success() {
+                                xml_project_content = out_p.stdout;
+                            }
+                        }
                         break;
                     }
                 }
@@ -957,11 +1091,11 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
         }
     }
 
-    if !decrypt_success || xml_content.is_empty() {
+    if !decrypt_success || xml_0_content.is_empty() {
         return Err("Entpacken von 0.xml fehlgeschlagen. Bitte Projektpasswort prüfen.".to_string());
     }
 
-    let xml_str = String::from_utf8(xml_content)
+    let xml_str = String::from_utf8(xml_0_content)
         .map_err(|_| "0.xml ist keine gültige UTF-8 Datei".to_string())?;
 
     let res = parse_ets_project_xml(&xml_str, default_name, Some(&catalog_ctx));
@@ -994,14 +1128,52 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
                 assign_rules: app.map(|a| a.assign_rules.clone()).unwrap_or_default(),
             };
 
-            let filename = format!("{}.json", prod_id.replace('/', "_").replace(':', "_"));
+            let filename = format!("{}.json", prod_id.replace(['/', ':'], "_"));
             if let Ok(json) = serde_json::to_string_pretty(&cat_prod) {
                 let _ = std::fs::write(catalog_dir.join(filename), json);
             }
         }
     }
 
-    res
+    if let Ok(mut project) = res {
+        let extracted_project_id = p_zip_name.strip_suffix(".zip").unwrap_or("P-0425").to_string();
+        project.ets_project_id = Some(extracted_project_id);
+
+        if !xml_project_content.is_empty() {
+            let p_info = parse_ets_project_info_xml(&String::from_utf8_lossy(&xml_project_content));
+            if let Some(id) = p_info.id {
+                project.ets_project_id = Some(id);
+            }
+            if let Some(name) = p_info.name {
+                if !name.trim().is_empty() {
+                    project.name = name;
+                }
+            }
+            if let Some(guid) = p_info.guid {
+                project.ets_guid = Some(guid);
+            }
+            if let Some(puid) = p_info.last_used_puid {
+                project.ets_last_used_puid = Some(puid);
+            }
+            if !p_info.traces.is_empty() {
+                project.ets_traces = p_info.traces;
+            }
+            if !p_info.certificates.is_empty() {
+                project.ets_device_certificates = p_info.certificates;
+            }
+        }
+
+        // Persist assets to storage
+        let storage = crate::storage::StorageManager::new();
+        let _ = storage.save_project_assets_sync(&project.name, &assets_bytes);
+        if project.name != default_name {
+            let _ = storage.save_project_assets_sync(default_name, &assets_bytes);
+        }
+
+        Ok(project)
+    } else {
+        res
+    }
 }
 
 /// Enriches an existing Project with parameter offsets, bit offsets, sizes, and LoadedImage from a .knxproj archive
@@ -1307,7 +1479,7 @@ pub fn parse_ets_project_xml(
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"Type" => space_type = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"Name" => space_name = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Name" => space_name = attr_unescaped(&attr.value),
                                 _ => {}
                             }
                         }
@@ -1372,11 +1544,11 @@ pub fn parse_ets_project_xml(
                                         range_end = s.parse::<u16>().unwrap_or(0);
                                     }
                                 }
-                                b"Name" => gr_name = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Name" => gr_name = attr_unescaped(&attr.value),
                                 _ => {}
                             }
                         }
-                        if (range_end - range_start) > 256 || (range_start % 2048 == 0 && range_end > range_start + 256) {
+                        if (range_end - range_start) > 256 || (range_start.is_multiple_of(2048) && range_end > range_start + 256) {
                             if !gr_name.is_empty() {
                                 current_main_name = gr_name;
                             }
@@ -1388,7 +1560,9 @@ pub fn parse_ets_project_xml(
                         let mut ga_addr = 0u16;
                         let mut ga_id = String::new();
                         let mut ga_name = String::new();
+                        let mut ga_desc = String::new();
                         let mut dpt_str = String::new();
+                        let mut ga_puid: Option<u32> = None;
 
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
@@ -1398,8 +1572,10 @@ pub fn parse_ets_project_xml(
                                         ga_addr = s.parse::<u16>().unwrap_or(0);
                                     }
                                 }
-                                b"Name" => ga_name = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Name" => ga_name = attr_unescaped(&attr.value),
+                                b"Description" => ga_desc = attr_unescaped(&attr.value),
                                 b"DatapointType" | b"DPTs" => dpt_str = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Puid" => ga_puid = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
                                 _ => {}
                             }
                         }
@@ -1430,10 +1606,12 @@ pub fn parse_ets_project_xml(
                                 sub,
                                 name: ga_name,
                                 dpt: effective_dpt,
-                                description: format!("{} / {}", current_main_name, current_mid_name),
+                                description: if !ga_desc.is_empty() { ga_desc } else { format!("{} / {}", current_main_name, current_mid_name) },
                                 origin_block_id: None,
                                 origin_pin_name: None,
                                 is_custom: true,
+                                ets_ga_id: if ga_id.is_empty() { None } else { Some(ga_id.clone()) },
+                                ets_puid: ga_puid,
                             });
                         }
                     }
@@ -1457,12 +1635,13 @@ pub fn parse_ets_project_xml(
                             match attr.key.as_ref() {
                                 b"Id" => raw_dev.id = String::from_utf8_lossy(&attr.value).to_string(),
                                 b"Address" => raw_dev.address = String::from_utf8_lossy(&attr.value).to_string(),
-                                b"Name" => raw_dev.name = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Name" => raw_dev.name = attr_unescaped(&attr.value),
                                 b"ProductRefId" => raw_dev.product_ref_id = String::from_utf8_lossy(&attr.value).to_string(),
                                 b"Hardware2ProgramRefId" => raw_dev.hardware2program_ref_id = String::from_utf8_lossy(&attr.value).to_string(),
                                 b"LoadedImage" => raw_dev.loaded_image = Some(String::from_utf8_lossy(&attr.value).to_string()),
                                 b"CheckSums" => raw_dev.checksums = Some(String::from_utf8_lossy(&attr.value).to_string()),
                                 b"SerialNumber" => raw_dev.serial_number = decode_ets_serial_number(&String::from_utf8_lossy(&attr.value)),
+                                b"Puid" => raw_dev.puid = String::from_utf8_lossy(&attr.value).parse::<u32>().ok(),
                                 _ => {}
                             }
                         }
@@ -1474,8 +1653,8 @@ pub fn parse_ets_project_xml(
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
                                     b"RefId" => raw_co.ref_id = String::from_utf8_lossy(&attr.value).to_string(),
-                                    b"Text" => raw_co.text = String::from_utf8_lossy(&attr.value).to_string(),
-                                    b"FunctionText" => raw_co.function_text = String::from_utf8_lossy(&attr.value).to_string(),
+                                    b"Text" => raw_co.text = attr_unescaped(&attr.value),
+                                    b"FunctionText" => raw_co.function_text = attr_unescaped(&attr.value),
                                     b"DatapointType" => raw_co.dpt = String::from_utf8_lossy(&attr.value).to_string(),
                                     b"Links" => raw_co.links = String::from_utf8_lossy(&attr.value).to_string(),
                                     b"CommunicationFlag" => raw_co.communication_flag = Some(attr.value.as_ref() == b"Enabled"),
@@ -1496,7 +1675,7 @@ pub fn parse_ets_project_xml(
                             for attr in e.attributes().flatten() {
                                 match attr.key.as_ref() {
                                     b"RefId" => pref_id = String::from_utf8_lossy(&attr.value).to_string(),
-                                    b"Value" => pval = String::from_utf8_lossy(&attr.value).to_string(),
+                                    b"Value" => pval = attr_unescaped(&attr.value),
                                     _ => {}
                                 }
                             }
@@ -1559,15 +1738,25 @@ pub fn parse_ets_project_xml(
                         let mut cos = app_info.map(|a| a.communication_objects.clone()).unwrap_or_default();
 
                         for raw_co in &dev.cos {
-                            let num = extract_ko_number(&raw_co.ref_id);
-                            let mut matched_idx = None;
+                            let mut matched_idx = cos.iter().position(|c| c.id == raw_co.ref_id);
 
-                            if let Some(n) = num {
-                                matched_idx = cos.iter().position(|c| c.number == n);
+                            if matched_idx.is_none() {
+                                matched_idx = cos.iter().position(|c| {
+                                    (c.id.len() < raw_co.ref_id.len() && raw_co.ref_id.ends_with(&format!("_{}", c.id)))
+                                        || (raw_co.ref_id.len() < c.id.len() && c.id.ends_with(&format!("_{}", raw_co.ref_id)))
+                                });
                             }
+
                             if matched_idx.is_none() {
                                 if let Some(o_part) = extract_o_part(&raw_co.ref_id) {
-                                    matched_idx = cos.iter().position(|c| c.id.ends_with(&o_part));
+                                    matched_idx = cos.iter().position(|c| c.id == o_part || c.id.ends_with(&format!("_{}", o_part)));
+                                }
+                            }
+
+                            let num = extract_ko_number(&raw_co.ref_id);
+                            if matched_idx.is_none() {
+                                if let Some(n) = num {
+                                    matched_idx = cos.iter().position(|c| c.number == n);
                                 }
                             }
 
@@ -1694,6 +1883,10 @@ pub fn parse_ets_project_xml(
                             }),
                             loaded_image: dev.loaded_image.clone(),
                             checksums: dev.checksums.clone(),
+                            ets_device_id: Some(dev.id.clone()),
+                            product_ref_id: if dev.product_ref_id.is_empty() { None } else { Some(dev.product_ref_id.clone()) },
+                            hardware2program_ref_id: if dev.hardware2program_ref_id.is_empty() { None } else { Some(dev.hardware2program_ref_id.clone()) },
+                            ets_puid: dev.puid,
                         });
                     }
                 }
@@ -2410,6 +2603,7 @@ pub fn parse_ets_project_xml(
         connections,
         group_addresses,
         topology: None,
+        ..Default::default()
     };
     crate::topology::TopologyManager::ensure_topology(&mut project);
     Ok(project)

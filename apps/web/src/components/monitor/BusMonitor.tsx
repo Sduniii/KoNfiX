@@ -16,6 +16,7 @@ import {
 import { KnxTelegram, Project } from '../../types/knx'
 import { sendKnxTelegram } from '../../services/api'
 import { lookupDpt } from '../../utils/dptRegistry'
+import { useTranslation } from '../../i18n/I18nContext'
 
 interface BusMonitorProps {
   telegrams: KnxTelegram[]
@@ -34,6 +35,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
   onTogglePause,
   project,
 }) => {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(true)
   const [filterText, setFilterText] = useState('')
   const [showSender, setShowSender] = useState(false)
@@ -147,16 +149,16 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
               <ChevronUp className="w-4 h-4 text-slate-500" />
             )}
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
-            <span>KNX Busmonitor (Live)</span>
+            <span>{t('monitor.title')}</span>
             <span className="text-[10px] font-mono bg-slate-800 px-1.5 py-0.2 rounded text-slate-400">
-              {telegrams.length} Telegramme
+              {t('monitor.telegramsCount', { count: telegrams.length })}
             </span>
           </button>
 
           {isConnected ? (
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono">
               <Radio className="w-3 h-3 animate-pulse" />
-              <span>Live-Bus aktiv</span>
+              <span>{t('monitor.liveBusActive')}</span>
             </div>
           ) : (
             <div className="text-[10px] text-slate-500 font-mono">
@@ -175,10 +177,10 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
                   ? 'bg-sky-600 text-white font-medium'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
               }`}
-              title="Test-Telegramm senden"
+              title={t('monitor.sendTelegram')}
             >
               <Send className="w-3 h-3" />
-              <span className="text-[10px]">Telegramm senden</span>
+              <span className="text-[10px]">{t('monitor.sendTelegram')}</span>
             </button>
 
             {/* Filter Input */}
@@ -186,7 +188,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
               <Search className="w-3 h-3 text-slate-500 absolute left-2 top-2" />
               <input
                 type="text"
-                placeholder="Filter GA, Name, Raum..."
+                placeholder={t('monitor.filterPlaceholder')}
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
                 className="bg-slate-800 border border-slate-700 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-500 w-44 focus:w-56 transition-all"
@@ -201,17 +203,17 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
               }`}
-              title={isPaused ? 'Fortsetzen' : 'Pausieren'}
+              title={isPaused ? t('monitor.resume') : t('monitor.pause')}
             >
               {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-              <span className="text-[10px]">{isPaused ? 'Pausiert' : 'Pause'}</span>
+              <span className="text-[10px]">{isPaused ? t('monitor.paused') : t('monitor.pause')}</span>
             </button>
 
             {/* Clear button */}
             <button
               onClick={onClear}
               className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-              title="Log leeren"
+              title={t('monitor.clearLog')}
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -401,20 +403,20 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
         <div className="flex-1 overflow-y-auto font-mono text-xs">
           {filteredTelegrams.length === 0 ? (
             <div className="h-full flex items-center justify-center text-slate-500 text-xs font-sans">
-              Noch keine Telegramme auf dem Bus empfangen. Schalte einen Taster im Haus oder sende oben ein Test-Telegramm.
+              {t('monitor.emptyLogMessage')}
             </div>
           ) : (
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-950/80 sticky top-0 text-[10px] text-slate-400 border-b border-slate-800 uppercase tracking-wider">
                 <tr>
-                  <th className="py-1.5 px-3">Zeit</th>
-                  <th className="py-1.5 px-3">Quelle (PA)</th>
-                  <th className="py-1.5 px-3">Ziel (GA)</th>
-                  <th className="py-1.5 px-3">Zugeordneter Name / Gewerk</th>
-                  <th className="py-1.5 px-3">DPT</th>
-                  <th className="py-1.5 px-3">Typ</th>
-                  <th className="py-1.5 px-3 text-right">Wert</th>
-                  <th className="py-1.5 px-3 text-center">Test</th>
+                  <th className="py-1.5 px-3">{t('monitor.timeCol')}</th>
+                  <th className="py-1.5 px-3">{t('monitor.sourceCol')}</th>
+                  <th className="py-1.5 px-3">{t('monitor.destCol')}</th>
+                  <th className="py-1.5 px-3">{t('monitor.assignedNameCol')}</th>
+                  <th className="py-1.5 px-3">{t('monitor.dptCol')}</th>
+                  <th className="py-1.5 px-3">{t('monitor.typeCol')}</th>
+                  <th className="py-1.5 px-3 text-right">{t('monitor.valueCol')}</th>
+                  <th className="py-1.5 px-3 text-center">{t('monitor.testCol')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">

@@ -5,10 +5,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.0] - 2026-10-02 (ETS 6.2 Schema 23 Export Fix, i18n Localization, Security Hardening, Code Simplification & Performance)
+
+### 100% ETS 6.2 XML Schema 23 Export & Roundtrip Fix
+- **Lossless ETS Project Roundtrip (`ets_export.rs`, `ets_import.rs`):** Preserves original ETS project identifiers (`ets_project_id`, `ets_guid`, `ets_last_used_puid`), project traces, and history metadata.
+- **KNX Data Secure Device Certificates:** Automatically generates and preserves `<DeviceCertificates>` (`SerialNumber`, `FDSK`) in `project.xml`, ensuring exported `.knxproj` archives open seamlessly in official ETS 6.2 without losing Data Secure keys or commissioning state.
+- **Dynamic Topology & Line Mapping:** Correctly maps devices to their respective ETS areas and lines (`P-XXXX-0_L-X-X`), preventing topology orphan errors upon ETS import.
+- **Automated Roundtrip Integration Tests (`tests/test_roundtrip.rs`):** Verified via full import, re-export, and byte/XML structure comparison against real-world ETS projects (`Marienthal`).
+
+### Seamless i18n Localization & Elimination of Raw Keys
+- **Elimination of Raw Literal Translation Keys:** Completely resolved all unformatted translation key paths displayed in the UI (`rooms.title`, `sidebar.blocks`, `sidebar.devices`, `rooms.buildingHierarchy`, `common.devices`).
+- **Localization of Previously Hardcoded Strings:**
+  - `RoomTabBar.tsx`: Central overview (`rooms.centralOverview`), New room (`rooms.newRoom`), tooltips, and confirmation/cancel actions.
+  - `FlowCanvas.tsx`: Auto-layout button (`canvas.autoLayout`), dynamic zoom/snap indicator (`canvas.gridPattern`, `canvas.snap`), and fit-view tooltips.
+  - `RightSidebar.tsx`: Project overview (`inspector.projectOverview`), Project Inspector header (`inspector.projectInspector`), GA routing scheme label, security status, GA manager button, and live active group address count badge (`inspector.activeGasCount`).
+  - `BusMonitor.tsx`: Dynamic table headers (`Time`, `Source (IA)`, `Destination (GA)`, `Assigned Name / Trade`, `DPT`, `Type`, `Value`, `Test`), filter search input placeholder, pause/resume button status, clear log button, and telegram count statistics.
+- **100% Type & Locale Parity:** Strict synchronization across `types.ts`, `locales/de.ts`, and `locales/en.ts` with automated parity validation (306 keys in each locale, 0 missing keys).
+
+### Security & Hardening (STRIDE & OWASP Top 10)
+- **Restrictive CORS Policy (`server.rs`):** Strict loopback interface binding (`localhost`, `127.0.0.1`, `[::1]`) and configurable `KONFIX_ALLOWED_ORIGINS` to prevent unauthorized cross-origin tampering or CSRF telegrams.
+- **HTTP Security Headers (`server.rs`):** Global defense-in-depth middleware (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Content-Security-Policy`).
+- **Path Traversal & OS Root Protection (`storage.rs`):** Strict sanitization via `sanitize_project_name` (blocking `..`, control characters, path separators) and hard blocking of operating system root directories (`/`, `/etc`, `C:\Windows`).
+- **Zip-Bomb Prevention (`knxprod.rs`, `ets_import.rs`):** Bounded decompression (`take(64 MB)`) protects backend services against denial-of-service via malicious archive compression ratios.
+- **Differentiated Axum Payload Limits (`server.rs`):** 8 MB global payload limit, with 128 MB reserved exclusively for dedicated archive import endpoints.
+
+### Frontend Code Simplification & Refactoring
+- **Function Block Factory Extraction (`blockFactory.ts`):** Extracted the ~450-line block generation logic from `App.tsx` into a dedicated, unit-testable factory module (-422 lines in `App.tsx`, -23% reduction).
+- **Hook Optimization (`FlowCanvas.tsx`):** Pruned unused `useMemo` dependencies to eliminate redundant canvas re-renders.
+- **Error Handling:** Consolidated fallback synchronization on connection interruption.
+
+### Performance Optimization & Bundle Splitting
+- **Initial Main Bundle Slimming:** Reduced initial JavaScript bundle size from **1,101 kB** down to **292 kB** (-73.5% / -813 kB).
+- **On-Demand Lazy Loading:** Dynamic code-splitting for computation-heavy views and modals (`jsqr`, `TopologyWorkspace`, `DiagnosticsWorkspace`, `DeviceKoParamModal`, `AddDeviceModal`, `SceneMixerModal`).
+- **Vendor Chunking:** Isolated, long-term cached browser vendor chunks for React/ReactDOM, Lucide icons, and xyflow.
+
 ## [2026.9.3] - 2026-09-29
 
-### Geändert
-- Wartung und Versionsanhebung auf 2026.9.3.
+### Changed
+- Maintenance and version bump to 2026.9.3.
 
 ## [2026.9.2] - 2026-09-29 (Non-Destructive Flash Verification & Live QR-Code Commissioning)
 

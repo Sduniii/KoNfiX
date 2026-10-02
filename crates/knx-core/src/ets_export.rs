@@ -97,7 +97,8 @@ impl EtsExporter {
 
     /// Generates ETS Schema 23 compliant XML installation document (0.xml)
     pub fn to_ets_xml(project: &Project) -> String {
-        Self::generate_installation_0_xml(project, "P-0425")
+        let project_id = project.ets_project_id.as_deref().unwrap_or("P-0425");
+        Self::generate_installation_0_xml(project, project_id)
     }
 
     /// Generates ETS 6.2 XML Schema 23 compliant `project.xml`
@@ -107,48 +108,75 @@ impl EtsExporter {
         xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
         xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"KNX Configurator\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
         xml.push_str(&format!("  <Project Id=\"{}\">\n", project_id));
+
+        let last_used_puid = project.ets_last_used_puid.unwrap_or(2000);
+        let guid = project
+            .ets_guid
+            .clone()
+            .unwrap_or_else(|| project.id.to_string());
+
         xml.push_str(&format!(
-            "    <ProjectInformation Name=\"{}\" GroupAddressStyle=\"ThreeLevel\" LastModified=\"{}\" ProjectStart=\"{}\" Comment=\"Erstellt mit KNX Configurator\" CompletionStatus=\"Editing\" Guid=\"{}\">\n",
+            "    <ProjectInformation Name=\"{}\" GroupAddressStyle=\"ThreeLevel\" LastModified=\"{}\" ProjectStart=\"{}\" Comment=\"Erstellt mit KoNfiX\" CompletionStatus=\"Editing\" LastUsedPuid=\"{}\" Guid=\"{}\">\n",
             escape(&project.name),
             now_iso,
             now_iso,
-            project.id
+            last_used_puid,
+            guid
         ));
+
+        // ProjectTraces
         xml.push_str("      <ProjectTraces>\n");
-        xml.push_str(&format!(
-            "        <ProjectTrace Date=\"{}\" UserName=\"KNX Configurator\" Comment=\"Vollwertiger ETS 6.2 Projekt-Export\" />\n",
-            now_iso
-        ));
+        if !project.ets_traces.is_empty() {
+            for trace in &project.ets_traces {
+                let comment_attr = if !trace.comment.is_empty() {
+                    format!(" Comment=\"{}\"", escape(&trace.comment))
+                } else {
+                    String::new()
+                };
+                xml.push_str(&format!(
+                    "        <ProjectTrace Date=\"{}\" UserName=\"{}\"{} />\n",
+                    escape(&trace.date),
+                    escape(&trace.user_name),
+                    comment_attr
+                ));
+            }
+        } else {
+            xml.push_str(&format!(
+                "        <ProjectTrace Date=\"{}\" UserName=\"KoNfiX\" Comment=\"Vollwertiger ETS 6.2 Projekt-Export\" />\n",
+                now_iso
+            ));
+        }
         xml.push_str("      </ProjectTraces>\n");
 
         // Device certificates for KNX Data Secure devices
-        let secure_devices: Vec<&KnxDevice> = project
-            .devices
-            .iter()
-            .filter(|d| {
-                d.security
-                    .as_ref()
-                    .map(|s| s.is_secure_enabled && s.fdsk.is_some())
-                    .unwrap_or(false)
-            })
-            .collect();
-
-        if !secure_devices.is_empty() {
-            xml.push_str("      <DeviceCertificates>\n");
-            for dev in secure_devices {
-                if let Some(sec) = &dev.security {
-                    if let Some(fdsk) = &sec.fdsk {
+        let mut certificates = project.ets_device_certificates.clone();
+        for dev in &project.devices {
+            if let Some(ref sec) = dev.security {
+                if sec.is_secure_enabled {
+                    if let Some(ref fdsk) = sec.fdsk {
                         let serial = dev
                             .order_number
                             .clone()
                             .unwrap_or_else(|| format!("SN-{}", dev.individual_address.replace('.', "-")));
-                        xml.push_str(&format!(
-                            "        <DeviceCertificate SerialNumber=\"{}\" FDSK=\"{}\" />\n",
-                            escape(&serial),
-                            escape(fdsk)
-                        ));
+                        if !certificates.iter().any(|c| c.serial_number == serial) {
+                            certificates.push(DeviceCertificateInfo {
+                                serial_number: serial,
+                                fdsk: fdsk.clone(),
+                            });
+                        }
                     }
                 }
+            }
+        }
+
+        if !certificates.is_empty() {
+            xml.push_str("      <DeviceCertificates>\n");
+            for cert in &certificates {
+                xml.push_str(&format!(
+                    "        <DeviceCertificate SerialNumber=\"{}\" FDSK=\"{}\" />\n",
+                    escape(&cert.serial_number),
+                    escape(&cert.fdsk)
+                ));
             }
             xml.push_str("      </DeviceCertificates>\n");
         }
@@ -162,28 +190,7 @@ impl EtsExporter {
 
     /// Generates ETS 6.2 XML Schema 23 compliant `0.xml` (Installation data)
     pub fn generate_installation_0_xml(project: &Project, project_id: &str) -> String {
-        let mut xml = String::new();
-        xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"KNX Configurator\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
-        xml.push_str(&format!("  <Project Id=\"{}\">\n", project_id));
-        xml.push_str("    <Installations>\n");
-        xml.push_str("      <Installation InstallationNumber=\"0\" Name=\"\" BCUKey=\"4294967295\" DefaultLine=\"P-0425-0_L-1\" IPRoutingLatencyTolerance=\"2000\">\n");
-
         let mut puid_counter: u32 = 1;
-
-        // 1. Map GroupAddresses to unique XML IDs: Id="P-XXXX-0_GA-YYYY"
-        // Also build reverse lookup: ga_uuid -> ga_xml_id, ga_addr_str -> ga_xml_id
-        let mut ga_id_to_xml: HashMap<Uuid, String> = HashMap::new();
-        let mut ga_addr_to_xml: HashMap<String, String> = HashMap::new();
-
-        for (idx, ga) in project.group_addresses.iter().enumerate() {
-            let ga_xml_id = format!("{}-0_GA-{}", project_id, idx + 1);
-            ga_id_to_xml.insert(ga.id, ga_xml_id.clone());
-            ga_addr_to_xml.insert(ga.address.clone(), ga_xml_id);
-        }
-
-        // 2. Topology Generation
-        xml.push_str("        <Topology>\n");
 
         // Group devices by area and line
         // Area number -> (Line number -> Vec<&KnxDevice>)
@@ -205,6 +212,48 @@ impl EtsExporter {
         if area_line_devices.is_empty() {
             area_line_devices.entry(1).or_default().entry(1).or_default();
         }
+
+        let default_line_id = if let Some((&first_area, lines_map)) = area_line_devices.iter().next() {
+            if let Some((&first_line, _)) = lines_map.iter().next() {
+                format!("{}-0_L-{}-{}", project_id, first_area, first_line)
+            } else {
+                format!("{}-0_L-1-1", project_id)
+            }
+        } else {
+            format!("{}-0_L-1-1", project_id)
+        };
+
+        let mut xml = String::new();
+        xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"KNX Configurator\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
+        xml.push_str(&format!("  <Project Id=\"{}\">\n", project_id));
+        xml.push_str("    <Installations>\n");
+        xml.push_str(&format!(
+            "      <Installation Name=\"\" BCUKey=\"4294967295\" DefaultLine=\"{}\" IPRoutingLatencyTolerance=\"2000\">\n",
+            default_line_id
+        ));
+
+        // 1. Map GroupAddresses to unique XML IDs: Id="P-XXXX-0_GA-YYYY"
+        // Also build reverse lookup: ga_uuid -> ga_xml_id, ga_addr_str -> ga_xml_id
+        let mut ga_id_to_xml: HashMap<Uuid, String> = HashMap::new();
+        let mut ga_addr_to_xml: HashMap<String, String> = HashMap::new();
+
+        for (idx, ga) in project.group_addresses.iter().enumerate() {
+            let ga_xml_id = if let Some(ref gid) = ga.ets_ga_id {
+                if gid.starts_with("P-") {
+                    gid.clone()
+                } else {
+                    format!("{}-0_{}", project_id, gid)
+                }
+            } else {
+                format!("{}-0_GA-{}", project_id, idx + 1)
+            };
+            ga_id_to_xml.insert(ga.id, ga_xml_id.clone());
+            ga_addr_to_xml.insert(ga.address.clone(), ga_xml_id);
+        }
+
+        // 2. Topology Generation
+        xml.push_str("        <Topology>\n");
 
         // Track Device UUID to generated Device XML ID for <Locations>
         let mut dev_uuid_to_xml_id: HashMap<Uuid, String> = HashMap::new();
@@ -246,22 +295,36 @@ impl EtsExporter {
                 for (d_idx, dev) in devs.iter().enumerate() {
                     let parts: Vec<&str> = dev.individual_address.split('.').collect();
                     let host_addr = parts.get(2).and_then(|s| s.parse::<u8>().ok()).unwrap_or((d_idx + 1) as u8);
-                    let dev_xml_id = format!("{}-0_DI-{}", project_id, puid_counter);
+                    let dev_puid = dev.ets_puid.unwrap_or(puid_counter);
+                    let dev_xml_id = if let Some(ref did) = dev.ets_device_id {
+                        if did.starts_with("P-") {
+                            did.clone()
+                        } else {
+                            format!("{}-0_{}", project_id, did)
+                        }
+                    } else {
+                        format!("{}-0_DI-{}", project_id, puid_counter)
+                    };
                     dev_uuid_to_xml_id.insert(dev.id, dev_xml_id.clone());
-                    let dev_puid = puid_counter;
                     puid_counter += 1;
 
-                    let product_ref = dev
-                        .order_number
-                        .as_deref()
-                        .map(|o| format!("M-0083_H-1_P-{}", o.replace(' ', "_")))
-                        .unwrap_or_else(|| "M-0083_H-1_P-Default".to_string());
+                    let product_ref = if let Some(ref pr) = dev.product_ref_id {
+                        pr.clone()
+                    } else if let Some(ref o) = dev.order_number {
+                        let clean_o: String = o.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '.' || c == '_' { c } else { '_' }).collect();
+                        format!("M-0083_H-1_P-{}", clean_o)
+                    } else {
+                        "M-0083_H-1_P-Default".to_string()
+                    };
 
-                    let h2p_ref = dev
-                        .application_program
-                        .as_deref()
-                        .map(|a| format!("M-0083_H-1_HP-{}", a.replace(' ', "_")))
-                        .unwrap_or_else(|| "M-0083_H-1_HP-Default".to_string());
+                    let h2p_ref = if let Some(ref hp) = dev.hardware2program_ref_id {
+                        hp.clone()
+                    } else if let Some(ref a) = dev.application_program {
+                        let clean_a: String = a.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '.' || c == '_' { c } else { '_' }).collect();
+                        format!("M-0083_H-1_HP-{}", clean_a)
+                    } else {
+                        "M-0083_H-1_HP-Default".to_string()
+                    };
 
                     let mut extra_attrs = String::new();
                     if let Some(ref img) = dev.loaded_image {
@@ -304,52 +367,56 @@ impl EtsExporter {
 
                             for ga_addr in &co.group_addresses {
                                 if let Some(xml_id) = ga_addr_to_xml.get(ga_addr) {
-                                    linked_ga_xmls.push(xml_id.clone());
+                                    let rel_id = xml_id.split('_').next_back().unwrap_or(xml_id);
+                                    if !linked_ga_xmls.contains(&rel_id.to_string()) {
+                                        linked_ga_xmls.push(rel_id.to_string());
+                                    }
                                 }
                             }
 
                             for ga_id in &co.group_address_ids {
                                 if let Some(xml_id) = ga_id_to_xml.get(ga_id) {
-                                    if !linked_ga_xmls.contains(xml_id) {
-                                        linked_ga_xmls.push(xml_id.clone());
+                                    let rel_id = xml_id.split('_').next_back().unwrap_or(xml_id);
+                                    if !linked_ga_xmls.contains(&rel_id.to_string()) {
+                                        linked_ga_xmls.push(rel_id.to_string());
                                     }
                                 }
                             }
 
-                                let links_attr = if !linked_ga_xmls.is_empty() {
-                                    format!(" Links=\"{}\"", linked_ga_xmls.join(" "))
-                                } else {
-                                    String::new()
-                                };
+                            let links_attr = if !linked_ga_xmls.is_empty() {
+                                format!(" Links=\"{}\"", linked_ga_xmls.join(" "))
+                            } else {
+                                String::new()
+                            };
 
-                                let dpst_attr = if !co.dpt.is_empty() {
-                                    format!(" DatapointType=\"{}\"", Self::to_ets_dpst(&co.dpt))
-                                } else {
-                                    String::new()
-                                };
+                            let dpst_attr = if !co.dpt.is_empty() {
+                                format!(" DatapointType=\"{}\"", Self::to_ets_dpst(&co.dpt))
+                            } else {
+                                String::new()
+                            };
 
-                                let comm_flag = if co.flags.communication { "Enabled" } else { "Disabled" };
-                                let read_flag = if co.flags.read { "Enabled" } else { "Disabled" };
-                                let write_flag = if co.flags.write { "Enabled" } else { "Disabled" };
-                                let trans_flag = if co.flags.transmit { "Enabled" } else { "Disabled" };
-                                let update_flag = if co.flags.update { "Enabled" } else { "Disabled" };
+                            let comm_flag = if co.flags.communication { "Enabled" } else { "Disabled" };
+                            let read_flag = if co.flags.read { "Enabled" } else { "Disabled" };
+                            let write_flag = if co.flags.write { "Enabled" } else { "Disabled" };
+                            let trans_flag = if co.flags.transmit { "Enabled" } else { "Disabled" };
+                            let update_flag = if co.flags.update { "Enabled" } else { "Disabled" };
 
-                                xml.push_str(&format!(
-                                    "                    <ComObjectInstanceRef RefId=\"{}\" Text=\"{}\" FunctionText=\"{}\"{}{} CommunicationFlag=\"{}\" ReadFlag=\"{}\" WriteFlag=\"{}\" TransmitFlag=\"{}\" UpdateFlag=\"{}\" />\n",
-                                    escape(&co.id),
-                                    escape(&co.object_text),
-                                    escape(&co.function_text),
-                                    dpst_attr,
-                                    links_attr,
-                                    comm_flag,
-                                    read_flag,
-                                    write_flag,
-                                    trans_flag,
-                                    update_flag
-                                ));
-                            }
-                            xml.push_str("                  </ComObjectInstanceRefs>\n");
+                            xml.push_str(&format!(
+                                "                    <ComObjectInstanceRef RefId=\"{}\" Text=\"{}\" FunctionText=\"{}\"{}{} CommunicationFlag=\"{}\" ReadFlag=\"{}\" WriteFlag=\"{}\" TransmitFlag=\"{}\" UpdateFlag=\"{}\" />\n",
+                                escape(&co.id),
+                                escape(&co.object_text),
+                                escape(&co.function_text),
+                                dpst_attr,
+                                links_attr,
+                                comm_flag,
+                                read_flag,
+                                write_flag,
+                                trans_flag,
+                                update_flag
+                            ));
                         }
+                        xml.push_str("                  </ComObjectInstanceRefs>\n");
+                    }
 
                     // Security element if Data Secure is enabled
                     if let Some(sec) = &dev.security {
@@ -382,10 +449,12 @@ impl EtsExporter {
             .map(|b| b.name.as_str())
             .unwrap_or("Gebäude");
         let bldg_puid = puid_counter;
+        let bldg_xml_id = format!("{}-0_BP-{}", project_id, bldg_puid);
         puid_counter += 1;
 
         xml.push_str(&format!(
-            "          <Space Type=\"Building\" Name=\"{}\" Puid=\"{}\">\n",
+            "          <Space Type=\"Building\" Id=\"{}\" Name=\"{}\" Puid=\"{}\">\n",
+            bldg_xml_id,
             escape(building_name),
             bldg_puid
         ));
@@ -399,17 +468,21 @@ impl EtsExporter {
         if project.floors.is_empty() {
             // Default floor
             let floor_puid = puid_counter;
+            let floor_xml_id = format!("{}-0_BP-{}", project_id, floor_puid);
             puid_counter += 1;
             xml.push_str(&format!(
-                "            <Space Type=\"Floor\" Name=\"Erdgeschoss\" Puid=\"{}\">\n",
+                "            <Space Type=\"Floor\" Id=\"{}\" Name=\"Erdgeschoss\" Puid=\"{}\">\n",
+                floor_xml_id,
                 floor_puid
             ));
 
             for room in &project.rooms {
                 let room_puid = puid_counter;
+                let room_xml_id = format!("{}-0_BP-{}", project_id, room_puid);
                 puid_counter += 1;
                 xml.push_str(&format!(
-                    "              <Space Type=\"Room\" Name=\"{}\" Puid=\"{}\">\n",
+                    "              <Space Type=\"Room\" Id=\"{}\" Name=\"{}\" Puid=\"{}\">\n",
+                    room_xml_id,
                     escape(&room.name),
                     room_puid
                 ));
@@ -433,10 +506,12 @@ impl EtsExporter {
         } else {
             for floor in &project.floors {
                 let floor_puid = puid_counter;
+                let floor_xml_id = format!("{}-0_BP-{}", project_id, floor_puid);
                 puid_counter += 1;
 
                 xml.push_str(&format!(
-                    "            <Space Type=\"Floor\" Name=\"{}\" Puid=\"{}\">\n",
+                    "            <Space Type=\"Floor\" Id=\"{}\" Name=\"{}\" Puid=\"{}\">\n",
+                    floor_xml_id,
                     escape(&floor.name),
                     floor_puid
                 ));
@@ -444,10 +519,12 @@ impl EtsExporter {
                 if let Some(rooms) = rooms_by_floor.get(&floor.id) {
                     for room in rooms {
                         let room_puid = puid_counter;
+                        let room_xml_id = format!("{}-0_BP-{}", project_id, room_puid);
                         puid_counter += 1;
 
                         xml.push_str(&format!(
-                            "              <Space Type=\"Room\" Name=\"{}\" Puid=\"{}\">\n",
+                            "              <Space Type=\"Room\" Id=\"{}\" Name=\"{}\" Puid=\"{}\">\n",
+                            room_xml_id,
                             escape(&room.name),
                             room_puid
                         ));
@@ -660,12 +737,26 @@ impl EtsExporter {
     /// Full `.knxproj` export pipeline.
     /// Produces a 100% ETS 5 / ETS 6 compatible `.knxproj` ZIP archive.
     pub fn export_knxproj(project: &Project, password: Option<&str>) -> Result<Vec<u8>, String> {
-        let project_id = "P-0425";
+        let project_id = project.ets_project_id.as_deref().unwrap_or("P-0425");
 
         let xml_0 = Self::generate_installation_0_xml(project, project_id);
         let project_xml = Self::generate_project_xml(project, project_id);
 
         let inner_zip_bytes = Self::create_inner_project_zip(&xml_0, &project_xml, password)?;
+
+        // Try to load cached project assets (.assets.zip)
+        let storage = crate::storage::StorageManager::new();
+        let asset_bundle = storage.load_project_assets_sync(&project.name)
+            .or_else(|| {
+                if let Ok(source_proj_path) = std::env::var("KONFIX_SOURCE_KNXPROJ") {
+                    if let Ok(bytes) = std::fs::read(&source_proj_path) {
+                        if let Ok(mut src_zip) = zip::ZipArchive::new(std::io::Cursor::new(&bytes)) {
+                            return Some(crate::ets_import::extract_project_assets(&mut src_zip));
+                        }
+                    }
+                }
+                None
+            });
 
         // Build outer .knxproj ZIP
         let mut outer_buf = Vec::new();
@@ -674,51 +765,70 @@ impl EtsExporter {
             let options = SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
 
-            // 1. knx_master.xml
-            const MASTER_XML: &[u8] = include_bytes!("../resources/knx_master.xml");
-            writer
-                .start_file("knx_master.xml", options)
-                .map_err(|e| format!("Fehler beim Hinzufügen von knx_master.xml: {}", e))?;
-            writer
-                .write_all(MASTER_XML)
-                .map_err(|e| format!("Fehler beim Schreiben von knx_master.xml: {}", e))?;
+            let mut has_master_xml = false;
+            let mut has_project_sig = false;
 
-            // 2. P-0425.signature (Standard dummy base64 signature)
-            let dummy_sig = b"bUx6WmxRYjdKdjRvMFNSYjhFTkIyYVpQcWdxcnBYNldBSlR2WGJJaE1vdTM4R2x0U0o4OFpmTFRP\naERocnFubUFyWGNzUUhDQTBTZEdxSXR4S1NNN3krM2xDVVVxN3VLZytLVWxEVzdnV1hkUkg1UEt1\nN2Z1OE8wQWdWNXA4Z1FNYjJudlBDenlwcmhWMHhyNEd2VXg4MzEvcWc5VnVsSVpmaktYQkNaNG9n\nPQ==";
-            writer
-                .start_file(format!("{}.signature", project_id), options)
-                .map_err(|e| format!("Fehler beim Hinzufügen der Signatur: {}", e))?;
-            writer
-                .write_all(dummy_sig)
-                .map_err(|e| format!("Fehler beim Schreiben der Signatur: {}", e))?;
-
-            // 3. P-0425.zip
-            writer
-                .start_file(format!("{}.zip", project_id), options)
-                .map_err(|e| format!("Fehler beim Hinzufügen von {}.zip: {}", project_id, e))?;
-            writer
-                .write_all(&inner_zip_bytes)
-                .map_err(|e| format!("Fehler beim Schreiben von {}.zip: {}", project_id, e))?;
-
-            // 4. Optionally copy manufacturer hardware catalogs from a source knxproj if available
-            let source_proj_path = std::env::var("KONFIX_SOURCE_KNXPROJ").unwrap_or_else(|_| "source.knxproj".to_string());
-            if let Ok(source_bytes) = std::fs::read(&source_proj_path) {
-                if let Ok(mut src_zip) = zip::ZipArchive::new(Cursor::new(&source_bytes)) {
-                    for i in 0..src_zip.len() {
-                        if let Ok(mut src_file) = src_zip.by_index(i) {
-                            let fname = src_file.name().to_string();
-                            // Copy manufacturer folders and signatures
-                            if fname.starts_with("M-") {
+            // 1. Copy manufacturer hardware catalogs & signatures from asset bundle
+            if let Some(ref assets_bytes) = asset_bundle {
+                if let Ok(mut asset_zip) = zip::ZipArchive::new(Cursor::new(assets_bytes)) {
+                    for i in 0..asset_zip.len() {
+                        if let Ok(mut f) = asset_zip.by_index(i) {
+                            let fname = f.name().to_string();
+                            if fname == format!("{}.signature", project_id) {
+                                let mut sig_bytes = Vec::new();
+                                if f.read_to_end(&mut sig_bytes).is_ok() {
+                                    let _ = writer.start_file(&fname, options);
+                                    let _ = writer.write_all(&sig_bytes);
+                                    has_project_sig = true;
+                                }
+                            } else if fname.starts_with("M-") || fname.ends_with(".signature") {
                                 let mut file_bytes = Vec::new();
-                                if src_file.read_to_end(&mut file_bytes).is_ok() {
+                                if f.read_to_end(&mut file_bytes).is_ok() {
                                     let _ = writer.start_file(&fname, options);
                                     let _ = writer.write_all(&file_bytes);
+                                }
+                            } else if fname == "knx_master.xml" {
+                                let mut master_bytes = Vec::new();
+                                if f.read_to_end(&mut master_bytes).is_ok() {
+                                    let _ = writer.start_file("knx_master.xml", options);
+                                    let _ = writer.write_all(&master_bytes);
+                                    has_master_xml = true;
                                 }
                             }
                         }
                     }
                 }
             }
+
+            // 2. knx_master.xml fallback if not in asset bundle
+            if !has_master_xml {
+                const MASTER_XML: &[u8] = include_bytes!("../resources/knx_master.xml");
+                writer
+                    .start_file("knx_master.xml", options)
+                    .map_err(|e| format!("Fehler beim Hinzufügen von knx_master.xml: {}", e))?;
+                writer
+                    .write_all(MASTER_XML)
+                    .map_err(|e| format!("Fehler beim Schreiben von knx_master.xml: {}", e))?;
+            }
+
+            // 3. {project_id}.signature if not already written
+            if !has_project_sig {
+                let dummy_sig = b"bUx6WmxRYjdKdjRvMFNSYjhFTkIyYVpQcWdxcnBYNldBSlR2WGJJaE1vdTM4R2x0U0o4OFpmTFRP\naERocnFubUFyWGNzUUhDQTBTZEdxSXR4S1NNN3krM2xDVVVxN3VLZytLVWxEVzdnV1hkUkg1UEt1\nN2Z1OE8wQWdWNXA4Z1FNYjJudlBDenlwcmhWMHhyNEd2VXg4MzEvcWc5VnVsSVpmaktYQkNaNG9n\nPQ==";
+                writer
+                    .start_file(format!("{}.signature", project_id), options)
+                    .map_err(|e| format!("Fehler beim Hinzufügen der Signatur: {}", e))?;
+                writer
+                    .write_all(dummy_sig)
+                    .map_err(|e| format!("Fehler beim Schreiben der Signatur: {}", e))?;
+            }
+
+            // 4. {project_id}.zip
+            writer
+                .start_file(format!("{}.zip", project_id), options)
+                .map_err(|e| format!("Fehler beim Hinzufügen von {}.zip: {}", project_id, e))?;
+            writer
+                .write_all(&inner_zip_bytes)
+                .map_err(|e| format!("Fehler beim Schreiben von {}.zip: {}", project_id, e))?;
 
             writer
                 .finish()
@@ -759,9 +869,11 @@ mod tests {
                     origin_block_id: None,
                     origin_pin_name: None,
                     is_custom: false,
+                    ..Default::default()
                 },
             ],
             topology: None,
+            ..Default::default()
         };
 
         let csv = EtsExporter::to_ets_csv(&project);
@@ -858,6 +970,7 @@ mod tests {
                 security: None,
                 loaded_image: None,
                 checksums: None,
+                ..Default::default()
             }],
             blocks: vec![],
             connections: vec![],
@@ -873,8 +986,10 @@ mod tests {
                 origin_block_id: None,
                 origin_pin_name: None,
                 is_custom: true,
+                ..Default::default()
             }],
             topology: None,
+            ..Default::default()
         };
 
         // Test 0.xml generation
@@ -884,7 +999,7 @@ mod tests {
         assert!(xml_0.contains("Address=\"5\""));
         assert!(xml_0.contains("Name=\"Dimmaktor 4-fach\""));
         assert!(xml_0.contains("DatapointType=\"DPST-1-1\""));
-        assert!(xml_0.contains("Links=\"P-0425-0_GA-1\""));
+        assert!(xml_0.contains("Links=\"GA-1\""));
         assert!(xml_0.contains("Name=\"Wohnzimmer\""));
         assert!(xml_0.contains("Space Type=\"Room\""));
 
@@ -970,6 +1085,7 @@ mod tests {
                 security: None,
                 loaded_image: None,
                 checksums: None,
+                ..Default::default()
             }],
             blocks: vec![],
             connections: vec![],
@@ -985,8 +1101,10 @@ mod tests {
                 origin_block_id: None,
                 origin_pin_name: None,
                 is_custom: true,
+                ..Default::default()
             }],
             topology: None,
+            ..Default::default()
         };
 
         // Export to .knxproj

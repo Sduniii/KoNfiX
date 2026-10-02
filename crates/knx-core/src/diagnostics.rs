@@ -853,11 +853,13 @@ mod tests {
                 security: None,
                 loaded_image: None,
                 checksums: None,
+                ..Default::default()
             }],
             blocks: vec![],
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         let project = Arc::new(RwLock::new(proj));

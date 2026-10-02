@@ -675,11 +675,12 @@ pub fn build_tunnelling_request(
 ) -> Option<Vec<u8>> {
     let ga_raw = parse_group_address(dest_ga)?;
 
-    let mut cemi = Vec::new();
-    cemi.push(0x11); // Message Code: L_Data.req
-    cemi.push(0x00); // Additional Info length = 0
-    cemi.push(0xBC); // Control 1: Standard frame, Priority normal
-    cemi.push(0xE0); // Control 2: Group address destination, Hop count 6
+    let mut cemi = vec![
+        0x11, // Message Code: L_Data.req
+        0x00, // Additional Info length = 0
+        0xBC, // Control 1: Standard frame, Priority normal
+        0xE0, // Control 2: Group address destination, Hop count 6
+    ];
     cemi.extend_from_slice(&[0x00, 0x00]); // Source address (filled by interface)
     cemi.extend_from_slice(&ga_raw.to_be_bytes()); // Destination Group Address
 
@@ -917,7 +918,7 @@ pub fn decode_knx_float2(bytes: [u8; 2]) -> f32 {
     let mut mantissa = (raw & 0x07FF) as i32;
 
     if sign {
-        mantissa = mantissa - 2048;
+        mantissa -= 2048;
     }
 
     (0.01 * mantissa as f32) * (1 << exponent) as f32
@@ -1413,6 +1414,7 @@ impl KnxNetManager {
     }
 
     /// Background task for KNX IP Secure TCP session: receives frames and sends periodic heartbeat
+    #[allow(clippy::too_many_arguments)]
     fn spawn_secure_tcp_listener_and_heartbeat(
         &self,
         mut reader: tokio::net::tcp::OwnedReadHalf,

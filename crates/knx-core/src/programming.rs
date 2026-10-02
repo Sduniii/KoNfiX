@@ -161,19 +161,19 @@ impl DeviceBusClient {
                         }
 
                         // 2. Check for NDT Response from device
-                        if (tpci_byte & 0xC0) == 0x40 && expected_resp_apci.is_some() {
-                            let dev_seq = (tpci_byte >> 2) & 0x0F;
-                            let apci_hi = (tpci_byte & 0x03) as u16;
-                            let apci_lo = cemi.get(base + 8).copied().unwrap_or(0) as u16;
-                            let frame_apci = (apci_hi << 8) | apci_lo;
+                        if (tpci_byte & 0xC0) == 0x40 {
+                            if let Some(target_apci) = expected_resp_apci {
+                                let dev_seq = (tpci_byte >> 2) & 0x0F;
+                                let apci_hi = (tpci_byte & 0x03) as u16;
+                                let apci_lo = cemi.get(base + 8).copied().unwrap_or(0) as u16;
+                                let frame_apci = (apci_hi << 8) | apci_lo;
 
-                            // Send immediate T_ACK back to device for its sequence number
-                            let ack_pkt = build_cemi_t_ack(self.raw_ia, dev_seq);
-                            let _ = self.knx_manager.send_raw_cemi(&ack_pkt).await;
+                                // Send immediate T_ACK back to device for its sequence number
+                                let ack_pkt = build_cemi_t_ack(self.raw_ia, dev_seq);
+                                let _ = self.knx_manager.send_raw_cemi(&ack_pkt).await;
 
-                            // Check matching APCI (or mask)
-                            let target_apci = expected_resp_apci.unwrap();
-                            let is_match = if (target_apci & 0x03C0) == 0x0240 {
+                                // Check matching APCI (or mask)
+                                let is_match = if (target_apci & 0x03C0) == 0x0240 {
                                 (frame_apci & 0x03C0) == 0x0240
                             } else if target_apci == 0x03D6 && payload.len() >= 2 {
                                 frame_apci == 0x03D6
@@ -193,6 +193,7 @@ impl DeviceBusClient {
                             }
                         }
                     }
+                }
                     _ => break,
                 }
             }
@@ -1890,6 +1891,7 @@ impl ProgrammingJobManager {
     }
 
     /// Handles Physical Address programming via Serial Number write or interactive button press
+    #[allow(clippy::too_many_arguments)]
     async fn process_physical_address_job(
         job_id: Uuid,
         dev_id: Uuid,

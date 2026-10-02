@@ -58,7 +58,7 @@ export function parseKnxCertificateQr(rawText: string): KnxCertificateQrResult {
   // 2. Short key-value scheme: S:...;F:... (without KNX: prefix)
   if (!serialNumber && !fdsk) {
     const sMatch = text.match(/(?:^|;)S:([0-9a-fA-F:]{12,17})/i)
-    const fMatch = text.match(/(?:^|;)F:([0-9a-fA-F\-]{32,45})/i)
+    const fMatch = text.match(/(?:^|;)F:([0-9a-fA-F-]{32,45})/i)
     if (sMatch) {
       serialNumber = formatSerialNumber(sMatch[1])
     }

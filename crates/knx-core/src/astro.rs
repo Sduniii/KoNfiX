@@ -59,7 +59,7 @@ pub fn calculate_solar_position(dt: DateTime<Utc>, lat_deg: f64, lon_deg: f64) -
 /// Human-readable compass cardinal direction
 pub fn compass_direction(azimuth: f64) -> &'static str {
     let az = (azimuth % 360.0 + 360.0) % 360.0;
-    if az >= 337.5 || az < 22.5 {
+    if !(22.5..337.5).contains(&az) {
         "Nord (N)"
     } else if az < 67.5 {
         "Nord-Ost (NO)"

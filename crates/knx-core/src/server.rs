@@ -11,7 +11,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Path as AxPath, Query, State,
     },
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -24,7 +24,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use uuid::Uuid;
 
@@ -48,11 +48,61 @@ pub struct AppState {
     pub storage: Arc<StorageManager>,
 }
 
+async fn security_headers_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(req).await;
+    let headers = response.headers_mut();
+    headers.insert(header::X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
+    headers.insert(header::X_FRAME_OPTIONS, "SAMEORIGIN".parse().unwrap());
+    headers.insert(header::REFERRER_POLICY, "strict-origin-when-cross-origin".parse().unwrap());
+    headers.insert(
+        header::CONTENT_SECURITY_POLICY,
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self';"
+            .parse()
+            .unwrap(),
+    );
+    response
+}
+
 pub fn create_router(state: AppState) -> Router {
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(AllowOrigin::predicate(|origin, _| {
+            if let Ok(origin_str) = origin.to_str() {
+                // Allow local loopback addresses on any port (Vite dev server, local access, Electron/Tauri)
+                if origin_str.starts_with("http://localhost:")
+                    || origin_str.starts_with("http://127.0.0.1:")
+                    || origin_str.starts_with("http://[::1]:")
+                    || origin_str.starts_with("https://localhost:")
+                    || origin_str.starts_with("https://127.0.0.1:")
+                    || origin_str == "http://localhost"
+                    || origin_str == "http://127.0.0.1"
+                    || origin_str == "http://[::1]"
+                    || origin_str == "null"
+                {
+                    return true;
+                }
+                // Allow custom allowed origins configured via environment variable
+                if let Ok(allowed) = std::env::var("KONFIX_ALLOWED_ORIGINS") {
+                    return allowed.split(',').any(|o| o.trim() == origin_str);
+                }
+            }
+            false
+        }))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::ORIGIN,
+        ]);
 
     let mut router = Router::new()
         .route("/api/version", get(handle_get_version))
@@ -80,7 +130,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/knx/connect-keyring", post(handle_knx_connect_keyring))
         .route("/api/knx/import/local-files", get(handle_import_local_files))
         .route("/api/knx/import/csv", post(handle_import_csv))
-        .route("/api/knx/import/knxproj", post(handle_import_knxproj))
+        .route(
+            "/api/knx/import/knxproj",
+            post(handle_import_knxproj).layer(axum::extract::DefaultBodyLimit::max(128 * 1024 * 1024)),
+        )
         .route("/api/knx/send", post(handle_knx_send_telegram))
         .route("/api/diagnostics/results", get(handle_diag_results))
         .route("/api/diagnostics/progress", get(handle_diag_progress))
@@ -92,7 +145,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/diagnostics/program-address", post(handle_diag_program_address))
         .route("/api/catalog/products", get(handle_catalog_products))
         .route("/api/catalog/products/:id", get(handle_catalog_product_detail))
-        .route("/api/catalog/import-knxprod", post(handle_catalog_import_knxprod))
+        .route(
+            "/api/catalog/import-knxprod",
+            post(handle_catalog_import_knxprod).layer(axum::extract::DefaultBodyLimit::max(128 * 1024 * 1024)),
+        )
         .route("/api/catalog/create-device", post(handle_catalog_create_device))
         .route("/api/catalog/download-default", post(handle_catalog_download_default))
         .route("/api/catalog/sync-project", post(handle_catalog_sync_project))
@@ -126,7 +182,8 @@ pub fn create_router(state: AppState) -> Router {
     }
 
     router
-        .layer(axum::extract::DefaultBodyLimit::max(128 * 1024 * 1024))
+        .layer(axum::extract::DefaultBodyLimit::max(8 * 1024 * 1024))
+        .layer(axum::middleware::from_fn(security_headers_middleware))
         .layer(cors)
         .with_state(state)
 }
@@ -440,6 +497,7 @@ async fn handle_storage_new_project(
         connections: vec![],
         group_addresses: vec![],
         topology: None,
+        ..Default::default()
     };
 
     let _ = state
@@ -1838,7 +1896,7 @@ async fn handle_device_security(
         None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Gerät nicht gefunden" }))),
     };
 
-    let mut current_sec = dev.security.clone().unwrap_or_else(|| KnxDataSecureConfig {
+    let mut current_sec = dev.security.clone().unwrap_or(KnxDataSecureConfig {
         is_secure_enabled: false,
         serial_number: None,
         fdsk: None,
@@ -1887,7 +1945,90 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.9.3");
+        assert_eq!(res.0.version, "2026.10.0");
         assert_eq!(res.0.name, "knx-core");
+    }
+
+    fn create_test_app_state() -> AppState {
+        let project = Arc::new(RwLock::new(Project::default()));
+        let simulator = Arc::new(Simulator::new(project.clone()));
+        let knx_manager = Arc::new(KnxNetManager::new(simulator.clone()));
+        let diagnostics = Arc::new(DiagnosticsManager::new(
+            knx_manager.clone(),
+            project.clone(),
+            simulator.clone(),
+        ));
+        let storage = Arc::new(StorageManager::new());
+        let catalog = Arc::new(CatalogManager::new());
+        let programming = ProgrammingJobManager::new(
+            project.clone(),
+            knx_manager.clone(),
+            Some(storage.clone()),
+        );
+        AppState {
+            project,
+            simulator,
+            knx_manager,
+            diagnostics,
+            catalog,
+            programming,
+            storage,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_security_headers_present() {
+        use tower::util::ServiceExt;
+        let state = create_test_app_state();
+        let app = create_router(state);
+
+        let req = axum::http::Request::builder()
+            .uri("/api/version")
+            .method("GET")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let headers = res.headers();
+        assert_eq!(headers.get("x-content-type-options").unwrap(), "nosniff");
+        assert_eq!(headers.get("x-frame-options").unwrap(), "SAMEORIGIN");
+        assert_eq!(headers.get("referrer-policy").unwrap(), "strict-origin-when-cross-origin");
+        assert!(headers.get("content-security-policy").unwrap().to_str().unwrap().contains("default-src 'self'"));
+    }
+
+    #[tokio::test]
+    async fn test_cors_local_allowed_and_external_blocked() {
+        use tower::util::ServiceExt;
+        let state = create_test_app_state();
+        let app = create_router(state);
+
+        // 1. Allowed: localhost:5173
+        let req_local = axum::http::Request::builder()
+            .uri("/api/version")
+            .method("OPTIONS")
+            .header("Origin", "http://localhost:5173")
+            .header("Access-Control-Request-Method", "GET")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res_local = app.clone().oneshot(req_local).await.unwrap();
+        assert_eq!(
+            res_local.headers().get("access-control-allow-origin").and_then(|v| v.to_str().ok()),
+            Some("http://localhost:5173")
+        );
+
+        // 2. Blocked: malicious external domain
+        let req_malicious = axum::http::Request::builder()
+            .uri("/api/version")
+            .method("OPTIONS")
+            .header("Origin", "https://malicious-attacker.com")
+            .header("Access-Control-Request-Method", "GET")
+            .body(axum::body::Body::empty())
+            .unwrap();
+
+        let res_malicious = app.oneshot(req_malicious).await.unwrap();
+        assert!(res_malicious.headers().get("access-control-allow-origin").is_none());
     }
 }

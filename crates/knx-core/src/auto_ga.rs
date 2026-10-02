@@ -103,6 +103,7 @@ impl AutoGaRouter {
     }
 
     /// Helper to assign or preserve a GA for a specific block pin
+    #[allow(clippy::too_many_arguments)]
     fn assign_pin_ga(
         block: &mut FunctionBlock,
         pin_id: &str,
@@ -165,6 +166,7 @@ impl AutoGaRouter {
             origin_block_id: Some(block.id),
             origin_pin_name: Some(pin_id.to_string()),
             is_custom: false,
+            ..Default::default()
         };
         allocated_gas.push(ga);
 
@@ -878,6 +880,7 @@ impl AutoGaRouter {
                         origin_block_id: None,
                         origin_pin_name: None,
                         is_custom: false,
+                        ..Default::default()
                     };
 
                     project.group_addresses.push(new_ga.clone());
@@ -1137,6 +1140,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         AutoGaRouter::route_project(&mut project);
@@ -1229,6 +1233,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         AutoGaRouter::route_project(&mut project);
@@ -1321,6 +1326,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         AutoGaRouter::route_project(&mut project);
@@ -1375,6 +1381,7 @@ mod tests {
             origin_block_id: Some(block_id),
             origin_pin_name: Some("sw".to_string()),
             is_custom: true,
+            ..Default::default()
         };
 
         let block = FunctionBlock {
@@ -1415,6 +1422,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![custom_ga],
             topology: None,
+            ..Default::default()
         };
 
         AutoGaRouter::route_project(&mut project);
@@ -1499,6 +1507,7 @@ mod tests {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         };
 
         let dev2 = KnxDevice {
@@ -1522,6 +1531,7 @@ mod tests {
             security: None,
             loaded_image: None,
             checksums: None,
+            ..Default::default()
         };
 
         let mut project = Project {
@@ -1536,6 +1546,7 @@ mod tests {
             connections: vec![],
             group_addresses: vec![],
             topology: None,
+            ..Default::default()
         };
 
         // Wire Taster KO 0 to Actuator KO 0!

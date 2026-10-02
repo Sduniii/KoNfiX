@@ -15,6 +15,7 @@ import {
   useStore,
 } from '@xyflow/react'
 import { Wand2, Maximize2, Grid3X3 } from 'lucide-react'
+import { useTranslation } from '../../i18n/I18nContext'
 import { Project, GroupAddress } from '../../types/knx'
 import { LightBlockNode } from './nodes/LightBlockNode'
 import { BlindBlockNode } from './nodes/BlindBlockNode'
@@ -109,6 +110,7 @@ const getTierIndex = (zoom: number): number => {
  * Reaktive Zoom- und Snap-Anzeige in der Canvas-Kopfzeile
  */
 const CanvasZoomSnapIndicator: React.FC = React.memo(() => {
+  const { t } = useTranslation()
   const zoom = useStore((state) => state.transform[2])
   const tierIndex = getTierIndex(zoom)
   const tier = ZOOM_TIERS[tierIndex]
@@ -117,14 +119,14 @@ const CanvasZoomSnapIndicator: React.FC = React.memo(() => {
   return (
     <div
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-slate-300 border border-slate-800 shadow-lg shadow-black/60 select-none backdrop-blur"
-      title={`Dynamisches Raster: ${tier.gap}px Musterabstand, ${tier.snap}px Fang-Schrittweite bei ${zoomPct}% Zoom`}
+      title={`${t('canvas.gridPattern')}: ${tier.gap}px, ${t('canvas.snap')} ${tier.snap}px (${zoomPct}%)`}
     >
       <Grid3X3 className="w-3.5 h-3.5 text-sky-400" />
       <span>
-        Muster: <strong className="text-white font-mono">{tier.gap}px</strong>
+        {t('canvas.gridPattern')}: <strong className="text-white font-mono">{tier.gap}px</strong>
       </span>
       <span className="text-slate-600">·</span>
-      <span className="text-slate-400 font-mono">Snap {tier.snap}px</span>
+      <span className="text-slate-400 font-mono">{t('canvas.snap')} {tier.snap}px</span>
       <span className="text-slate-600">·</span>
       <span className="font-mono text-slate-400">{zoomPct}%</span>
     </div>
@@ -160,6 +162,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
   onOpenMixer,
   onNavigateToRoom,
 }) => {
+  const { t } = useTranslation()
   const [reactFlowInstance, setReactFlowInstance] = React.useState<any>(null)
 
   // Zoom-abhängige dynamische Raster- & Fang-Stufe (re-rendert nur wenn Stufe wechselt!)
@@ -532,9 +535,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
     onBlockAction,
     onTriggerSwitch,
     onDeleteBlock,
-    onDeleteBlocks,
     onRemoveChannel,
-    onPlaceDevice,
     onRemoveDeviceFromCanvas,
     onOpenDeviceSettings,
     onUpdateDeviceVisibleKos,
@@ -1301,16 +1302,16 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
             type="button"
             onClick={handleAutoLayout}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-sky-400 border border-sky-500/40 shadow-lg shadow-black/60 backdrop-blur transition-all active:scale-95 cursor-pointer"
-            title="Alle Geräte und Blöcke automatisch in saubere Signalfluss-Spalten ordnen (ohne Überlappung)"
+            title={t('canvas.autoLayoutTooltip')}
           >
             <Wand2 className="w-3.5 h-3.5" />
-            <span>Layout ordnen</span>
+            <span>{t('canvas.autoLayout')}</span>
           </button>
           <button
             type="button"
             onClick={() => reactFlowInstance?.fitView({ padding: 0.2, duration: 400 })}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 bg-slate-900/90 border border-slate-800 shadow-lg shadow-black/60 hover:bg-slate-800 transition-all cursor-pointer"
-            title="Ansicht zentrieren (Fit View)"
+            title={t('canvas.fitViewTooltip')}
           >
             <Maximize2 className="w-4 h-4" />
           </button>
