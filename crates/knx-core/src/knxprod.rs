@@ -1651,11 +1651,20 @@ impl CatalogManager {
             }
 
             // Also scan database folders if any knxprod files exist
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    mgr.scan_database_folder().await;
-                });
-            });
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread {
+                    tokio::task::block_in_place(|| {
+                        handle.block_on(async {
+                            mgr.scan_database_folder().await;
+                        });
+                    });
+                } else {
+                    let mgr_clone = mgr.clone();
+                    handle.spawn(async move {
+                        mgr_clone.scan_database_folder().await;
+                    });
+                }
+            }
         }
 
         mgr

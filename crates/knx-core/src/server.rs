@@ -1959,7 +1959,7 @@ mod tests {
             simulator.clone(),
         ));
         let storage = Arc::new(StorageManager::new());
-        let catalog = Arc::new(CatalogManager::new());
+        let catalog = Arc::new(CatalogManager::new_in_memory());
         let programming = ProgrammingJobManager::new(
             project.clone(),
             knx_manager.clone(),
@@ -1976,7 +1976,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_security_headers_present() {
         use tower::util::ServiceExt;
         let state = create_test_app_state();
@@ -1998,7 +1998,7 @@ mod tests {
         assert!(headers.get("content-security-policy").unwrap().to_str().unwrap().contains("default-src 'self'"));
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_cors_local_allowed_and_external_blocked() {
         use tower::util::ServiceExt;
         let state = create_test_app_state();
