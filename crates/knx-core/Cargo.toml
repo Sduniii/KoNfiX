@@ -1,6 +1,6 @@
 [package]
 name = "knx-core"
-version = "2026.10.0"
+version = "2026.10.1"
 edition = "2021"
 default-run = "konfix"
 license = "AGPL-3.0-or-later"
@@ -33,7 +33,8 @@ x25519-dalek = { version = "2.0", features = ["static_secrets", "getrandom"] }
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 ctr = "0.9"
-sha2 = "0.10"
+sha1 = { version = "0.10", features = ["oid"] }
+sha2 = { version = "0.10", features = ["oid"] }
 pbkdf2 = "0.12"
 hmac = "0.12"
 rand = "0.8"
@@ -42,6 +43,10 @@ base64 = "0.22"
 zip = { version = "8.6.0", features = ["deflate", "aes-crypto"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 flate2 = "1.0"
+rsa = { version = "0.9", features = ["pem"] }
+pkcs8 = { version = "0.10", features = ["pem"] }
+subtle = "2.5"
+
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }

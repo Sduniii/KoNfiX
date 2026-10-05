@@ -14,6 +14,10 @@ import {
   Check,
   Terminal,
   Sparkles,
+  Key,
+  ShieldCheck,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { StorageSettings } from '../../types/storage'
 import { fetchStorageSettings, updateStorageSettings } from '../../services/api'
@@ -35,6 +39,8 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
   const [settings, setSettings] = useState<StorageSettings | null>(null)
   const [dataDir, setDataDir] = useState('')
   const [migrate, setMigrate] = useState(true)
+  const [signingKey, setSigningKey] = useState('')
+  const [showSigningKey, setShowSigningKey] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,6 +54,7 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
       const s = await fetchStorageSettings()
       setSettings(s)
       setDataDir(s.data_dir)
+      setSigningKey(s.signing_key || '')
     } catch (err: any) {
       setError(err?.message || 'Fehler beim Laden der Speicher-Einstellungen')
     } finally {
@@ -76,10 +83,12 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
     setSuccessMsg(null)
 
     try {
-      const updated = await updateStorageSettings(trimmed, migrate)
+      const keyToSend = signingKey === 'configured' ? undefined : (signingKey.trim() || null)
+      const updated = await updateStorageSettings(trimmed, migrate, keyToSend)
       setSettings(updated)
       setDataDir(updated.data_dir)
-      setSuccessMsg('Speicherort erfolgreich aktualisiert!')
+      setSigningKey(updated.signing_key || '')
+      setSuccessMsg('Einstellungen erfolgreich aktualisiert!')
       if (onSettingsUpdated) {
         onSettingsUpdated(updated)
       }
@@ -222,6 +231,58 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
                       </p>
                     </div>
                   </label>
+                </div>
+
+                {/* ETS Export Signing Key Section */}
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <Key className="w-4 h-4 text-amber-400" />
+                      <span>ETS-Projekt Signierschlüssel (Signing Key)</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      {signingKey.trim() ? (
+                        <>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 font-medium flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                            Schlüssel aktiv
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSigningKey('')}
+                            className="px-2 py-0.5 rounded-full text-[10px] bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 transition-colors"
+                            title="Signierschlüssel entfernen"
+                          >
+                            Entfernen
+                          </button>
+                        </>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-400 font-medium">
+                          Nicht hinterlegt
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type={showSigningKey ? 'text' : 'password'}
+                      value={signingKey === 'configured' ? '' : signingKey}
+                      onChange={(e) => setSigningKey(e.target.value)}
+                      placeholder={signingKey === 'configured' ? '✓ RSA-Schlüssel ist hinterlegt. Neuen Schlüssel/Pfad eingeben zum Überschreiben...' : 'RSA Private Key (PEM / Base64) oder Dateipfad...'}
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-xs font-mono text-slate-100 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSigningKey(!showSigningKey)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                      title={showSigningKey ? 'Schlüssel verbergen' : 'Schlüssel anzeigen'}
+                    >
+                      {showSigningKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Wird beim <strong>.knxproj-Export</strong> verwendet, um die Projektdatei digital zu signieren (Integritäts- und Quellsignatur). Ermöglicht den reibungslosen Import in ETS 5 &amp; 6 ohne Signaturwarnung. Unterstützt RSA PEM (PKCS#1 / PKCS#8) sowie Base64-DER.
+                  </p>
                 </div>
 
                 {/* Structure Explanation */}

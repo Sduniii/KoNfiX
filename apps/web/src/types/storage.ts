@@ -2,6 +2,7 @@ export interface StorageSettings {
   data_dir: string
   active_project_name: string | null
   auto_save: boolean
+  signing_key?: string | null
 }
 
 export interface ProjectMetadata {

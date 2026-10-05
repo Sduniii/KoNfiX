@@ -12,6 +12,8 @@ pub struct StorageSettings {
     pub active_project_name: Option<String>,
     #[serde(default = "default_true")]
     pub auto_save: bool,
+    #[serde(default)]
+    pub signing_key: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -24,6 +26,7 @@ impl Default for StorageSettings {
             data_dir: default_data_dir().to_string_lossy().to_string(),
             active_project_name: None,
             auto_save: true,
+            signing_key: None,
         }
     }
 }
@@ -147,6 +150,23 @@ impl StorageManager {
             settings.data_dir = base_dir.to_string_lossy().to_string();
         }
 
+        // Check environment variable for signing key if not present in settings
+        if settings.signing_key.is_none() {
+            if let Ok(env_key) = std::env::var("KONFIX_SIGNING_KEY") {
+                let trimmed = env_key.trim();
+                if !trimmed.is_empty() {
+                    settings.signing_key = Some(trimmed.to_string());
+                }
+            } else if let Ok(key_path) = std::env::var("KONFIX_SIGNING_KEY_PATH") {
+                if let Ok(content) = fs::read_to_string(key_path.trim()) {
+                    let trimmed = content.trim();
+                    if !trimmed.is_empty() {
+                        settings.signing_key = Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+
         let mgr = Self {
             settings: Arc::new(RwLock::new(settings)),
         };
@@ -184,18 +204,34 @@ impl StorageManager {
         Ok(())
     }
 
+    /// Synchronously gets current storage settings
+    pub fn get_settings_sync(&self) -> StorageSettings {
+        self.settings.read().unwrap().clone()
+    }
+
     /// Asynchronously gets current storage settings
     pub async fn get_settings(&self) -> StorageSettings {
         self.settings.read().unwrap().clone()
     }
 
-    /// Persists settings to settings.json
+    /// Persists settings to settings.json with restrictive permissions
     pub async fn persist_settings(&self) -> Result<(), String> {
         let s = self.settings.read().unwrap().clone();
         let data_dir = PathBuf::from(&s.data_dir);
         let settings_file = data_dir.join("settings.json");
         let json = serde_json::to_string_pretty(&s).map_err(|e| e.to_string())?;
-        fs::write(settings_file, json).map_err(|e| e.to_string())?;
+        fs::write(&settings_file, json).map_err(|e| e.to_string())?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(metadata) = fs::metadata(&settings_file) {
+                let mut perms = metadata.permissions();
+                perms.set_mode(0o600);
+                let _ = fs::set_permissions(&settings_file, perms);
+            }
+        }
+
         Ok(())
     }
 
@@ -264,6 +300,42 @@ impl StorageManager {
 
         self.persist_settings().await?;
 
+        Ok(self.get_settings().await)
+    }
+
+    /// Updates signing key in settings and persists to disk
+    pub async fn update_signing_key(&self, key: Option<String>) -> Result<StorageSettings, String> {
+        let clean = key.and_then(|k| {
+            let t = k.trim().to_string();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t)
+            }
+        });
+        {
+            let mut s = self.settings.write().unwrap();
+            s.signing_key = clean;
+        }
+        self.persist_settings().await?;
+        Ok(self.get_settings().await)
+    }
+
+    /// Updates both data directory and signing key if provided
+    pub async fn update_storage_settings(
+        &self,
+        new_dir: Option<&str>,
+        migrate: bool,
+        signing_key: Option<Option<String>>,
+    ) -> Result<StorageSettings, String> {
+        if let Some(dir) = new_dir {
+            if !dir.trim().is_empty() {
+                self.update_data_dir(dir, migrate).await?;
+            }
+        }
+        if let Some(key_opt) = signing_key {
+            self.update_signing_key(key_opt).await?;
+        }
         Ok(self.get_settings().await)
     }
 
@@ -366,6 +438,14 @@ impl StorageManager {
         let json = serde_json::to_string_pretty(&proj_to_save).map_err(|e| e.to_string())?;
         fs::write(&file_path, json).map_err(|e| format!("Fehler beim Schreiben von {}: {}", file_path.display(), e))?;
 
+        // Ensure target asset bundle exists if source project had assets
+        let target_asset_path = projects_dir.join(format!("{}.assets.zip", name));
+        if !target_asset_path.exists() {
+            if let Some(source_assets) = self.load_project_assets_sync(&project.name) {
+                let _ = fs::write(&target_asset_path, source_assets);
+            }
+        }
+
         // Update active project name
         {
             let mut s = self.settings.write().unwrap();
@@ -424,12 +504,13 @@ impl StorageManager {
         let mut project: Project = serde_json::from_str(&content)
             .map_err(|e| format!("Fehler beim Parsen der Projektdatei {}: {}", file_path.display(), e))?;
 
-        // Check if any device has missing parameter offsets, missing loaded_image, missing serial number, or missing assign_rules
+        // Check if any device has missing parameter offsets, missing loaded_image, missing serial number, missing assign_rules, or missing product_ref_id
         let needs_enrichment = project.devices.iter().any(|d| {
             d.parameters.iter().any(|p| p.offset.is_none())
                 || (d.loaded_image.is_none() && !d.parameters.is_empty())
                 || d.get_serial_number().is_none()
                 || (d.assign_rules.is_empty() && !d.parameters.is_empty())
+                || d.product_ref_id.is_none()
         });
 
         if needs_enrichment {
@@ -462,6 +543,31 @@ impl StorageManager {
                             break;
                         }
                     }
+                }
+            }
+        }
+
+        // Auto-resolve missing ProductRefId and Hardware2ProgramRefId from project assets
+        if project.devices.iter().any(|d| d.product_ref_id.is_none() || d.hardware2program_ref_id.is_none()) {
+            if let Some(assets_bytes) = self.load_project_assets_sync(&project.name) {
+                let cat = crate::ets_export::HardwareCatalogIndex::from_assets(&assets_bytes);
+                let mut updated_refs = 0;
+                for dev in &mut project.devices {
+                    if dev.product_ref_id.is_none() || dev.hardware2program_ref_id.is_none() {
+                        let (p, h) = cat.resolve_device_refs(dev);
+                        if dev.product_ref_id.is_none() && p.is_some() {
+                            dev.product_ref_id = p;
+                            updated_refs += 1;
+                        }
+                        if dev.hardware2program_ref_id.is_none() && h.is_some() {
+                            dev.hardware2program_ref_id = h;
+                            updated_refs += 1;
+                        }
+                    }
+                }
+                if updated_refs > 0 {
+                    info!("Auto-resolved {} catalog product/hardware references for project '{}'", updated_refs, project.name);
+                    let _ = self.save_project(&project, Some(&safe_name)).await;
                 }
             }
         }
@@ -504,7 +610,7 @@ impl StorageManager {
         Ok(())
     }
 
-    /// Loads project asset archive if exists
+    /// Loads project asset archive if exists (with case-insensitive and normalized fallback)
     pub fn load_project_assets_sync(&self, project_name: &str) -> Option<Vec<u8>> {
         let data_dir = {
             let s = self.settings.read().unwrap();
@@ -513,10 +619,62 @@ impl StorageManager {
         let projects_dir = data_dir.join("projects");
         let safe_name = sanitize_project_name(project_name).ok()?;
 
+        // 1. Direct match: <safe_name>.assets.zip
         let path = projects_dir.join(format!("{}.assets.zip", safe_name));
         if path.exists() {
             if let Ok(bytes) = fs::read(&path) {
                 return Some(bytes);
+            }
+        }
+
+        // 2. Lowercase match: <safe_name.to_lowercase()>.assets.zip
+        let lower_path = projects_dir.join(format!("{}.assets.zip", safe_name.to_lowercase()));
+        if lower_path.exists() {
+            if let Ok(bytes) = fs::read(&lower_path) {
+                return Some(bytes);
+            }
+        }
+
+        // 3. Scan projects directory for case-insensitive match on *.assets.zip
+        if let Ok(entries) = fs::read_dir(&projects_dir) {
+            let target_lower = format!("{}.assets.zip", safe_name.to_lowercase());
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.to_lowercase() == target_lower {
+                    if let Ok(bytes) = fs::read(entry.path()) {
+                        return Some(bytes);
+                    }
+                }
+            }
+        }
+
+        // 4. Fallback: Search all available *.assets.zip files in projects directory
+        if let Ok(entries) = fs::read_dir(&projects_dir) {
+            let mut candidates: Vec<PathBuf> = Vec::new();
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && p.extension().map(|e| e == "zip").unwrap_or(false) {
+                    let file_name = p.file_name().unwrap_or_default().to_string_lossy();
+                    if file_name.ends_with(".assets.zip") {
+                        candidates.push(p);
+                    }
+                }
+            }
+
+            // Sort candidates by size (prefer largest catalog bundle)
+            candidates.sort_by(|a, b| {
+                let a_size = a.metadata().map(|m| m.len()).unwrap_or(0);
+                let b_size = b.metadata().map(|m| m.len()).unwrap_or(0);
+                b_size.cmp(&a_size)
+            });
+
+            for candidate in candidates {
+                if let Ok(bytes) = fs::read(&candidate) {
+                    if bytes.len() > 100_000 {
+                        tracing::info!("Verwende Fallback-Asset-Paket von '{}' für Projekt '{}'", candidate.display(), safe_name);
+                        return Some(bytes);
+                    }
+                }
             }
         }
 
@@ -699,6 +857,43 @@ mod tests {
         assert!(storage.update_data_dir("/bin", false).await.is_err());
         assert!(storage.update_data_dir("/usr", false).await.is_err());
         assert!(storage.update_data_dir("", false).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_storage_settings_with_signing_key() {
+        let temp_dir = std::env::temp_dir().join(format!("konfix_test_settings_{}", uuid::Uuid::new_v4()));
+        let mut settings = StorageSettings::default();
+        settings.data_dir = temp_dir.to_string_lossy().to_string();
+        settings.signing_key = Some("TEST_SIGNING_KEY_12345".to_string());
+
+        let mgr = StorageManager {
+            settings: std::sync::Arc::new(std::sync::RwLock::new(settings)),
+        };
+        mgr.ensure_dirs_sync().expect("ensure dirs");
+        mgr.persist_settings().await.expect("persist settings");
+
+        // Verify loaded settings
+        let loaded = mgr.get_settings().await;
+        assert_eq!(loaded.signing_key.as_deref(), Some("TEST_SIGNING_KEY_12345"));
+
+        // Update signing key
+        let updated = mgr.update_signing_key(Some("NEW_KEY_ABC".to_string())).await.expect("update key");
+        assert_eq!(updated.signing_key.as_deref(), Some("NEW_KEY_ABC"));
+
+        // Clear signing key with empty string
+        let cleared = mgr.update_signing_key(Some("   ".to_string())).await.expect("clear key");
+        assert_eq!(cleared.signing_key, None);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let settings_file = temp_dir.join("settings.json");
+            let mode = std::fs::metadata(&settings_file).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600, "settings.json must have 0600 permissions on Unix");
+        }
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(temp_dir);
     }
 }
 

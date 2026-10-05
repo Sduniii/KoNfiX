@@ -244,7 +244,8 @@ pub fn unwrap_secure_frame(
     block_0[14..16].copy_from_slice(&(dec_payload.len() as u16).to_be_bytes());
 
     let expected_mac = calculate_mac_cbc(session_key, &add_data, &dec_payload, &block_0);
-    if mac_tr != expected_mac {
+    use subtle::ConstantTimeEq;
+    if !bool::from(mac_tr.ct_eq(&expected_mac)) {
         return Err("SECURE_WRAPPER MAC verification failed".to_string());
     }
 

@@ -146,7 +146,8 @@ pub fn decrypt_tp_data_secure(
         expected_enc_mac[i] ^= s_0[i];
     }
 
-    if expected_enc_mac[..4] == mac_4[..] {
+    use subtle::ConstantTimeEq;
+    if bool::from(expected_enc_mac[..4].ct_eq(mac_4)) {
         Ok(plaintext)
     } else {
         Err("KNX Data Secure MAC-Fehler (Integritätsprüfung fehlgeschlagen)".to_string())

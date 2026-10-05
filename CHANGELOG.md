@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.1] - 2026-10-05 (Official ETS 6.2 XML Schema 23 Parity, Directory Manifest RSA Signing & Hardware ID Resolution)
+
+### 100% Official ETS 6.2 XML Schema 23 & Master Data Parity
+- **Official ETS Schema & Master XML Extraction (`docs/schemas/`):** Integrated official ETS 6.2 XML Schema definitions (`knx_project_23.xsd`, `knx_project_22.xsd`, `knx_project_21.xsd`, `knx_project_20.xsd`) and `knx_master.xml`.
+- **Root XML Header Harmonization (`ets_export.rs`):** Aligned root XML header attributes (`CreatedBy="ETS6"`, `ToolVersion="6.2.7302.0"`) with ETS 6.2.2 specifications to ensure strict validation compliance in ETS6 project extractors.
+- **Automated Schema Validation:** Exported projects validated against official `knx_project_23.xsd` via `xmllint` with 0 validation errors.
+
+### Compliant Directory Manifest Signing (`P-XXXX.signature`) & Key Management
+- **Directory Manifest Generation (`ets_export.rs`):** Generates compliant project directory manifests (`P-XXXX.signature`) hashing all files in the project folder with SHA-256 relative path references.
+- **RSA PKCS#1 v1.5 with SHA-1 Signing:** Implemented compliant `SignedXml` RSA-SHA1 signing for ETS project archives (`XmlDsigRSASHA1Url`).
+- **Flexible Custom Signing Key Configuration (`storage.rs`, `server.rs`, `StorageSettingsModal.tsx`):** Users can configure a custom RSA private key PEM file via UI settings (`StorageSettingsModal`), environment variable (`KONFIX_SIGNING_KEY`), or `~/.konfix/settings.json`.
+- **Non-Blocking UI Export Guidance (`ExportKnxprojModal.tsx`):** Displays a clear, non-blocking informational notice when exporting without a configured private key, allowing export to proceed seamlessly with native unsigned status.
+
+### Hardware Catalog Index & Schema ID Validation Fix
+- **Elimination of `ID 'M-0083_H-1' is not a valid Id ID` (`knxprod.rs`, `ets_export.rs`, `ets_import.rs`):** Resolved ETS6 XML schema validation failure caused by non-standard fallback hardware IDs.
+- **HardwareCatalogIndex Resolution:** Replaced synthetic hardware references (`H-1`) with official 3-segment hardware identifiers (`H-<SerialNumber>-<VersionNumber>`) derived directly from manufacturer `.knxprod` catalog metadata.
+
+### Security Hardening, Test Portability & Key Redaction
+- **Complete Manifest Hashing (`ets_export.rs`):** Hashes all project files under `{project_id}/` (including baggages/assets) into the directory manifest before signing with RSA PKCS#1 v1.5 SHA-1.
+- **Timing Side-Channel Protection (`data_secure.rs`, `knx_secure.rs`):** Upgraded KNX Data Secure and KNX IP Secure MAC verification to constant-time comparison via `subtle::ConstantTimeEq`.
+- **Zip-Slip & Decompression-Bomb Defenses (`ets_export.rs`, `ets_import.rs`):** Enforces `enclosed_name()` path sanitization on imported/exported ZIP entries and limits decompression streams to 64 MB per file.
+- **Settings Permissions & Key Redaction (`storage.rs`, `server.rs`, `StorageSettingsModal.tsx`):** Enforces `0600` permissions on `~/.konfix/settings.json`, masks private keys as `"configured"` in GET API responses, and provides a 1-click removal button in the UI.
+- **Hermetic Roundtrip Tests (`tests/test_roundtrip.rs`):** Tests autonomously generate ephemeral in-memory RSA keys and write to `temp_dir()`, ensuring 100% CI/CD independence from host environment state.
+
+
 ## [2026.10.0] - 2026-10-02 (ETS 6.2 Schema 23 Export Fix, i18n Localization, Security Hardening, Code Simplification & Performance)
 
 ### 100% ETS 6.2 XML Schema 23 Export & Roundtrip Fix

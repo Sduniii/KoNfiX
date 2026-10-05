@@ -882,13 +882,17 @@ pub fn extract_project_assets<R: std::io::Read + std::io::Seek>(outer_zip: &mut 
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
         let options = zip::write::SimpleFileOptions::default()
             .compression_method(zip::CompressionMethod::Deflated);
+        use std::io::Read;
         for i in 0..outer_zip.len() {
-            if let Ok(mut f) = outer_zip.by_index(i) {
-                let name = f.name().to_string();
-                if name == "knx_master.xml" || name.ends_with(".signature") || name.starts_with("M-") {
+            if let Ok(f) = outer_zip.by_index(i) {
+                let safe_name = match f.enclosed_name() {
+                    Some(p) => p.to_string_lossy().to_string(),
+                    None => continue,
+                };
+                if safe_name == "knx_master.xml" || safe_name.ends_with(".signature") || safe_name.starts_with("M-") {
                     let mut content = Vec::new();
-                    if std::io::copy(&mut f, &mut content).is_ok()
-                        && writer.start_file(&name, options).is_ok()
+                    if f.take(64 * 1024 * 1024).read_to_end(&mut content).is_ok()
+                        && writer.start_file(&safe_name, options).is_ok()
                     {
                         let _ = writer.write_all(&content);
                     }
@@ -989,106 +993,147 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
     let catalog_ctx = extract_catalog_context(&mut outer_zip);
     let assets_bytes = extract_project_assets(&mut outer_zip);
 
-    // Look for P-XXXX.zip
+    // Look for P-XXXX.zip OR direct unencrypted P-XXXX/0.xml in outer zip
     let mut p_zip_name = None;
+    let mut direct_project_id = None;
     for i in 0..outer_zip.len() {
         if let Ok(f) = outer_zip.by_index(i) {
             let name = f.name().to_string();
             if name.starts_with("P-") && name.ends_with(".zip") {
                 p_zip_name = Some(name);
                 break;
+            } else if name.starts_with("P-") && (name.ends_with("/0.xml") || name.ends_with("\\0.xml")) {
+                let pid = name.split(|c| c == '/' || c == '\\').next().unwrap_or("P-0425");
+                direct_project_id = Some(pid.to_string());
             }
         }
-    }
-
-    let p_zip_name = p_zip_name.ok_or_else(|| "Keine Projektdatei (P-*.zip) im .knxproj Archiv gefunden.".to_string())?;
-
-    let mut p_zip_bytes = Vec::new();
-    {
-        let mut p_file = outer_zip
-            .by_name(&p_zip_name)
-            .map_err(|e| format!("Fehler beim Lesen von {}: {}", p_zip_name, e))?;
-        std::io::copy(&mut p_file, &mut p_zip_bytes)
-            .map_err(|e| format!("Fehler beim Extrahieren von {}: {}", p_zip_name, e))?;
     }
 
     let mut xml_0_content = Vec::new();
     let mut xml_project_content = Vec::new();
     let mut decrypt_success = false;
+    let p_zip_name_resolved;
 
-    // 1. Try in-memory zip decryption with zip crate
-    let p_reader = Cursor::new(&p_zip_bytes);
-    if let Ok(mut inner_zip) = zip::ZipArchive::new(p_reader) {
-        let passwords: Vec<Option<String>> = if let Some(pwd) = password {
-            if !pwd.trim().is_empty() {
-                vec![Some(derive_ets6_key(pwd)), Some(pwd.to_string()), None]
+    if let Some(pid) = direct_project_id {
+        // Direct unencrypted project folder in outer archive (standard ETS unencrypted format)
+        p_zip_name_resolved = format!("{}.zip", pid);
+        let path_0_fwd = format!("{}/0.xml", pid);
+        let path_0_bck = format!("{}\\\\0.xml", pid);
+        let path_p_fwd = format!("{}/project.xml", pid);
+        let path_p_bck = format!("{}\\\\project.xml", pid);
+
+        let mut found_0 = false;
+        if let Ok(mut f0) = outer_zip.by_name(&path_0_fwd) {
+            let _ = std::io::copy(&mut f0, &mut xml_0_content);
+            found_0 = true;
+        }
+        if !found_0 {
+            if let Ok(mut f0) = outer_zip.by_name(&path_0_bck) {
+                let _ = std::io::copy(&mut f0, &mut xml_0_content);
+            }
+        }
+
+        let mut found_p = false;
+        if let Ok(mut fp) = outer_zip.by_name(&path_p_fwd) {
+            let _ = std::io::copy(&mut fp, &mut xml_project_content);
+            found_p = true;
+        }
+        if !found_p {
+            if let Ok(mut fp) = outer_zip.by_name(&path_p_bck) {
+                let _ = std::io::copy(&mut fp, &mut xml_project_content);
+            }
+        }
+
+        if !xml_0_content.is_empty() {
+            decrypt_success = true;
+        }
+    } else if let Some(p_name) = p_zip_name {
+        p_zip_name_resolved = p_name.clone();
+        let mut p_zip_bytes = Vec::new();
+        {
+            let mut p_file = outer_zip
+                .by_name(&p_name)
+                .map_err(|e| format!("Fehler beim Lesen von {}: {}", p_name, e))?;
+            std::io::copy(&mut p_file, &mut p_zip_bytes)
+                .map_err(|e| format!("Fehler beim Extrahieren von {}: {}", p_name, e))?;
+        }
+
+        // 1. Try in-memory zip decryption with zip crate
+        let p_reader = Cursor::new(&p_zip_bytes);
+        if let Ok(mut inner_zip) = zip::ZipArchive::new(p_reader) {
+            let passwords: Vec<Option<String>> = if let Some(pwd) = password {
+                if !pwd.trim().is_empty() {
+                    vec![Some(derive_ets6_key(pwd)), Some(pwd.to_string()), None]
+                } else {
+                    vec![None]
+                }
             } else {
                 vec![None]
-            }
-        } else {
-            vec![None]
-        };
-
-        for p_opt in passwords {
-            let res_0 = match &p_opt {
-                Some(p) => inner_zip.by_name_decrypt("0.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
-                None => inner_zip.by_name("0.xml").map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
             };
-            if res_0.is_ok() && !xml_0_content.is_empty() {
-                decrypt_success = true;
-                let _ = match &p_opt {
-                    Some(p) => inner_zip.by_name_decrypt("project.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
-                    None => inner_zip.by_name("project.xml").map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
+
+            for p_opt in passwords {
+                let res_0 = match &p_opt {
+                    Some(p) => inner_zip.by_name_decrypt("0.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
+                    None => inner_zip.by_name("0.xml").map(|mut f| std::io::copy(&mut f, &mut xml_0_content)),
                 };
-                break;
+                if res_0.is_ok() && !xml_0_content.is_empty() {
+                    decrypt_success = true;
+                    let _ = match &p_opt {
+                        Some(p) => inner_zip.by_name_decrypt("project.xml", p.as_bytes()).map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
+                        None => inner_zip.by_name("project.xml").map(|mut f| std::io::copy(&mut f, &mut xml_project_content)),
+                    };
+                    break;
+                }
             }
         }
-    }
 
-    // 2. Fallback using system 7z if in-memory decrypt encountered an unsupported AES format
-    if !decrypt_success {
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("knx_import_{}.zip", Uuid::new_v4()));
-        if std::fs::write(&temp_file, &p_zip_bytes).is_ok() {
-            let mut passwords_to_try = Vec::new();
-            if let Some(pwd) = password {
-                if !pwd.trim().is_empty() {
-                    passwords_to_try.push(derive_ets6_key(pwd));
-                    passwords_to_try.push(pwd.to_string());
-                }
-            }
-            passwords_to_try.push(String::new());
-
-            for p in &passwords_to_try {
-                let mut cmd = std::process::Command::new("7z");
-                cmd.arg("e").arg("-so");
-                if !p.is_empty() {
-                    cmd.arg(format!("-p{}", p));
-                }
-                cmd.arg(&temp_file).arg("0.xml");
-                if let Ok(output) = cmd.output() {
-                    if output.status.success() && !output.stdout.is_empty() {
-                        xml_0_content = output.stdout;
-                        decrypt_success = true;
-
-                        // Also extract project.xml
-                        let mut cmd_p = std::process::Command::new("7z");
-                        cmd_p.arg("e").arg("-so");
-                        if !p.is_empty() {
-                            cmd_p.arg(format!("-p{}", p));
-                        }
-                        cmd_p.arg(&temp_file).arg("project.xml");
-                        if let Ok(out_p) = cmd_p.output() {
-                            if out_p.status.success() {
-                                xml_project_content = out_p.stdout;
-                            }
-                        }
-                        break;
+        // 2. Fallback using system 7z if in-memory decrypt encountered an unsupported AES format
+        if !decrypt_success {
+            let temp_dir = std::env::temp_dir();
+            let temp_file = temp_dir.join(format!("knx_import_{}.zip", Uuid::new_v4()));
+            if std::fs::write(&temp_file, &p_zip_bytes).is_ok() {
+                let mut passwords_to_try = Vec::new();
+                if let Some(pwd) = password {
+                    if !pwd.trim().is_empty() {
+                        passwords_to_try.push(derive_ets6_key(pwd));
+                        passwords_to_try.push(pwd.to_string());
                     }
                 }
+                passwords_to_try.push(String::new());
+
+                for p in &passwords_to_try {
+                    let mut cmd = std::process::Command::new("7z");
+                    cmd.arg("e").arg("-so");
+                    if !p.is_empty() {
+                        cmd.arg(format!("-p{}", p));
+                    }
+                    cmd.arg(&temp_file).arg("0.xml");
+                    if let Ok(output) = cmd.output() {
+                        if output.status.success() && !output.stdout.is_empty() {
+                            xml_0_content = output.stdout;
+                            decrypt_success = true;
+
+                            // Also extract project.xml
+                            let mut cmd_p = std::process::Command::new("7z");
+                            cmd_p.arg("e").arg("-so");
+                            if !p.is_empty() {
+                                cmd_p.arg(format!("-p{}", p));
+                            }
+                            cmd_p.arg(&temp_file).arg("project.xml");
+                            if let Ok(out_p) = cmd_p.output() {
+                                if out_p.status.success() {
+                                    xml_project_content = out_p.stdout;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+                let _ = std::fs::remove_file(temp_file);
             }
-            let _ = std::fs::remove_file(temp_file);
         }
+    } else {
+        return Err("Keine Projektdatei (P-*.zip oder P-*/0.xml) im .knxproj Archiv gefunden.".to_string());
     }
 
     if !decrypt_success || xml_0_content.is_empty() {
@@ -1136,7 +1181,7 @@ pub fn parse_knxproj(file_bytes: &[u8], password: Option<&str>, default_name: &s
     }
 
     if let Ok(mut project) = res {
-        let extracted_project_id = p_zip_name.strip_suffix(".zip").unwrap_or("P-0425").to_string();
+        let extracted_project_id = p_zip_name_resolved.strip_suffix(".zip").unwrap_or("P-0425").to_string();
         project.ets_project_id = Some(extracted_project_id);
 
         if !xml_project_content.is_empty() {
@@ -1194,26 +1239,46 @@ pub fn enrich_project_from_knxproj(
     let mut dev_images_by_name: HashMap<String, (String, Option<String>)> = HashMap::new();
     let mut dev_serials: HashMap<String, String> = HashMap::new(); // IA -> Serial
     let mut dev_serials_by_name: HashMap<String, String> = HashMap::new();
+    let mut dev_products: HashMap<String, (String, String, Option<u32>, Option<String>)> = HashMap::new(); // IA -> (prod_ref, h2p_ref, puid, dev_id)
+    let mut dev_products_by_name: HashMap<String, (String, String, Option<u32>, Option<String>)> = HashMap::new();
 
-    // Look for P-XXXX.zip
+    // Look for P-XXXX.zip OR direct unencrypted P-XXXX/0.xml in outer zip
     let mut p_zip_name = None;
+    let mut direct_project_id = None;
     for i in 0..outer_zip.len() {
         if let Ok(f) = outer_zip.by_index(i) {
             let name = f.name().to_string();
             if name.starts_with("P-") && name.ends_with(".zip") {
                 p_zip_name = Some(name);
                 break;
+            } else if name.starts_with("P-") && (name.ends_with("/0.xml") || name.ends_with("\\0.xml")) {
+                let pid = name.split(|c| c == '/' || c == '\\').next().unwrap_or("P-0425");
+                direct_project_id = Some(pid.to_string());
             }
         }
     }
 
-    if let Some(p_name) = p_zip_name {
+    let mut xml_content = Vec::new();
+
+    if let Some(pid) = direct_project_id {
+        let path_0_fwd = format!("{}/0.xml", pid);
+        let path_0_bck = format!("{}\\\\0.xml", pid);
+        let mut found_0 = false;
+        if let Ok(mut f0) = outer_zip.by_name(&path_0_fwd) {
+            let _ = std::io::copy(&mut f0, &mut xml_content);
+            found_0 = true;
+        }
+        if !found_0 {
+            if let Ok(mut f0) = outer_zip.by_name(&path_0_bck) {
+                let _ = std::io::copy(&mut f0, &mut xml_content);
+            }
+        }
+    } else if let Some(p_name) = p_zip_name {
         let mut p_zip_bytes = Vec::new();
         if let Ok(mut p_file) = outer_zip.by_name(&p_name) {
             let _ = std::io::copy(&mut p_file, &mut p_zip_bytes);
         }
 
-        let mut xml_content = Vec::new();
         let mut decrypt_success = false;
 
         let p_reader = Cursor::new(&p_zip_bytes);
@@ -1266,12 +1331,13 @@ pub fn enrich_project_from_knxproj(
                 let _ = std::fs::remove_file(&temp_file);
             }
         }
+    }
 
-        if let Ok(xml_str) = String::from_utf8(xml_content) {
-            use quick_xml::events::Event;
-            use quick_xml::reader::Reader;
-            let mut r = Reader::from_str(&xml_str);
-            r.config_mut().trim_text(true);
+    if let Ok(xml_str) = String::from_utf8(xml_content) {
+        use quick_xml::events::Event;
+        use quick_xml::reader::Reader;
+        let mut r = Reader::from_str(&xml_str);
+        r.config_mut().trim_text(true);
             let mut cur_area = String::new();
             let mut cur_line = String::new();
             let mut buf = Vec::new();
@@ -1292,15 +1358,23 @@ pub fn enrich_project_from_knxproj(
                                 }
                             }
                         } else if tag == "DeviceInstance" {
+                            let mut did = None;
                             let mut addr = String::new();
                             let mut name = String::new();
+                            let mut prod_ref = String::new();
+                            let mut h2p_ref = String::new();
+                            let mut puid = None;
                             let mut img = None;
                             let mut chk = None;
                             let mut serial = None;
                             for a in e.attributes().flatten() {
                                 match a.key.as_ref() {
+                                    b"Id" => did = Some(String::from_utf8_lossy(&a.value).to_string()),
                                     b"Address" => addr = String::from_utf8_lossy(&a.value).to_string(),
                                     b"Name" => name = String::from_utf8_lossy(&a.value).to_string(),
+                                    b"ProductRefId" => prod_ref = String::from_utf8_lossy(&a.value).to_string(),
+                                    b"Hardware2ProgramRefId" => h2p_ref = String::from_utf8_lossy(&a.value).to_string(),
+                                    b"Puid" => puid = String::from_utf8_lossy(&a.value).parse::<u32>().ok(),
                                     b"LoadedImage" => img = Some(String::from_utf8_lossy(&a.value).to_string()),
                                     b"CheckSums" => chk = Some(String::from_utf8_lossy(&a.value).to_string()),
                                     b"SerialNumber" => serial = decode_ets_serial_number(&String::from_utf8_lossy(&a.value)),
@@ -1322,7 +1396,16 @@ pub fn enrich_project_from_knxproj(
                                     dev_serials.insert(full_ia, sn.clone());
                                 }
                                 if !name.is_empty() {
-                                    dev_serials_by_name.insert(name, sn);
+                                    dev_serials_by_name.insert(name.clone(), sn);
+                                }
+                            }
+                            if !prod_ref.is_empty() || !h2p_ref.is_empty() {
+                                if !addr.is_empty() {
+                                    let full_ia = format!("{}.{}.{}", cur_area, cur_line, addr);
+                                    dev_products.insert(full_ia, (prod_ref.clone(), h2p_ref.clone(), puid, did.clone()));
+                                }
+                                if !name.is_empty() {
+                                    dev_products_by_name.insert(name, (prod_ref, h2p_ref, puid, did));
                                 }
                             }
                         }
@@ -1333,7 +1416,6 @@ pub fn enrich_project_from_knxproj(
                 buf.clear();
             }
         }
-    }
 
     // Now enrich devices in project
     let mut enriched_count = 0;
@@ -1363,6 +1445,26 @@ pub fn enrich_project_from_knxproj(
                     });
                 }
                 enriched_count += 1;
+            }
+        }
+
+        // 1c. Populate ProductRefId, Hardware2ProgramRefId, Puid, DeviceId if missing
+        if dev.product_ref_id.is_none() || dev.hardware2program_ref_id.is_none() {
+            if let Some((p, h, puid, did)) = dev_products.get(&dev.individual_address).or_else(|| dev_products_by_name.get(&dev.name)) {
+                if dev.product_ref_id.is_none() && !p.is_empty() {
+                    dev.product_ref_id = Some(p.clone());
+                    enriched_count += 1;
+                }
+                if dev.hardware2program_ref_id.is_none() && !h.is_empty() {
+                    dev.hardware2program_ref_id = Some(h.clone());
+                    enriched_count += 1;
+                }
+                if dev.ets_puid.is_none() {
+                    dev.ets_puid = *puid;
+                }
+                if dev.ets_device_id.is_none() {
+                    dev.ets_device_id = did.clone();
+                }
             }
         }
 

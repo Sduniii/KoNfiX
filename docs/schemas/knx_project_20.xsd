@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- edited with XMLSpy v2020 sp1 (x64) (http://www.altova.com) by  (ise GmbH) -->
-<xs:schema xmlns:knx="http://knx.org/xml/project/23" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://knx.org/xml/project/23" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0">
+<xs:schema xmlns:knx="http://knx.org/xml/project/20" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://knx.org/xml/project/20" elementFormDefault="qualified" attributeFormDefault="unqualified" version="1.0">
   <!-- Simple types -->
   <xs:simpleType name="IDREF">
     <xs:restriction base="xs:NCName"/>
@@ -321,27 +320,6 @@
       <xs:enumeration value="Locked"/>
     </xs:restriction>
   </xs:simpleType>
-  <xs:simpleType name="ProjectType_t">
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="Apartment"/>
-      <xs:enumeration value="Family House"/>
-      <xs:enumeration value="Villa"/>
-      <xs:enumeration value="Other (Residential)"/>
-      <xs:enumeration value="Hotel"/>
-      <xs:enumeration value="Airport"/>
-      <xs:enumeration value="Office Building"/>
-      <xs:enumeration value="Educational"/>
-      <xs:enumeration value="Leisure"/>
-      <xs:enumeration value="Entertainment"/>
-      <xs:enumeration value="Public Building"/>
-      <xs:enumeration value="Health Care"/>
-      <xs:enumeration value="Other (Commercial)"/>
-      <xs:enumeration value="Manufacturer"/>
-      <xs:enumeration value="City Project"/>
-      <xs:enumeration value="Transportation"/>
-      <xs:enumeration value="Other (Other)"/>
-    </xs:restriction>
-  </xs:simpleType>
   <xs:simpleType name="ResourceName_t">
     <xs:restriction base="xs:string">
       <xs:enumeration value="ManagementStyle"/>
@@ -549,13 +527,18 @@
       <xs:enumeration value="Repeat"/>
     </xs:restriction>
   </xs:simpleType>
+  <xs:simpleType name="RFDeviceMode_t">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Multi"/>
+      <xs:enumeration value="Ready"/>
+    </xs:restriction>
+  </xs:simpleType>
   <xs:simpleType name="CouplerCapability_t">
     <xs:restriction base="xs:string">
       <xs:enumeration value="RfReady"/>
       <xs:enumeration value="RfMultiFast"/>
       <xs:enumeration value="RfMultiSlow"/>
       <xs:enumeration value="SecurityProxy"/>
-      <xs:enumeration value="SegmentCoupler"/>
     </xs:restriction>
   </xs:simpleType>
   <xs:simpleType name="TextEncoding_t">
@@ -639,14 +622,8 @@
   <xs:simpleType name="RFTxCapabilities_t">
     <xs:restriction base="xs:string">
       <xs:enumeration value="Ready"/>
+      <xs:enumeration value="ReadyFast"/>
       <xs:enumeration value="ReadyFastSlow"/>
-    </xs:restriction>
-  </xs:simpleType>
-  <xs:simpleType name="TextAlignment_t">
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="Left"/>
-      <xs:enumeration value="Center"/>
-      <xs:enumeration value="Right"/>
     </xs:restriction>
   </xs:simpleType>
   <!-- Root element -->
@@ -960,8 +937,6 @@
                             <xs:attribute name="Name" type="knx:LanguageDependentString_t" use="optional"/>
                             <xs:attribute name="Unit" type="knx:LanguageDependentString_t" use="optional"/>
                             <xs:attribute name="Encoding" type="knx:TextEncoding_t" use="optional"/>
-                            <xs:attribute name="VariableLength" type="xs:boolean" use="optional" default="false"/>
-                            <xs:attribute name="NullTerminated" type="xs:boolean" use="optional" default="false"/>
                           </xs:complexType>
                         </xs:element>
                         <xs:element name="Float" minOccurs="0">
@@ -1023,7 +998,6 @@
     <xs:attribute name="Name" type="knx:String255_t" use="required"/>
     <xs:attribute name="Text" type="knx:LanguageDependentString255_t" use="optional"/>
     <xs:attribute name="SizeInBit" type="xs:unsignedInt" use="required"/>
-    <xs:attribute name="VariableLength" type="xs:boolean" use="optional" default="false"/>
     <xs:attribute name="Default" type="xs:boolean" use="optional"/>
     <xs:attribute name="PDT" type="knx:IDREF" use="optional"/>
   </xs:complexType>
@@ -1210,7 +1184,6 @@
                     <xs:list itemType="knx:ResourceMgmtStyle_t"/>
                   </xs:simpleType>
                 </xs:attribute>
-                <xs:attribute name="Optional" type="xs:boolean" use="optional" default="false"/>
               </xs:complexType>
             </xs:element>
           </xs:sequence>
@@ -1399,7 +1372,6 @@
                       </xs:attribute>
                       <xs:attribute name="FileIntegrity" type="xs:string" use="optional" default="00000000"/>
                       <xs:attribute name="Id" type="xs:ID" use="required"/>
-                      <xs:attribute name="Guid" type="knx:Guid_t" use="optional"/>
                     </xs:complexType>
                   </xs:element>
                 </xs:sequence>
@@ -1427,54 +1399,6 @@
   </xs:complexType>
   <xs:complexType name="ApplicationProgram_t">
     <xs:sequence>
-      <xs:element name="Profile" minOccurs="0">
-        <xs:annotation>
-          <xs:documentation>registration-relevant set</xs:documentation>
-        </xs:annotation>
-        <xs:complexType>
-          <xs:sequence>
-            <xs:element name="IoT" minOccurs="0">
-              <xs:complexType>
-                <xs:attribute name="SupportsCoAPBlockWiseTransfer" type="xs:boolean" use="optional" default="true">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="MaxAssociationsPerGroupObject" type="xs:unsignedShort" use="optional" default="20">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="MaxRecipientTableEntries" type="xs:unsignedShort" use="optional" default="0">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="MaxPublisherTableEntries" type="xs:unsignedShort" use="optional" default="0">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="MaxAccessTokenListEntries" type="xs:unsignedShort" use="optional" default="0">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="MaxGroupAddressRoutingTableEntries" type="xs:unsignedShort" use="optional">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-                <xs:attribute name="RoutableDatapointMainTypes" type="knx:IDREFS" use="optional">
-                  <xs:annotation>
-                    <xs:documentation>registration-relevant</xs:documentation>
-                  </xs:annotation>
-                </xs:attribute>
-              </xs:complexType>
-            </xs:element>
-          </xs:sequence>
-        </xs:complexType>
-      </xs:element>
       <xs:element name="Static" type="knx:ApplicationProgramStatic_t"/>
       <xs:element name="ModuleDefs" minOccurs="0" maxOccurs="1">
         <xs:complexType>
@@ -1522,11 +1446,6 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="PeiType" type="xs:unsignedByte" use="required">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
-    <xs:attribute name="HardwareType" type="xs:base64Binary" use="optional">
       <xs:annotation>
         <xs:documentation>registration-relevant</xs:documentation>
       </xs:annotation>
@@ -1608,6 +1527,11 @@
         <xs:documentation>registration-relevant</xs:documentation>
       </xs:annotation>
     </xs:attribute>
+    <xs:attribute name="MaxSecurityProxyIndividualAddressTableEntries" type="xs:unsignedShort" use="optional" default="0">
+      <xs:annotation>
+        <xs:documentation>registration-relevant</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="NonRegRelevantDataVersion" type="xs:unsignedShort" use="optional" default="0"/>
     <xs:attribute name="Broken" type="xs:boolean" use="optional" default="false"/>
     <xs:attribute name="DownloadInfoIncomplete" type="xs:boolean" use="optional" default="false"/>
@@ -1621,14 +1545,6 @@
     </xs:attribute>
     <xs:attribute name="Hash" type="xs:base64Binary" use="optional"/>
     <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
-    <xs:attribute name="CloudConnect" use="optional">
-      <xs:simpleType>
-        <xs:restriction base="xs:string">
-          <xs:enumeration value="Peer"/>
-          <xs:enumeration value="Broker"/>
-        </xs:restriction>
-      </xs:simpleType>
-    </xs:attribute>
     <xs:attribute name="Semantics" type="xs:string"/>
   </xs:complexType>
   <xs:complexType name="SegmentBase_t">
@@ -1748,7 +1664,6 @@
                       <xs:choice minOccurs="0">
                         <xs:element name="Memory" type="knx:MemoryParameter_t"/>
                         <xs:element name="Property" type="knx:PropertyParameter_t"/>
-                        <xs:element name="IoTPoint" type="knx:IoTPointParameter_t"/>
                       </xs:choice>
                     </xs:sequence>
                     <xs:attribute name="LegacyPatchAlways" type="xs:boolean" use="optional" default="false">
@@ -2061,7 +1976,6 @@
                       <xs:enumeration value="Tunneling"/>
                       <xs:enumeration value="USB"/>
                       <xs:enumeration value="Routing"/>
-                      <xs:enumeration value="Internal"/>
                     </xs:restriction>
                   </xs:simpleType>
                 </xs:attribute>
@@ -2325,7 +2239,6 @@
                             </xs:complexContent>
                           </xs:complexType>
                         </xs:element>
-                        <xs:element name="IoTPoint" type="knx:IoTPointParameter_t"/>
                       </xs:choice>
                     </xs:sequence>
                     <xs:attribute name="BaseValue" type="knx:IDREF" use="optional">
@@ -3145,11 +3058,6 @@
           </xs:annotation>
         </xs:attribute>
         <xs:attribute name="InlineData" type="xs:hexBinary" use="optional">
-          <xs:annotation>
-            <xs:documentation>registration-relevant</xs:documentation>
-          </xs:annotation>
-        </xs:attribute>
-        <xs:attribute name="Trim" type="xs:boolean" use="optional">
           <xs:annotation>
             <xs:documentation>registration-relevant</xs:documentation>
           </xs:annotation>
@@ -4153,12 +4061,6 @@
     <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
     <xs:attribute name="Plugin" type="xs:string" use="optional"/>
     <xs:attribute name="ValidationErrorRef" type="knx:IDREF"/>
-    <xs:attribute name="TextAlignment" type="knx:TextAlignment_t" use="optional"/>
-    <xs:attribute name="IoTEncoding" type="xs:string" use="optional">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
   </xs:complexType>
   <xs:complexType name="MemoryParameter_t">
     <xs:attribute name="CodeSegment" type="knx:IDREF" use="required">
@@ -4209,13 +4111,6 @@
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="BitOffset" type="knx:BitOffset_t" use="required">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
-  </xs:complexType>
-  <xs:complexType name="IoTPointParameter_t">
-    <xs:attribute name="PointReference" type="xs:string" use="required">
       <xs:annotation>
         <xs:documentation>registration-relevant</xs:documentation>
       </xs:annotation>
@@ -4545,11 +4440,6 @@
         <xs:documentation>registration-relevant</xs:documentation>
       </xs:annotation>
     </xs:attribute>
-    <xs:attribute name="IoTPointReference" type="xs:string" use="optional">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
   </xs:complexType>
   <xs:complexType name="ApplicationProgramChannel_t">
     <xs:choice maxOccurs="unbounded">
@@ -4580,7 +4470,6 @@
     <xs:attribute name="Icon" type="xs:string"/>
     <xs:attribute name="HelpContext" type="xs:string"/>
     <xs:attribute name="Semantics" type="xs:string"/>
-    <xs:attribute name="IsSemantic" type="xs:boolean" use="optional"/>
   </xs:complexType>
   <xs:complexType name="When_t">
     <xs:attribute name="test" type="knx:Condition_t" use="optional">
@@ -4666,7 +4555,6 @@
                     </xs:restriction>
                   </xs:simpleType>
                 </xs:attribute>
-                <xs:attribute name="TextAlignment" type="knx:TextAlignment_t" use="optional"/>
                 <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
               </xs:complexType>
             </xs:element>
@@ -4844,7 +4732,6 @@
     <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
     <xs:attribute name="Cell" type="knx:CellRef_t"/>
     <xs:attribute name="Icon" type="xs:string"/>
-    <xs:attribute name="TextAlignment" type="knx:TextAlignment_t" use="optional"/>
   </xs:complexType>
   <xs:complexType name="Button_t">
     <xs:attribute name="Id" type="xs:ID" use="required">
@@ -5038,7 +4925,6 @@
                 <xs:attribute name="NonRegRelevantDataVersion" type="xs:unsignedShort" use="optional" default="0"/>
                 <xs:attribute name="Hash" type="xs:base64Binary" use="optional"/>
                 <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
-                <xs:attribute name="Semantics" type="xs:string"/>
               </xs:complexType>
             </xs:element>
           </xs:sequence>
@@ -5135,10 +5021,19 @@
         <xs:documentation>registration-relevant</xs:documentation>
       </xs:annotation>
     </xs:attribute>
+    <xs:attribute name="RFRxCapabilities" type="knx:RFRxCapabilities_t" use="optional">
+      <xs:annotation>
+        <xs:documentation>registration-relevant</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="RFTxCapabilities" type="knx:RFTxCapabilities_t" use="optional">
+      <xs:annotation>
+        <xs:documentation>registration-relevant</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
     <xs:attribute name="NoDownloadWithoutPlugin" type="xs:boolean" use="optional" default="false"/>
     <xs:attribute name="NonRegRelevantDataVersion" type="xs:unsignedShort" use="optional" default="0"/>
     <xs:attribute name="InternalDescription" type="xs:string" use="optional"/>
-    <xs:attribute name="Semantics" type="xs:string"/>
   </xs:complexType>
   <xs:complexType name="Hardware2Program_t">
     <xs:sequence>
@@ -5173,22 +5068,6 @@
       <xs:simpleType>
         <xs:list itemType="knx:CouplerCapability_t"/>
       </xs:simpleType>
-    </xs:attribute>
-    <xs:attribute name="RFRxCapabilities" type="knx:RFRxCapabilities_t" use="optional">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
-    <xs:attribute name="RFTxCapabilities" type="knx:RFTxCapabilities_t" use="optional">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
-    </xs:attribute>
-    <xs:attribute name="Semantics" type="xs:string"/>
-    <xs:attribute name="SleepCycleTimeSeconds" type="xs:unsignedInt" use="optional">
-      <xs:annotation>
-        <xs:documentation>registration-relevant</xs:documentation>
-      </xs:annotation>
     </xs:attribute>
   </xs:complexType>
   <xs:complexType name="ApplicationProgramRef_t">
@@ -5293,25 +5172,6 @@
       <xs:element name="ProjectInformation" minOccurs="0">
         <xs:complexType>
           <xs:sequence>
-            <xs:element name="Tags" minOccurs="0">
-              <xs:complexType>
-                <xs:sequence>
-                  <xs:element name="Tag" maxOccurs="unbounded">
-                    <xs:complexType>
-                      <xs:attribute name="Text" type="knx:String20_t" use="required"/>
-                      <xs:attribute name="Color" use="required">
-                        <xs:simpleType>
-                          <xs:restriction base="xs:string">
-                            <xs:length value="7"/>
-                            <xs:pattern value="#[0-9A-F]{6}"/>
-                          </xs:restriction>
-                        </xs:simpleType>
-                      </xs:attribute>
-                    </xs:complexType>
-                  </xs:element>
-                </xs:sequence>
-              </xs:complexType>
-            </xs:element>
             <xs:element name="HistoryEntries" minOccurs="0">
               <xs:complexType>
                 <xs:sequence>
@@ -5353,10 +5213,8 @@
           <xs:attribute name="ProjectNumber" type="knx:String50_t" use="optional"/>
           <xs:attribute name="ContractNumber" type="knx:String50_t" use="optional"/>
           <xs:attribute name="LastModified" type="xs:dateTime" use="optional"/>
-          <xs:attribute name="ArchivedVersion" type="xs:dateTime" use="optional"/>
           <xs:attribute name="ProjectStart" type="xs:dateTime" use="optional"/>
           <xs:attribute name="ProjectEnd" type="xs:dateTime" use="optional"/>
-          <xs:attribute name="ProjectType" type="knx:ProjectType_t" default="Other (Commercial)"/>
           <xs:attribute name="ProjectId" use="optional">
             <xs:simpleType>
               <xs:restriction base="xs:unsignedShort">
@@ -5364,6 +5222,7 @@
               </xs:restriction>
             </xs:simpleType>
           </xs:attribute>
+          <xs:attribute name="ProjectPassword" type="knx:String20_t" use="optional"/>
           <xs:attribute name="Comment" type="xs:string" use="optional"/>
           <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional" default="Undefined"/>
           <xs:attribute name="ProjectTracingLevel" type="knx:ProjectTracingLevel_t" use="optional" default="None"/>
@@ -5415,8 +5274,6 @@
                     </xs:restriction>
                   </xs:simpleType>
                 </xs:attribute>
-                <xs:attribute name="Context" type="xs:string" use="optional"/>
-                <xs:attribute name="Ipv6InstallationId" type="xs:unsignedLong" use="optional" />
               </xs:complexType>
             </xs:element>
           </xs:sequence>
@@ -5462,45 +5319,22 @@
             <xs:element name="Line" minOccurs="0" maxOccurs="16">
               <xs:complexType>
                 <xs:sequence>
-                  <xs:element name="Segment" maxOccurs="128">
+                  <xs:element name="DeviceInstance" type="knx:DeviceInstance_t" minOccurs="0" maxOccurs="unbounded"/>
+                  <xs:element name="BusAccess" type="knx:BusAccess_t" minOccurs="0" maxOccurs="1"/>
+                  <xs:element name="AdditionalGroupAddresses" minOccurs="0">
                     <xs:complexType>
-                      <xs:sequence>
-                        <xs:element name="DeviceInstance" type="knx:DeviceInstance_t" minOccurs="0" maxOccurs="unbounded"/>
-                        <xs:element name="BusAccess" type="knx:BusAccess_t" minOccurs="0"/>
-                        <xs:element name="AdditionalGroupAddresses" minOccurs="0">
+                      <xs:sequence maxOccurs="unbounded">
+                        <xs:element name="GroupAddress">
                           <xs:complexType>
-                            <xs:sequence maxOccurs="unbounded">
-                              <xs:element name="GroupAddress">
-                                <xs:complexType>
-                                  <xs:attribute name="Address" type="xs:unsignedShort" use="required"/>
-                                </xs:complexType>
-                              </xs:element>
-                            </xs:sequence>
+                            <xs:attribute name="Address" type="xs:unsignedShort" use="required"/>
                           </xs:complexType>
                         </xs:element>
                       </xs:sequence>
-                      <xs:attribute name="Id" type="xs:ID" use="required"/>
-                      <xs:attribute name="Name" type="knx:String255_t"/>
-                      <xs:attribute name="Number" use="required">
-                        <xs:simpleType>
-                          <xs:restriction base="xs:int">
-                            <xs:minInclusive value="0"/>
-                            <xs:maxInclusive value="127"/>
-                          </xs:restriction>
-                        </xs:simpleType>
-                      </xs:attribute>
-                      <xs:attribute name="MediumTypeRefId" type="knx:IDREF" use="required"/>
-                      <xs:attribute name="DomainAddress" type="xs:unsignedLong" use="optional"/>
-                      <xs:attribute name="MasterSalt" type="xs:string" use="optional"/>
-                      <xs:attribute name="Comment" type="xs:string" use="optional"/>
-                      <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional"/>
-                      <xs:attribute name="Description" type="xs:string" use="optional"/>
-                      <xs:attribute name="Puid" type="xs:int" use="required"/>
                     </xs:complexType>
                   </xs:element>
                 </xs:sequence>
                 <xs:attribute name="Id" type="xs:ID" use="required"/>
-                <xs:attribute name="Name" type="knx:String255_t"/>
+                <xs:attribute name="Name" type="knx:String255_t" use="required"/>
                 <xs:attribute name="Address" use="required">
                   <xs:simpleType>
                     <xs:restriction base="xs:int">
@@ -5509,15 +5343,17 @@
                     </xs:restriction>
                   </xs:simpleType>
                 </xs:attribute>
+                <xs:attribute name="MediumTypeRefId" type="knx:IDREF" use="required"/>
                 <xs:attribute name="Comment" type="xs:string" use="optional"/>
+                <xs:attribute name="DomainAddress" type="xs:unsignedLong" use="optional"/>
                 <xs:attribute name="CompletionStatus" type="knx:CompletionStatus_t" use="optional"/>
                 <xs:attribute name="Description" type="xs:string" use="optional"/>
                 <xs:attribute name="Puid" type="xs:int" use="required"/>
               </xs:complexType>
             </xs:element>
           </xs:sequence>
-          <xs:attribute name="Id" type="xs:ID" use="required"/>
-          <xs:attribute name="Name" type="knx:String255_t"/>
+          <xs:attribute name="Id" type="xs:ID" use="optional"/>
+          <xs:attribute name="Name" type="knx:String255_t" use="required"/>
           <xs:attribute name="Address" use="required">
             <xs:simpleType>
               <xs:restriction base="xs:int">
@@ -5590,7 +5426,7 @@
           <xs:sequence>
             <xs:element name="Address" maxOccurs="254">
               <xs:complexType>
-                <xs:attribute name="Address" use="optional">
+                <xs:attribute name="Address" use="required">
                   <xs:simpleType>
                     <xs:restriction base="xs:unsignedByte">
                       <xs:minInclusive value="1"/>
@@ -5617,7 +5453,7 @@
                 <xs:attribute name="Id" type="xs:string" use="optional"/>
                 <xs:attribute name="RefId" type="knx:IDREF" use="optional"/>
                 <xs:attribute name="Name" type="knx:String255_t" use="optional"/>
-                <xs:attribute name="DoNotCopy" type="xs:boolean" use="optional" default="false"/>
+                <xs:attribute name="AutoCopy" type="xs:boolean" use="optional" default="false"/>
               </xs:complexType>
             </xs:element>
           </xs:sequence>
@@ -5685,8 +5521,6 @@
     <xs:attribute name="SerialNumber" type="xs:base64Binary" use="optional"/>
     <xs:attribute name="UniqueId" type="knx:Guid_t" use="optional"/>
     <xs:attribute name="IsRFRetransmitter" type="xs:boolean" use="optional" default="false"/>
-    <xs:attribute name="IsSlowResender" type="xs:boolean" use="optional" default="false"/>
-    <xs:attribute name="InitialValueLanguage" type="xs:language" use="optional" />
     <xs:attribute name="Puid" type="xs:int" use="required"/>
     <xs:attribute name="Context" type="xs:string"/>
   </xs:complexType>
@@ -5700,10 +5534,8 @@
     <xs:attribute name="LoadedDeviceManagementPasswordHash" type="xs:base64Binary" use="optional"/>
     <xs:attribute name="ToolKey" type="knx:Aes128Key_t" use="optional"/>
     <xs:attribute name="LoadedToolKey" type="knx:Aes128Key_t" use="optional"/>
-    <xs:attribute name="LoadedMasterSalt" type="xs:string" use="optional"/>
     <xs:attribute name="SequenceNumber" type="xs:unsignedLong" use="optional"/>
     <xs:attribute name="SequenceNumberTimestamp" type="xs:dateTime" use="optional"/>
-    <xs:attribute name="UnicastBroadcastBlocking" type="knx:SecurityMode_t" use="optional" default="Auto"/>
   </xs:complexType>
   <xs:complexType name="DeviceInstanceRef_t">
     <xs:attribute name="RefId" type="knx:IDREF" use="required"/>
@@ -5740,7 +5572,6 @@
     <xs:attribute name="ChannelId" type="knx:IDREF" use="optional"/>
     <xs:attribute name="Links" type="knx:RELIDREFS" use="optional"/>
     <xs:attribute name="Acknowledges" type="knx:RELIDREFS" use="optional"/>
-    <xs:attribute name="Context" type="xs:string"/>
   </xs:complexType>
   <xs:complexType name="GroupRange_t">
     <xs:sequence>
@@ -5770,6 +5601,7 @@
   </xs:complexType>
   <xs:complexType name="BusAccess_t">
     <xs:attribute name="Name" type="xs:string" use="required"/>
+    <xs:attribute name="Edi" type="knx:Guid_t" use="optional"/>
     <xs:attribute name="Parameter" type="xs:string" use="required"/>
   </xs:complexType>
   <xs:complexType name="GroupAddress_t">
@@ -5880,8 +5712,7 @@
   </xs:complexType>
   <xs:complexType name="DeviceCertificate_t">
     <xs:attribute name="SerialNumber" type="xs:base64Binary" use="required"/>
-    <xs:attribute name="FDSK" type="knx:Aes128Key_t" use="optional"/>
-    <xs:attribute name="Password" type="xs:string" use="optional"/>
+    <xs:attribute name="FDSK" type="knx:Aes128Key_t" use="required"/>
   </xs:complexType>
   <xs:complexType name="IPConfig_t">
     <xs:attribute name="Assign" type="knx:IPConfigAssign_t" use="optional" default="Auto"/>
@@ -5910,7 +5741,6 @@
     <xs:attribute name="Comment" type="xs:string" use="optional"/>
     <xs:attribute name="Password" type="knx:String20_t" use="optional"/>
     <xs:attribute name="PasswordHash" type="xs:base64Binary" use="optional"/>
-    <xs:attribute name="IsSecureEnabled" type="xs:boolean" use="optional" default="true"/>
   </xs:complexType>
   <xs:complexType name="P2PLinks_t">
     <xs:sequence>

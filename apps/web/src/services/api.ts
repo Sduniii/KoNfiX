@@ -136,9 +136,13 @@ export function downloadEtsXml() {
   window.open(`${API_BASE}/project/export/ets-xml`, '_blank')
 }
 
-export async function downloadKnxproj(options?: { password?: string }): Promise<void> {
+export async function downloadKnxproj(options?: {
+  password?: string
+  signing_key?: string
+}): Promise<void> {
   const pwd = options?.password?.trim()
-  if (!pwd) {
+  const signingKey = options?.signing_key?.trim()
+  if (!pwd && !signingKey) {
     const link = document.createElement('a')
     link.href = `${API_BASE}/project/export/knxproj`
     link.download = ''
@@ -151,7 +155,10 @@ export async function downloadKnxproj(options?: { password?: string }): Promise<
   const res = await fetch(`${API_BASE}/project/export/knxproj`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pwd }),
+    body: JSON.stringify({
+      password: pwd || undefined,
+      signing_key: signingKey || undefined,
+    }),
   })
 
   if (!res.ok) {
@@ -830,17 +837,22 @@ export async function fetchStorageSettings(): Promise<StorageSettings> {
 }
 
 export async function updateStorageSettings(
-  dataDir: string,
-  migrate: boolean = true
+  dataDir?: string,
+  migrate: boolean = true,
+  signingKey?: string | null
 ): Promise<StorageSettings> {
   const res = await fetch(`${API_BASE}/storage/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ data_dir: dataDir, migrate }),
+    body: JSON.stringify({
+      data_dir: dataDir || undefined,
+      migrate,
+      signing_key: signingKey !== undefined ? signingKey : undefined,
+    }),
   })
   if (!res.ok) {
     const err = await res.text().catch(() => res.statusText)
-    throw new Error(err || 'Fehler beim Aktualisieren des Speicherorts')
+    throw new Error(err || 'Fehler beim Aktualisieren der Einstellungen')
   }
   return res.json()
 }

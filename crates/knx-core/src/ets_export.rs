@@ -1,10 +1,262 @@
 use crate::model::*;
+use base64::Engine;
 use quick_xml::escape::escape;
+use rsa::pkcs1::DecodeRsaPrivateKey;
+use rsa::pkcs8::DecodePrivateKey;
+use rsa::pkcs1v15::{SigningKey, VerifyingKey};
+use rsa::signature::{SignatureEncoding, Signer, Verifier};
+use rsa::{RsaPrivateKey, RsaPublicKey};
+use sha1::{Digest as Sha1Digest, Sha1};
 use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Read, Write};
 use uuid::Uuid;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+
+/// Helper to map manufacturer string to ETS Schema 23 manufacturer identifier
+pub fn lookup_manufacturer_id_by_name(mfr: &str) -> &'static str {
+    let lower = mfr.to_lowercase();
+    if lower.contains("mdt") {
+        "M-0083"
+    } else if lower.contains("sation") || lower.contains("enertex") {
+        "M-010F"
+    } else if lower.contains("abb") || lower.contains("busch") {
+        "M-0002"
+    } else if lower.contains("weinzierl") || lower.contains("knx association") {
+        "M-00FA"
+    } else if lower.contains("siemens") {
+        "M-0001"
+    } else if lower.contains("gira") || lower.contains("jung") {
+        "M-0004"
+    } else {
+        "M-0000"
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct HardwareCatalogEntry {
+    pub hardware_id: String,
+    pub product_id: String,
+    pub order_number: String,
+    pub product_text: String,
+    pub h2p_id: String,
+    pub app_ref: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct HardwareCatalogIndex {
+    pub entries: Vec<HardwareCatalogEntry>,
+}
+
+impl HardwareCatalogIndex {
+    pub fn from_assets(assets_zip_bytes: &[u8]) -> Self {
+        let reader = Cursor::new(assets_zip_bytes);
+        let mut zip = match zip::ZipArchive::new(reader) {
+            Ok(z) => z,
+            Err(_) => return Self::default(),
+        };
+
+        let mut entries = Vec::new();
+
+        for i in 0..zip.len() {
+            let (file_name, is_hardware) = match zip.by_index(i) {
+                Ok(f) => {
+                    let safe_name = match f.enclosed_name() {
+                        Some(p) => p.to_string_lossy().to_string(),
+                        None => continue,
+                    };
+                    let is_hw = safe_name.to_lowercase().ends_with("hardware.xml");
+                    (safe_name, is_hw)
+                }
+                Err(_) => continue,
+            };
+
+            if is_hardware {
+                let mut content = Vec::new();
+                if let Ok(f) = zip.by_name(&file_name) {
+                    // Protect against decompression bombs (max 64 MB per file)
+                    let _ = f.take(64 * 1024 * 1024).read_to_end(&mut content);
+                }
+
+                if !content.is_empty() {
+                    let parsed = Self::parse_hardware_xml(&content);
+                    entries.extend(parsed);
+                }
+            }
+        }
+
+        Self { entries }
+    }
+
+    fn parse_hardware_xml(xml_bytes: &[u8]) -> Vec<HardwareCatalogEntry> {
+        use quick_xml::events::Event;
+        use quick_xml::reader::Reader;
+
+        let mut r = Reader::from_reader(xml_bytes);
+        r.config_mut().trim_text(true);
+
+        let mut entries = Vec::new();
+        let mut cur_hw_id = String::new();
+        let mut cur_h2ps: Vec<(String, String)> = Vec::new(); // (h2p_id, app_ref)
+        let mut cur_products: Vec<(String, String, String)> = Vec::new(); // (prod_id, order_number, text)
+        let mut in_hardware = false;
+        let mut buf = Vec::new();
+
+        let flush_entries = |entries: &mut Vec<HardwareCatalogEntry>,
+                             cur_hw_id: &str,
+                             cur_products: &[(String, String, String)],
+                             cur_h2ps: &[(String, String)]| {
+            for (prod_id, order, text) in cur_products {
+                if cur_h2ps.is_empty() {
+                    entries.push(HardwareCatalogEntry {
+                        hardware_id: cur_hw_id.to_string(),
+                        product_id: prod_id.clone(),
+                        order_number: order.clone(),
+                        product_text: text.clone(),
+                        h2p_id: String::new(),
+                        app_ref: String::new(),
+                    });
+                } else {
+                    for (h2p_id, app_ref) in cur_h2ps {
+                        entries.push(HardwareCatalogEntry {
+                            hardware_id: cur_hw_id.to_string(),
+                            product_id: prod_id.clone(),
+                            order_number: order.clone(),
+                            product_text: text.clone(),
+                            h2p_id: h2p_id.clone(),
+                            app_ref: app_ref.clone(),
+                        });
+                    }
+                }
+            }
+        };
+
+        while let Ok(ev) = r.read_event_into(&mut buf) {
+            match ev {
+                Event::Start(ref e) | Event::Empty(ref e) => {
+                    let qname = e.name();
+                    let tag = qname.as_ref();
+                    if tag == b"Hardware" {
+                        in_hardware = true;
+                        cur_hw_id.clear();
+                        cur_h2ps.clear();
+                        cur_products.clear();
+                        for a in e.attributes().flatten() {
+                            if a.key.as_ref() == b"Id" {
+                                cur_hw_id = String::from_utf8_lossy(&a.value).to_string();
+                            }
+                        }
+                    } else if tag == b"Product" {
+                        let mut pid = String::new();
+                        let mut order = String::new();
+                        let mut text = String::new();
+                        for a in e.attributes().flatten() {
+                            match a.key.as_ref() {
+                                b"Id" => pid = String::from_utf8_lossy(&a.value).to_string(),
+                                b"OrderNumber" => order = String::from_utf8_lossy(&a.value).to_string(),
+                                b"Text" => text = String::from_utf8_lossy(&a.value).to_string(),
+                                _ => {}
+                            }
+                        }
+                        if !pid.is_empty() {
+                            cur_products.push((pid, order, text));
+                        }
+                    } else if tag == b"Hardware2Program" {
+                        let mut hid = String::new();
+                        for a in e.attributes().flatten() {
+                            if a.key.as_ref() == b"Id" {
+                                hid = String::from_utf8_lossy(&a.value).to_string();
+                            }
+                        }
+                        if !hid.is_empty() {
+                            cur_h2ps.push((hid, String::new()));
+                        }
+                    } else if tag == b"ApplicationProgramRef" {
+                        for a in e.attributes().flatten() {
+                            if a.key.as_ref() == b"RefId" {
+                                let ref_id = String::from_utf8_lossy(&a.value).to_string();
+                                if let Some(last_h2p) = cur_h2ps.last_mut() {
+                                    last_h2p.1 = ref_id;
+                                }
+                            }
+                        }
+                    }
+                }
+                Event::End(ref e) => {
+                    let qname = e.name();
+                    if qname.as_ref() == b"Hardware" {
+                        in_hardware = false;
+                        flush_entries(&mut entries, &cur_hw_id, &cur_products, &cur_h2ps);
+                    }
+                }
+                Event::Eof => {
+                    if in_hardware {
+                        flush_entries(&mut entries, &cur_hw_id, &cur_products, &cur_h2ps);
+                    }
+                    break;
+                }
+                _ => {}
+            }
+            buf.clear();
+        }
+
+        entries
+    }
+
+    pub fn resolve_device_refs(&self, dev: &KnxDevice) -> (Option<String>, Option<String>) {
+        if let (Some(ref p), Some(ref h)) = (&dev.product_ref_id, &dev.hardware2program_ref_id) {
+            return (Some(p.clone()), Some(h.clone()));
+        }
+
+        let order = dev.order_number.as_deref().unwrap_or("").trim();
+        let mut matches: Vec<&HardwareCatalogEntry> = if !order.is_empty() {
+            self.entries
+                .iter()
+                .filter(|e| e.order_number.eq_ignore_ascii_case(order))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        if matches.is_empty() {
+            let model = dev.model.trim();
+            if !model.is_empty() {
+                matches = self.entries
+                    .iter()
+                    .filter(|e| e.order_number.eq_ignore_ascii_case(model))
+                    .collect();
+            }
+        }
+
+        if matches.is_empty() {
+            return (dev.product_ref_id.clone(), dev.hardware2program_ref_id.clone());
+        }
+
+        let chosen = if matches.len() == 1 {
+            matches[0]
+        } else {
+            let dname = dev.name.to_lowercase();
+            let dapp = dev.application_program.as_deref().unwrap_or("").to_lowercase();
+            matches
+                .iter()
+                .copied()
+                .find(|m| {
+                    let mtext = m.product_text.to_lowercase();
+                    let mapp = m.app_ref.to_lowercase();
+                    (!mtext.is_empty() && dname.contains(&mtext))
+                        || (!dapp.is_empty() && (mtext.contains(&dapp) || dapp.contains(&mtext) || mapp.contains(&dapp)))
+                        || (dname.contains("email") && mtext.contains("email"))
+                        || (dname.contains("secure") && mtext.contains("secure") && !dname.contains("email") && !mtext.contains("email"))
+                })
+                .unwrap_or(matches[0])
+        };
+
+        (
+            dev.product_ref_id.clone().or_else(|| Some(chosen.product_id.clone())),
+            dev.hardware2program_ref_id.clone().or_else(|| Some(chosen.h2p_id.clone())),
+        )
+    }
+}
 
 pub struct EtsExporter;
 
@@ -106,7 +358,7 @@ impl EtsExporter {
         let now_iso = chrono::Utc::now().to_rfc3339();
         let mut xml = String::new();
         xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"KNX Configurator\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
+        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"ETS6\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
         xml.push_str(&format!("  <Project Id=\"{}\">\n", project_id));
 
         let last_used_puid = project.ets_last_used_puid.unwrap_or(2000);
@@ -190,6 +442,15 @@ impl EtsExporter {
 
     /// Generates ETS 6.2 XML Schema 23 compliant `0.xml` (Installation data)
     pub fn generate_installation_0_xml(project: &Project, project_id: &str) -> String {
+        Self::generate_installation_0_xml_with_catalog(project, project_id, None)
+    }
+
+    /// Generates ETS 6.2 XML Schema 23 compliant `0.xml` using optional hardware catalog index for resolving ProductRefId and Hardware2ProgramRefId
+    pub fn generate_installation_0_xml_with_catalog(
+        project: &Project,
+        project_id: &str,
+        catalog_index: Option<&HardwareCatalogIndex>,
+    ) -> String {
         let mut puid_counter: u32 = 1;
 
         // Group devices by area and line
@@ -225,7 +486,7 @@ impl EtsExporter {
 
         let mut xml = String::new();
         xml.push_str("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"KNX Configurator\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
+        xml.push_str("<KNX xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" CreatedBy=\"ETS6\" ToolVersion=\"6.2.7302.0\" xmlns=\"http://knx.org/xml/project/23\">\n");
         xml.push_str(&format!("  <Project Id=\"{}\">\n", project_id));
         xml.push_str("    <Installations>\n");
         xml.push_str(&format!(
@@ -308,22 +569,30 @@ impl EtsExporter {
                     dev_uuid_to_xml_id.insert(dev.id, dev_xml_id.clone());
                     puid_counter += 1;
 
-                    let product_ref = if let Some(ref pr) = dev.product_ref_id {
+                    let (resolved_prod, resolved_h2p) = if let Some(cat) = catalog_index {
+                        cat.resolve_device_refs(dev)
+                    } else {
+                        (dev.product_ref_id.clone(), dev.hardware2program_ref_id.clone())
+                    };
+
+                    let mfr_id = lookup_manufacturer_id_by_name(&dev.manufacturer);
+
+                    let product_ref = if let Some(ref pr) = resolved_prod {
                         pr.clone()
                     } else if let Some(ref o) = dev.order_number {
                         let clean_o: String = o.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '.' || c == '_' { c } else { '_' }).collect();
-                        format!("M-0083_H-1_P-{}", clean_o)
+                        format!("{}_H-1-1_P-{}", mfr_id, clean_o)
                     } else {
-                        "M-0083_H-1_P-Default".to_string()
+                        format!("{}_H-1-1_P-Default", mfr_id)
                     };
 
-                    let h2p_ref = if let Some(ref hp) = dev.hardware2program_ref_id {
+                    let h2p_ref = if let Some(ref hp) = resolved_h2p {
                         hp.clone()
                     } else if let Some(ref a) = dev.application_program {
                         let clean_a: String = a.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '.' || c == '_' { c } else { '_' }).collect();
-                        format!("M-0083_H-1_HP-{}", clean_a)
+                        format!("{}_H-1-1_HP-{}", mfr_id, clean_a)
                     } else {
-                        "M-0083_H-1_HP-Default".to_string()
+                        format!("{}_H-1-1_HP-Default", mfr_id)
                     };
 
                     let mut extra_attrs = String::new();
@@ -734,15 +1003,189 @@ impl EtsExporter {
         Ok(buf)
     }
 
+    /// Parses an RSA private key from PEM (PKCS#1, PKCS#8), raw Base64/Hex DER, or a local file path.
+    /// Used to sign project manifests using PKCS#1 v1.5 and SHA-1 for ETS 6.2 compatibility.
+    pub fn parse_rsa_private_key(key_str: &str) -> Result<RsaPrivateKey, String> {
+        let trimmed = key_str.trim();
+        if trimmed.is_empty() {
+            return Err("Signierschlüssel ist leer".to_string());
+        }
+
+        // Support reading from a local file path if specified
+        let key_text = if std::path::Path::new(trimmed).is_file() {
+            std::fs::read_to_string(trimmed)
+                .map_err(|e| format!("Fehler beim Lesen der Schlüsseldatei '{}': {}", trimmed, e))?
+        } else {
+            trimmed.to_string()
+        };
+        let trimmed = key_text.trim();
+        if trimmed.is_empty() {
+            return Err("Signierschlüsseldatei ist leer".to_string());
+        }
+        if trimmed.len() > 64 * 1024 {
+            return Err("Signierschlüssel überschreitet die maximale Größe von 64 KB".to_string());
+        }
+
+        // Normalize Windows CRLF line endings
+        let normalized = trimmed.replace("\r\n", "\n").replace('\r', "\n");
+
+        // 1. Direct standard PEM attempts
+        if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(&normalized) {
+            return Ok(key);
+        }
+        if let Ok(key) = RsaPrivateKey::from_pkcs1_pem(&normalized) {
+            return Ok(key);
+        }
+
+        // 2. Extract Base64 payload between PEM delimiters (handles space-separated, single-line, or extra text)
+        let (b64_payload, is_pkcs8, is_pkcs1) = if let Some(start) = normalized.find("-----BEGIN PRIVATE KEY-----") {
+            if let Some(end) = normalized[start..].find("-----END PRIVATE KEY-----") {
+                let payload = &normalized[start + "-----BEGIN PRIVATE KEY-----".len() .. start + end];
+                (payload, true, false)
+            } else {
+                (normalized.as_str(), false, false)
+            }
+        } else if let Some(start) = normalized.find("-----BEGIN RSA PRIVATE KEY-----") {
+            if let Some(end) = normalized[start..].find("-----END RSA PRIVATE KEY-----") {
+                let payload = &normalized[start + "-----BEGIN RSA PRIVATE KEY-----".len() .. start + end];
+                (payload, false, true)
+            } else {
+                (normalized.as_str(), false, false)
+            }
+        } else {
+            (normalized.as_str(), false, false)
+        };
+
+        // Filter out all whitespace (newlines, spaces, tabs) to get clean Base64
+        let clean_b64: String = b64_payload.chars().filter(|c| !c.is_whitespace()).collect();
+
+        if let Ok(der_bytes) = base64::engine::general_purpose::STANDARD.decode(&clean_b64) {
+            if is_pkcs8 {
+                if let Ok(key) = RsaPrivateKey::from_pkcs8_der(&der_bytes) {
+                    return Ok(key);
+                }
+                if let Ok(key) = RsaPrivateKey::from_pkcs1_der(&der_bytes) {
+                    return Ok(key);
+                }
+            } else if is_pkcs1 {
+                if let Ok(key) = RsaPrivateKey::from_pkcs1_der(&der_bytes) {
+                    return Ok(key);
+                }
+                if let Ok(key) = RsaPrivateKey::from_pkcs8_der(&der_bytes) {
+                    return Ok(key);
+                }
+            } else {
+                if let Ok(key) = RsaPrivateKey::from_pkcs8_der(&der_bytes) {
+                    return Ok(key);
+                }
+                if let Ok(key) = RsaPrivateKey::from_pkcs1_der(&der_bytes) {
+                    return Ok(key);
+                }
+            }
+        }
+
+        // 3. Fallback on hex decoding
+        if let Ok(der_bytes) = hex::decode(&clean_b64) {
+            if let Ok(key) = RsaPrivateKey::from_pkcs8_der(&der_bytes) {
+                return Ok(key);
+            }
+            if let Ok(key) = RsaPrivateKey::from_pkcs1_der(&der_bytes) {
+                return Ok(key);
+            }
+        }
+
+        Err("RSA-Private-Key konnte aus den Daten nicht geladen werden (weder PKCS#8 noch PKCS#1)".to_string())
+    }
+
+    /// Computes the Base64-encoded SHA-1 content hash of an uncompressed file entry (ETS `EntryWrapperStream.CreateContentHash`).
+    pub fn calculate_file_content_hash(data: &[u8]) -> String {
+        let mut hasher = Sha1::new();
+        hasher.update(data);
+        base64::engine::general_purpose::STANDARD.encode(hasher.finalize())
+    }
+
+    /// Normalizes a project file relative path (ETS `DirectorySignatureCreator.a`).
+    /// Strips leading `project_id` if present, trims leading slashes/backslashes, cleans path components, and replaces '/' with '\'.
+    pub fn normalize_manifest_path(project_id: &str, relative_path: &str) -> String {
+        let mut p = relative_path;
+        if p.starts_with(project_id) {
+            p = &p[project_id.len()..];
+        }
+        let cleaned = p.trim_start_matches(|c| c == '/' || c == '\\');
+        let parts: Vec<&str> = cleaned
+            .split(['/', '\\'])
+            .filter(|seg| !seg.is_empty() && *seg != "." && *seg != "..")
+            .collect();
+        parts.join("\\")
+    }
+
+    /// Builds the directory manifest string from sorted entries (ETS `CalculateDirectoryDigest`).
+    /// Format: `<Path1>:<Hash1>,<Path2>:<Hash2>,...`
+    pub fn build_directory_manifest_string(entries: &BTreeMap<String, String>) -> String {
+        let mut s = String::new();
+        for (idx, (path, hash)) in entries.iter().enumerate() {
+            if idx > 0 {
+                s.push(',');
+            }
+            s.push_str(path);
+            s.push(':');
+            s.push_str(hash);
+        }
+        s
+    }
+
+    /// Calculates the 20-byte SHA-1 directory digest from the manifest string (ETS `CalculateDirectoryDigest`).
+    pub fn calculate_directory_digest(manifest_str: &str) -> [u8; 20] {
+        let mut hasher = Sha1::new();
+        hasher.update(manifest_str.as_bytes());
+        hasher.finalize().into()
+    }
+
+    /// Signs the manifest data using an RSA private key with PKCS#1 v1.5 and SHA-1 (ETS `DirectorySigner.CalculateSignature`).
+    /// Returns the Base64-encoded signature.
+    pub fn sign_manifest(manifest_str: &str, key_str: &str) -> Result<String, String> {
+        let private_key = Self::parse_rsa_private_key(key_str)?;
+        let signing_key = SigningKey::<Sha1>::new(private_key);
+        let signature = signing_key.sign(manifest_str.as_bytes());
+        Ok(base64::engine::general_purpose::STANDARD.encode(signature.to_bytes().as_ref()))
+    }
+
+    /// Verifies an ETS manifest signature against the manifest string using an RSA public key (ETS `DirectorySigner.VerifySignature`).
+    pub fn verify_manifest_signature(
+        manifest_str: &str,
+        signature_b64: &str,
+        public_key: &RsaPublicKey,
+    ) -> Result<bool, String> {
+        let verifying_key = VerifyingKey::<Sha1>::new(public_key.clone());
+        let sig_bytes = base64::engine::general_purpose::STANDARD
+            .decode(signature_b64.trim())
+            .map_err(|e| format!("Ungültiges Base64 in Signatur: {}", e))?;
+        let sig_obj = rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice())
+            .map_err(|e| format!("Ungültige Signaturstruktur: {}", e))?;
+        verifying_key
+            .verify(manifest_str.as_bytes(), &sig_obj)
+            .map(|_| true)
+            .map_err(|e| format!("Signaturprüfung fehlgeschlagen: {}", e))
+    }
+
+    /// Signs binary data using an RSA private key with PKCS#1 v1.5 and SHA-1.
+    pub fn sign_project_data(data: &[u8], key_str: &str) -> Result<String, String> {
+        let private_key = Self::parse_rsa_private_key(key_str)?;
+        let signing_key = SigningKey::<Sha1>::new(private_key);
+        let signature = signing_key.sign(data);
+        Ok(base64::engine::general_purpose::STANDARD.encode(signature.to_bytes().as_ref()))
+    }
+
     /// Full `.knxproj` export pipeline.
     /// Produces a 100% ETS 5 / ETS 6 compatible `.knxproj` ZIP archive.
-    pub fn export_knxproj(project: &Project, password: Option<&str>) -> Result<Vec<u8>, String> {
+    /// If `signing_key` is provided (or configured in `StorageSettings`), signs the project manifest
+    /// with RSA PKCS#1 v1.5 SHA-1 matching ETS 6.2 specifications and writes `{project_id}.signature`.
+    pub fn export_knxproj(
+        project: &Project,
+        password: Option<&str>,
+        signing_key: Option<&str>,
+    ) -> Result<Vec<u8>, String> {
         let project_id = project.ets_project_id.as_deref().unwrap_or("P-0425");
-
-        let xml_0 = Self::generate_installation_0_xml(project, project_id);
-        let project_xml = Self::generate_project_xml(project, project_id);
-
-        let inner_zip_bytes = Self::create_inner_project_zip(&xml_0, &project_xml, password)?;
 
         // Try to load cached project assets (.assets.zip)
         let storage = crate::storage::StorageManager::new();
@@ -758,6 +1201,107 @@ impl EtsExporter {
                 None
             });
 
+        let catalog_index = asset_bundle.as_ref().map(|b| HardwareCatalogIndex::from_assets(b));
+
+        let xml_0 = Self::generate_installation_0_xml_with_catalog(project, project_id, catalog_index.as_ref());
+        let project_xml = Self::generate_project_xml(project, project_id);
+
+        let is_password_protected = password
+            .map(|p| !p.trim().is_empty())
+            .unwrap_or(false);
+
+        let inner_zip_bytes = if is_password_protected {
+            Some(Self::create_inner_project_zip(&xml_0, &project_xml, password)?)
+        } else {
+            None
+        };
+
+        // 1. Process asset bundle: collect manufacturer files, knx_master.xml, and any project files
+        let mut extra_asset_files: Vec<(String, Vec<u8>)> = Vec::new();
+        let mut has_master_xml = false;
+
+        if let Some(ref assets_bytes) = asset_bundle {
+            if let Ok(mut asset_zip) = zip::ZipArchive::new(Cursor::new(assets_bytes)) {
+                for i in 0..asset_zip.len() {
+                    if let Ok(f) = asset_zip.by_index(i) {
+                        // Enforce Zip-Slip protection
+                        let safe_name = match f.enclosed_name() {
+                            Some(p) => p.to_string_lossy().to_string(),
+                            None => continue,
+                        };
+
+                        if safe_name == format!("{}.signature", project_id)
+                            || safe_name == format!("{}.zip", project_id)
+                            || safe_name == format!("{}/0.xml", project_id)
+                            || safe_name == format!("{}/project.xml", project_id)
+                        {
+                            // Skip dynamically generated project files
+                            continue;
+                        }
+
+                        // Read bounded bytes (max 64 MB per file)
+                        let mut file_bytes = Vec::new();
+                        if f.take(64 * 1024 * 1024).read_to_end(&mut file_bytes).is_ok() {
+                            if safe_name == "knx_master.xml" {
+                                has_master_xml = true;
+                            }
+                            extra_asset_files.push((safe_name, file_bytes));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build sorted manifest dictionary for the project container
+        // Following ETS 6.2 Directory Signature specifications
+        let mut manifest_entries: BTreeMap<String, String> = BTreeMap::new();
+        manifest_entries.insert(
+            Self::normalize_manifest_path(project_id, "0.xml"),
+            Self::calculate_file_content_hash(xml_0.as_bytes()),
+        );
+        manifest_entries.insert(
+            Self::normalize_manifest_path(project_id, "project.xml"),
+            Self::calculate_file_content_hash(project_xml.as_bytes()),
+        );
+
+        // Include all project container files (e.g. {project_id}/Baggages/*) in the directory manifest!
+        for (fname, bytes) in &extra_asset_files {
+            if fname.starts_with(&format!("{}/", project_id)) {
+                manifest_entries.insert(
+                    Self::normalize_manifest_path(project_id, fname),
+                    Self::calculate_file_content_hash(bytes),
+                );
+            }
+        }
+
+        let manifest_str = Self::build_directory_manifest_string(&manifest_entries);
+
+        // Determine effective signing key:
+        // Priority:
+        // 1. Explicitly passed signing_key argument
+        // 2. StorageSettings.signing_key (~/.konfix/settings.json)
+        // 3. Environment variable KONFIX_SIGNING_KEY / KONFIX_SIGNING_KEY_PATH
+        let effective_signing_key: Option<String> = signing_key
+            .and_then(|k| {
+                let t = k.trim().to_string();
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(t)
+                }
+            })
+            .or_else(|| {
+                #[cfg(not(test))]
+                {
+                    storage.get_settings_sync().signing_key
+                }
+                #[cfg(test)]
+                {
+                    None
+                }
+            })
+            .or_else(|| std::env::var("KONFIX_SIGNING_KEY").ok());
+
         // Build outer .knxproj ZIP
         let mut outer_buf = Vec::new();
         {
@@ -765,42 +1309,33 @@ impl EtsExporter {
             let options = SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
 
-            let mut has_master_xml = false;
-            let mut has_project_sig = false;
-
-            // 1. Copy manufacturer hardware catalogs & signatures from asset bundle
-            if let Some(ref assets_bytes) = asset_bundle {
-                if let Ok(mut asset_zip) = zip::ZipArchive::new(Cursor::new(assets_bytes)) {
-                    for i in 0..asset_zip.len() {
-                        if let Ok(mut f) = asset_zip.by_index(i) {
-                            let fname = f.name().to_string();
-                            if fname == format!("{}.signature", project_id) {
-                                let mut sig_bytes = Vec::new();
-                                if f.read_to_end(&mut sig_bytes).is_ok() {
-                                    let _ = writer.start_file(&fname, options);
-                                    let _ = writer.write_all(&sig_bytes);
-                                    has_project_sig = true;
-                                }
-                            } else if fname.starts_with("M-") || fname.ends_with(".signature") {
-                                let mut file_bytes = Vec::new();
-                                if f.read_to_end(&mut file_bytes).is_ok() {
-                                    let _ = writer.start_file(&fname, options);
-                                    let _ = writer.write_all(&file_bytes);
-                                }
-                            } else if fname == "knx_master.xml" {
-                                let mut master_bytes = Vec::new();
-                                if f.read_to_end(&mut master_bytes).is_ok() {
-                                    let _ = writer.start_file("knx_master.xml", options);
-                                    let _ = writer.write_all(&master_bytes);
-                                    has_master_xml = true;
-                                }
-                            }
-                        }
+            // 1. Generate freshly computed signature over directory manifest if key is provided!
+            if let Some(ref key) = effective_signing_key {
+                match Self::sign_manifest(&manifest_str, key) {
+                    Ok(sig_b64) => {
+                        writer
+                            .start_file(format!("{}.signature", project_id), options)
+                            .map_err(|e| format!("Fehler beim Hinzufügen der Signatur: {}", e))?;
+                        writer
+                            .write_all(sig_b64.as_bytes())
+                            .map_err(|e| format!("Fehler beim Schreiben der Signatur: {}", e))?;
+                        tracing::info!("Projekt {} erfolgreich nach ETS-Spezifikation (RSA PKCS#1 v1.5 SHA-1) signiert", project_id);
+                    }
+                    Err(e) => {
+                        return Err(format!("Signierung mit hinterlegtem Schlüssel fehlgeschlagen: {}. Bitte überprüfe das Schlüsselformat.", e));
                     }
                 }
+            } else {
+                tracing::warn!("Kein Signierschlüssel hinterlegt: Projekt {} wird unsigniert exportiert. ETS-Import erfordert einen gültigen Signierschlüssel.", project_id);
             }
 
-            // 2. knx_master.xml fallback if not in asset bundle
+            // 2. Copy manufacturer hardware catalogs & signatures from asset bundle (pre-filtered & safe)
+            for (fname, file_bytes) in extra_asset_files {
+                let _ = writer.start_file(&fname, options);
+                let _ = writer.write_all(&file_bytes);
+            }
+
+            // 3. knx_master.xml fallback if not in asset bundle
             if !has_master_xml {
                 const MASTER_XML: &[u8] = include_bytes!("../resources/knx_master.xml");
                 writer
@@ -811,24 +1346,32 @@ impl EtsExporter {
                     .map_err(|e| format!("Fehler beim Schreiben von knx_master.xml: {}", e))?;
             }
 
-            // 3. {project_id}.signature if not already written
-            if !has_project_sig {
-                let dummy_sig = b"bUx6WmxRYjdKdjRvMFNSYjhFTkIyYVpQcWdxcnBYNldBSlR2WGJJaE1vdTM4R2x0U0o4OFpmTFRP\naERocnFubUFyWGNzUUhDQTBTZEdxSXR4S1NNN3krM2xDVVVxN3VLZytLVWxEVzdnV1hkUkg1UEt1\nN2Z1OE8wQWdWNXA4Z1FNYjJudlBDenlwcmhWMHhyNEd2VXg4MzEvcWc5VnVsSVpmaktYQkNaNG9n\nPQ==";
-                writer
-                    .start_file(format!("{}.signature", project_id), options)
-                    .map_err(|e| format!("Fehler beim Hinzufügen der Signatur: {}", e))?;
-                writer
-                    .write_all(dummy_sig)
-                    .map_err(|e| format!("Fehler beim Schreiben der Signatur: {}", e))?;
-            }
 
-            // 4. {project_id}.zip
-            writer
-                .start_file(format!("{}.zip", project_id), options)
-                .map_err(|e| format!("Fehler beim Hinzufügen von {}.zip: {}", project_id, e))?;
-            writer
-                .write_all(&inner_zip_bytes)
-                .map_err(|e| format!("Fehler beim Schreiben von {}.zip: {}", project_id, e))?;
+            // 5. Project container files:
+            // - If password protected: {project_id}.zip (AES-256 encrypted)
+            // - If unencrypted (no password): {project_id}/0.xml and {project_id}/project.xml directly in outer zip!
+            if let Some(ref inner_bytes) = inner_zip_bytes {
+                writer
+                    .start_file(format!("{}.zip", project_id), options)
+                    .map_err(|e| format!("Fehler beim Hinzufügen von {}.zip: {}", project_id, e))?;
+                writer
+                    .write_all(inner_bytes)
+                    .map_err(|e| format!("Fehler beim Schreiben von {}.zip: {}", project_id, e))?;
+            } else {
+                writer
+                    .start_file(format!("{}/0.xml", project_id), options)
+                    .map_err(|e| format!("Fehler beim Hinzufügen von {}/0.xml: {}", project_id, e))?;
+                writer
+                    .write_all(xml_0.as_bytes())
+                    .map_err(|e| format!("Fehler beim Schreiben von {}/0.xml: {}", project_id, e))?;
+
+                writer
+                    .start_file(format!("{}/project.xml", project_id), options)
+                    .map_err(|e| format!("Fehler beim Hinzufügen von {}/project.xml: {}", project_id, e))?;
+                writer
+                    .write_all(project_xml.as_bytes())
+                    .map_err(|e| format!("Fehler beim Schreiben von {}/project.xml: {}", project_id, e))?;
+            }
 
             writer
                 .finish()
@@ -1009,15 +1552,23 @@ mod tests {
         assert!(proj_xml.contains("GroupAddressStyle=\"ThreeLevel\""));
 
         // Test full .knxproj export archive
-        let knxproj_bytes = EtsExporter::export_knxproj(&project, None).expect("Export failed");
+        let knxproj_bytes = EtsExporter::export_knxproj(&project, None, None).expect("Export failed");
         assert!(!knxproj_bytes.is_empty());
 
-        // Validate that exported bytes can be read back as valid ZIP archive
+        // Validate that exported bytes can be read back as valid ZIP archive (unencrypted)
         let cursor = Cursor::new(&knxproj_bytes);
         let mut zip = zip::ZipArchive::new(cursor).expect("Valid ZIP archive");
         assert!(zip.by_name("knx_master.xml").is_ok());
-        assert!(zip.by_name("P-0425.zip").is_ok());
-        assert!(zip.by_name("P-0425.signature").is_ok());
+        assert!(zip.by_name("P-0425/0.xml").is_ok());
+        assert!(zip.by_name("P-0425/project.xml").is_ok());
+        assert!(zip.by_name("P-0425.zip").is_err(), "Unencrypted export must not contain P-0425.zip");
+        assert!(zip.by_name("P-0425.signature").is_err(), "Export without key must not contain signature file");
+
+        // Validate encrypted export creates P-0425.zip
+        let enc_bytes = EtsExporter::export_knxproj(&project, Some("secret"), None).expect("Encrypted export failed");
+        let mut enc_zip = zip::ZipArchive::new(Cursor::new(&enc_bytes)).expect("Valid encrypted ZIP archive");
+        assert!(enc_zip.by_name("P-0425.zip").is_ok());
+        assert!(enc_zip.by_name("P-0425.signature").is_err(), "Encrypted export without key must not contain signature file");
     }
 
     #[test]
@@ -1108,7 +1659,7 @@ mod tests {
         };
 
         // Export to .knxproj
-        let exported_bytes = EtsExporter::export_knxproj(&original, None).expect("Export failed");
+        let exported_bytes = EtsExporter::export_knxproj(&original, None, None).expect("Export failed");
 
         // Import back via parse_knxproj
         let imported = crate::ets_import::parse_knxproj(&exported_bytes, None, "RoundtripImport")
@@ -1125,5 +1676,158 @@ mod tests {
         assert_eq!(imported.devices.len(), 1);
         assert_eq!(imported.devices[0].individual_address, "1.1.20");
         assert_eq!(imported.devices[0].name, "Schaltaktor 8-fach");
+    }
+
+    #[test]
+    fn test_ets_manifest_digest_and_path_normalization() {
+        // 1. Path normalization
+        assert_eq!(EtsExporter::normalize_manifest_path("P-0425", "P-0425/0.xml"), "0.xml");
+        assert_eq!(EtsExporter::normalize_manifest_path("P-0425", "P-0425\\project.xml"), "project.xml");
+        assert_eq!(EtsExporter::normalize_manifest_path("P-0425", "0.xml"), "0.xml");
+        assert_eq!(EtsExporter::normalize_manifest_path("P-0425", "/0.xml"), "0.xml");
+        assert_eq!(
+            EtsExporter::normalize_manifest_path("P-0425", "P-0425/Baggages/icon.png"),
+            "Baggages\\icon.png"
+        );
+
+        // 2. Content hash (SHA-1 base64)
+        let hash = EtsExporter::calculate_file_content_hash(b"Hello KNX");
+        // SHA-1("Hello KNX") = 2a2e45300d8e87d461fcbe4782bb578491c7c9bf -> Base64
+        assert!(!hash.is_empty());
+
+        // 3. Sorted manifest string
+        let mut entries = BTreeMap::new();
+        entries.insert("project.xml".to_string(), "hash2".to_string());
+        entries.insert("0.xml".to_string(), "hash1".to_string());
+        let manifest_str = EtsExporter::build_directory_manifest_string(&entries);
+        assert_eq!(manifest_str, "0.xml:hash1,project.xml:hash2");
+
+        // 4. Digest calculation (20 bytes)
+        let digest = EtsExporter::calculate_directory_digest(&manifest_str);
+        assert_eq!(digest.len(), 20);
+    }
+
+    #[test]
+    fn test_ets_export_with_rsa_signing() {
+        use rsa::pkcs1::EncodeRsaPrivateKey;
+
+        let mut rng = rand::rngs::OsRng;
+        let priv_key = RsaPrivateKey::new(&mut rng, 1024).expect("RSA key generation failed");
+        let pem_str = priv_key.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF).expect("PEM encoding failed");
+
+        let project = Project {
+            id: Uuid::new_v4(),
+            name: "SignTest".to_string(),
+            ets_project_id: Some("P-1234".to_string()),
+            ..Default::default()
+        };
+
+        // 1. Export with custom signing key (unencrypted)
+        let exported = EtsExporter::export_knxproj(&project, None, Some(&pem_str)).expect("Export with signing failed");
+
+        let cursor = Cursor::new(&exported);
+        let mut zip = zip::ZipArchive::new(cursor).expect("Valid ZIP archive");
+
+        // In unencrypted export, P-1234.zip must NOT exist to prevent ETS password prompts
+        assert!(zip.by_name("P-1234.zip").is_err(), "Unencrypted export must not contain P-1234.zip");
+
+        // Signature must exist
+        let sig_str = {
+            let mut sig_file = zip.by_name("P-1234.signature").expect("Signature file missing");
+            let mut s = String::new();
+            sig_file.read_to_string(&mut s).expect("Read signature string");
+            s
+        };
+
+        let sig_bytes = base64::engine::general_purpose::STANDARD.decode(sig_str.trim()).expect("Valid base64");
+        assert_eq!(sig_bytes.len(), 128, "1024-bit RSA signature must be 128 bytes");
+
+        // Extract 0.xml and project.xml directly from P-1234/
+        let mut xml_0_bytes = Vec::new();
+        zip.by_name("P-1234/0.xml").expect("0.xml directly in P-1234/").read_to_end(&mut xml_0_bytes).expect("Read 0.xml");
+        let mut proj_xml_bytes = Vec::new();
+        zip.by_name("P-1234/project.xml").expect("project.xml directly in P-1234/").read_to_end(&mut proj_xml_bytes).expect("Read project.xml");
+
+        let mut manifest_entries = BTreeMap::new();
+        manifest_entries.insert("0.xml".to_string(), EtsExporter::calculate_file_content_hash(&xml_0_bytes));
+        manifest_entries.insert("project.xml".to_string(), EtsExporter::calculate_file_content_hash(&proj_xml_bytes));
+        let manifest_str = EtsExporter::build_directory_manifest_string(&manifest_entries);
+
+        // Verify signature against directory manifest
+        let pub_key = priv_key.to_public_key();
+        assert!(
+            EtsExporter::verify_manifest_signature(&manifest_str, &sig_str, &pub_key).is_ok(),
+            "Signature must verify against directory manifest according to ETS specification"
+        );
+
+        // Negative test: verify that tampered manifest fails verification
+        let tampered_manifest = format!("{}tampered", manifest_str);
+        assert!(
+            EtsExporter::verify_manifest_signature(&tampered_manifest, &sig_str, &pub_key).is_err(),
+            "Signature verification must fail on tampered manifest"
+        );
+
+        // 2. Export without signing key -> no signature file created
+        let exported_no_key = EtsExporter::export_knxproj(&project, None, None).expect("Export without key failed");
+        let mut zip_no_key = zip::ZipArchive::new(Cursor::new(&exported_no_key)).expect("Valid default ZIP archive");
+        assert!(
+            zip_no_key.by_name("P-1234.signature").is_err(),
+            "Export without signing key must not contain signature file"
+        );
+    }
+
+    #[test]
+    fn test_parse_rsa_private_key_with_crlf_and_public_block() {
+        use rsa::pkcs8::EncodePrivateKey;
+        use rsa::pkcs8::LineEnding;
+        use rsa::traits::PublicKeyParts;
+
+        let mut rng = rand::rngs::OsRng;
+        let priv_key = RsaPrivateKey::new(&mut rng, 1024).expect("RSA key generation failed");
+        let pkcs8_pem = priv_key.to_pkcs8_pem(LineEnding::LF).expect("PEM encoding failed");
+
+        // Simulate rsakey.txt: CRLF line endings + trailing comment and public block
+        let mut mixed = pkcs8_pem.as_str().replace('\n', "\r\n");
+        mixed.push_str("\r\n---PUBLIC---\r\n-----BEGIN PUBLIC KEY-----\r\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQ...\r\n-----END PUBLIC KEY-----\r\n");
+
+        let parsed = EtsExporter::parse_rsa_private_key(&mixed).expect("Must parse private key block from mixed file with CRLF");
+        assert_eq!(parsed.n(), priv_key.n(), "Modulus must match original key");
+    }
+
+    #[test]
+    fn test_parse_rsa_private_key_single_line_with_spaces() {
+        use rsa::pkcs8::EncodePrivateKey;
+        use rsa::pkcs8::LineEnding;
+        use rsa::traits::PublicKeyParts;
+
+        let mut rng = rand::rngs::OsRng;
+        let priv_key = RsaPrivateKey::new(&mut rng, 1024).expect("RSA key generation failed");
+        let pkcs8_pem = priv_key.to_pkcs8_pem(LineEnding::LF).expect("PEM encoding failed");
+
+        // Simulate HTML input pasting where all newlines become spaces
+        let single_line = pkcs8_pem.as_str().replace('\n', " ");
+
+        let parsed = EtsExporter::parse_rsa_private_key(&single_line)
+            .expect("Must parse private key from space-separated single-line string");
+        assert_eq!(parsed.n(), priv_key.n(), "Modulus must match original key");
+    }
+
+    #[test]
+    fn test_parse_rsa_private_key_from_file_path() {
+        use rsa::pkcs1::EncodeRsaPrivateKey;
+        use rsa::traits::PublicKeyParts;
+
+        let mut rng = rand::rngs::OsRng;
+        let priv_key = RsaPrivateKey::new(&mut rng, 1024).expect("RSA key generation failed");
+        let pem_str = priv_key.to_pkcs1_pem(rsa::pkcs1::LineEnding::LF).expect("PEM encoding failed");
+
+        let temp_file = std::env::temp_dir().join(format!("test_key_{}.pem", uuid::Uuid::new_v4()));
+        std::fs::write(&temp_file, pem_str).expect("write temp key");
+
+        let parsed = EtsExporter::parse_rsa_private_key(&temp_file.to_string_lossy())
+            .expect("Must parse private key from file path");
+        assert_eq!(parsed.n(), priv_key.n(), "Modulus must match original key");
+
+        let _ = std::fs::remove_file(temp_file);
     }
 }

@@ -342,16 +342,16 @@ async fn export_ets_xml(State(state): State<AppState>) -> impl IntoResponse {
 #[derive(serde::Deserialize)]
 struct ExportKnxprojParams {
     password: Option<String>,
+    signing_key: Option<String>,
 }
 
 async fn export_knxproj_get(
     State(state): State<AppState>,
-    Query(params): Query<ExportKnxprojParams>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let proj = state.project.read().await;
     let safe_name = proj.name.replace(' ', "_").replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
     let filename = format!("{}.knxproj", if safe_name.is_empty() { "knx_project" } else { &safe_name });
-    let bytes = EtsExporter::export_knxproj(&proj, params.password.as_deref())
+    let bytes = EtsExporter::export_knxproj(&proj, None, None)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     let mut headers = HeaderMap::new();
@@ -374,7 +374,7 @@ async fn export_knxproj_post(
     let proj = state.project.read().await;
     let safe_name = proj.name.replace(' ', "_").replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
     let filename = format!("{}.knxproj", if safe_name.is_empty() { "knx_project" } else { &safe_name });
-    let bytes = EtsExporter::export_knxproj(&proj, params.password.as_deref())
+    let bytes = EtsExporter::export_knxproj(&proj, params.password.as_deref(), params.signing_key.as_deref())
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     let mut headers = HeaderMap::new();
@@ -392,8 +392,10 @@ async fn export_knxproj_post(
 
 #[derive(serde::Deserialize)]
 struct UpdateStorageSettingsReq {
-    data_dir: String,
+    data_dir: Option<String>,
     migrate: Option<bool>,
+    #[serde(default)]
+    signing_key: Option<Option<String>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -413,19 +415,33 @@ struct NewProjectReq {
 }
 
 async fn handle_storage_get_settings(State(state): State<AppState>) -> Json<StorageSettings> {
-    Json(state.storage.get_settings().await)
+    let mut settings = state.storage.get_settings().await;
+    // Redact raw private key for API security
+    if settings.signing_key.is_some() {
+        settings.signing_key = Some("configured".to_string());
+    }
+    Json(settings)
 }
 
 async fn handle_storage_update_settings(
     State(state): State<AppState>,
     Json(req): Json<UpdateStorageSettingsReq>,
 ) -> Result<Json<StorageSettings>, (StatusCode, String)> {
-    state
+    let mut settings = state
         .storage
-        .update_data_dir(&req.data_dir, req.migrate.unwrap_or(true))
+        .update_storage_settings(
+            req.data_dir.as_deref(),
+            req.migrate.unwrap_or(true),
+            req.signing_key,
+        )
         .await
-        .map(Json)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
+
+    // Redact raw private key for API security
+    if settings.signing_key.is_some() {
+        settings.signing_key = Some("configured".to_string());
+    }
+    Ok(Json(settings))
 }
 
 async fn handle_storage_list_projects(
@@ -1945,7 +1961,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.10.0");
+        assert_eq!(res.0.version, "2026.10.1");
         assert_eq!(res.0.name, "knx-core");
     }
 
