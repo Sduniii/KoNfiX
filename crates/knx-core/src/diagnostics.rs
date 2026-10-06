@@ -84,6 +84,26 @@ pub struct ProgramAddressResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddressCollisionInfo {
+    pub address: String,
+    pub count: usize,
+    pub device_names: Vec<String>,
+    pub is_bus_collision: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocateDeviceRequest {
+    pub address: String,
+    pub duration_secs: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProgramBySerialRequest {
+    pub serial_number: String,
+    pub target_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", content = "data")]
 pub enum DiagnosticsEvent {
     #[serde(rename = "scan_progress")]
@@ -777,27 +797,46 @@ impl DiagnosticsManager {
                 );
             }
 
+            // ETS Safety check: prevent flashing when multiple devices are in programming mode
+            if prog_devices.len() > 1 {
+                let addrs = prog_devices.iter().map(|d| d.address.as_str()).collect::<Vec<_>>().join(", ");
+                return Err(format!(
+                    "Sicherheitsstopp: Es wurden {} Geräte im Programmiermodus gefunden ({}). Bitte stellen Sie sicher, dass nur an genau einem Gerät die Programmiertaste aktiv ist!",
+                    prog_devices.len(), addrs
+                ));
+            }
+
             let old_addr = prog_devices[0].address.clone();
             old_addr_opt = Some(old_addr.clone());
 
-            // 2. Broadcast write physical address
+            // 2. Broadcast write physical address (A_IndividualAddress_Write)
             let write_req = build_cemi_individual_address_write(new_ia_raw);
             self.knx_manager.send_raw_cemi(&write_req).await?;
 
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            tokio::time::sleep(Duration::from_millis(250)).await;
 
-            // 3. Verify target device answers on new address
+            // 3. Send A_Restart to exit programming mode and reboot device with new address
+            let restart_req = crate::knxnet_ip::build_cemi_restart(new_ia_raw);
+            let _ = self.knx_manager.send_raw_cemi(&restart_req).await;
+
+            tokio::time::sleep(Duration::from_millis(400)).await;
+
+            // 4. Verify target device answers on new address
             let info = self.query_device_info(target_address).await?;
             if !info.reachable {
                 warn!("Adresse geschrieben, aber Leseprüfung auf {} schlug fehl. Möglicherweise reagiert das Gerät verzögert.", target_address);
             }
         }
 
-        // Update project model if device_id is provided
+        // Update project model if device_id is provided or matched by old address
         {
             let mut proj = self.project.write().await;
             if let Some(d_id) = device_id {
                 if let Some(dev) = proj.devices.iter_mut().find(|d| d.id == d_id) {
+                    dev.individual_address = target_address.to_string();
+                }
+            } else if let Some(ref old) = old_addr_opt {
+                if let Some(dev) = proj.devices.iter_mut().find(|d| &d.individual_address == old) {
                     dev.individual_address = target_address.to_string();
                 }
             } else if let Some(dev) = proj.devices.iter_mut().find(|d| d.individual_address == target_address) {
@@ -812,6 +851,147 @@ impl DiagnosticsManager {
             message: format!(
                 "Physikalische Adresse '{}' erfolgreich in das KNX-Gerät programmiert!",
                 target_address
+            ),
+        })
+    }
+
+    /// Check for physical address collisions both in the project and live scan
+    pub async fn check_address_collisions(&self) -> Vec<AddressCollisionInfo> {
+        let proj = self.project.read().await;
+        let mut addr_to_devices: HashMap<String, Vec<String>> = HashMap::new();
+
+        for dev in &proj.devices {
+            addr_to_devices
+                .entry(dev.individual_address.clone())
+                .or_default()
+                .push(format!("{} ({})", dev.name, dev.model));
+        }
+
+        let mut collisions = Vec::new();
+        for (addr, devs) in addr_to_devices {
+            if devs.len() > 1 {
+                collisions.push(AddressCollisionInfo {
+                    address: addr,
+                    count: devs.len(),
+                    device_names: devs,
+                    is_bus_collision: false,
+                });
+            }
+        }
+
+        // Also check if any scanned bus device collides
+        let scan_results = self.scan_results.read().await;
+        for (addr, scanned) in scan_results.iter() {
+            if scanned.status == AddressScanStatus::Occupied {
+                let matching_proj_count = proj.devices.iter().filter(|d| &d.individual_address == addr).count();
+                if matching_proj_count > 1 && !collisions.iter().any(|c| &c.address == addr) {
+                    collisions.push(AddressCollisionInfo {
+                        address: addr.clone(),
+                        count: matching_proj_count,
+                        device_names: proj.devices.iter().filter(|d| &d.individual_address == addr).map(|d| d.name.clone()).collect(),
+                        is_bus_collision: true,
+                    });
+                }
+            }
+        }
+
+        collisions.sort_by(|a, b| a.address.cmp(&b.address));
+        collisions
+    }
+
+    /// Optically locate a device by flashing its LED / toggling programming mode
+    pub async fn locate_device(&self, address: &str, duration_secs: u32) -> Result<String, String> {
+        let raw_ia = parse_individual_address(address)
+            .ok_or_else(|| format!("Ungültige KNX-Adresse: {}", address))?;
+
+        let dur = duration_secs.clamp(1, 60);
+        info!("Starte optisches Lokalisierungsblinken für {} für {} Sekunden...", address, dur);
+
+        let is_connected = self.knx_manager.get_status().await.connected;
+        if is_connected {
+            // Send T_Connect to target device
+            let conn = build_cemi_t_connect(raw_ia);
+            let _ = self.knx_manager.send_raw_cemi(&conn).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // In KNX, Property PID_PROGRAMMING_MODE (0x04) in Interface Object 0 can toggle prog LED
+            let turn_on = crate::knxnet_ip::build_cemi_property_value_write(
+                raw_ia, 0, 4, 1, 1, &[0x01],
+            );
+            let _ = self.knx_manager.send_raw_cemi(&turn_on).await;
+
+            let manager_clone = self.knx_manager.clone();
+            let addr_str = address.to_string();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(dur as u64)).await;
+                let turn_off = crate::knxnet_ip::build_cemi_property_value_write(
+                    raw_ia, 0, 4, 1, 1, &[0x00],
+                );
+                let _ = manager_clone.send_raw_cemi(&turn_off).await;
+                let disconn = build_cemi_t_disconnect(raw_ia);
+                let _ = manager_clone.send_raw_cemi(&disconn).await;
+                info!("Optisches Lokalisierungsblinken für {} beendet.", addr_str);
+            });
+        }
+
+        Ok(format!("Gerät {} blinkt nun für {} Sekunden zur optischen Auffindung im Schaltschrank.", address, dur))
+    }
+
+    /// Program individual address directly by 6-byte Serial Number without pressing the prog button
+    pub async fn program_individual_address_by_serial(
+        &self,
+        serial_hex: &str,
+        target_address: &str,
+    ) -> Result<ProgramAddressResult, String> {
+        let clean_serial = serial_hex.replace([':', '-', ' '], "");
+        if clean_serial.len() != 12 {
+            return Err("Ungültige KNX-Seriennummer: Muss genau 6 Bytes (12 Hex-Zeichen) lang sein (z. B. '00837B400285').".to_string());
+        }
+
+        let serial_bytes = hex::decode(&clean_serial)
+            .map_err(|e| format!("Fehler beim Parsen der Seriennummer: {}", e))?;
+
+        let target_raw = parse_individual_address(target_address)
+            .ok_or_else(|| format!("Ungültige Zieladresse: {}", target_address))?;
+
+        info!("Programmiere physikalische Adresse {} per Seriennummer {}...", target_address, clean_serial);
+
+        let is_connected = self.knx_manager.get_status().await.connected;
+        if is_connected {
+            let mut serial_arr = [0u8; 6];
+            serial_arr.copy_from_slice(&serial_bytes[0..6]);
+            let req = crate::knxnet_ip::build_cemi_individual_address_serial_number_write(&serial_arr, target_raw);
+            self.knx_manager.send_raw_cemi(&req).await
+                .map_err(|e| format!("Fehler beim Senden des Programmier-Telegramms: {}", e))?;
+
+            tokio::time::sleep(Duration::from_millis(300)).await;
+
+            // Restart target device
+            let restart_req = crate::knxnet_ip::build_cemi_restart(target_raw);
+            let _ = self.knx_manager.send_raw_cemi(&restart_req).await;
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+
+        // Update in project if device exists with this serial or target address
+        {
+            let mut proj = self.project.write().await;
+            if let Some(dev) = proj.devices.iter_mut().find(|d| {
+                d.security.as_ref()
+                    .and_then(|s| s.serial_number.as_deref())
+                    .map(|sn| sn.replace([':', '-', ' '], "").eq_ignore_ascii_case(&clean_serial))
+                    .unwrap_or(false)
+            }) {
+                dev.individual_address = target_address.to_string();
+            }
+        }
+
+        Ok(ProgramAddressResult {
+            success: true,
+            old_address: None,
+            new_address: target_address.to_string(),
+            message: format!(
+                "Adresse '{}' erfolgreich über Seriennummer '{}' programmiert (ohne physischen Tastendruck).",
+                target_address, clean_serial
             ),
         })
     }
@@ -897,6 +1077,65 @@ mod tests {
         // Verify project device was updated
         let proj_read = project.read().await;
         assert_eq!(proj_read.devices[0].individual_address, "1.1.15");
+    }
+
+    #[tokio::test]
+    async fn test_check_address_collisions_and_serial_programming() {
+        let dev1_id = Uuid::new_v4();
+        let dev2_id = Uuid::new_v4();
+        let proj = Project {
+            id: Uuid::new_v4(),
+            name: "Collision Test".to_string(),
+            devices: vec![
+                KnxDevice {
+                    id: dev1_id,
+                    individual_address: "1.1.5".to_string(),
+                    name: "Schaltaktor 1".to_string(),
+                    model: "AKK-0816.03".to_string(),
+                    security: Some(KnxDataSecureConfig {
+                        is_secure_enabled: false,
+                        serial_number: Some("00837B400285".to_string()),
+                        fdsk: None,
+                        tool_key: None,
+                        sequence_number: 0,
+                    }),
+                    ..Default::default()
+                },
+                KnxDevice {
+                    id: dev2_id,
+                    individual_address: "1.1.5".to_string(), // Duplicate address!
+                    name: "Dimmaktor 1".to_string(),
+                    model: "AKD-0424R.02".to_string(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let project = Arc::new(RwLock::new(proj));
+        let simulator = Arc::new(Simulator::new(project.clone()));
+        let knx_manager = Arc::new(KnxNetManager::new(simulator.clone()));
+        let diag_mgr = DiagnosticsManager::new(knx_manager, project.clone(), simulator);
+
+        // Check address collisions
+        let collisions = diag_mgr.check_address_collisions().await;
+        assert_eq!(collisions.len(), 1);
+        assert_eq!(collisions[0].address, "1.1.5");
+        assert_eq!(collisions[0].count, 2);
+
+        // Test programming by serial number
+        let res = diag_mgr.program_individual_address_by_serial("00:83:7B:40:02:85", "1.1.20").await.unwrap();
+        assert!(res.success);
+        assert_eq!(res.new_address, "1.1.20");
+
+        // Verify project was updated
+        let proj_read = project.read().await;
+        let dev1 = proj_read.devices.iter().find(|d| d.id == dev1_id).unwrap();
+        assert_eq!(dev1.individual_address, "1.1.20");
+
+        // Now collisions should be 0
+        let new_collisions = diag_mgr.check_address_collisions().await;
+        assert_eq!(new_collisions.len(), 0);
     }
 }
 

@@ -94,6 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(storage.clone()),
     );
 
+    let recorder = Arc::new(RwLock::new(knx_core::recorder::TelegramRecorder::new(10_000)));
+
     let app_state = AppState {
         project,
         simulator,
@@ -102,6 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         catalog,
         programming,
         storage,
+        recorder,
     };
 
     // Auto-connect to physical KNX IP Secure gateway if gateway.knxkeys or KONFIX_KEYRING_PATH is present

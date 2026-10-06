@@ -25,10 +25,12 @@ A modern, cross-platform, open-source alternative to classical ETS (Engineering 
 
 - [The Three Primary Workspaces](#the-three-primary-workspaces)
   - [1. Project & Canvas (Visual Logic & Blueprint Wiring)](#1-project--canvas-visual-logic--blueprint-wiring)
-  - [2. Topology & Filters (Areas, Lines & 8192-Byte Filter Tables)](#2-topology--filters-areas-lines--8192-byte-filter-tables)
-  - [3. ETS Diagnostics & Addressing (Line Scanner & Flasher)](#3-ets-diagnostics--addressing-line-scanner--flasher)
+  - [2. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)](#2-topology--filters-areas-lines-filter-tables--coupler-health)
+  - [3. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)](#3-ets-diagnostics--addressing-line-scanner-wizard--flasher)
 - [Project Management, Filesystem & Storage (~/.konfix)](#project-management-filesystem--storage-konfix)
 - [Additional Core Features](#additional-core-features)
+  - [Professional Bus Monitor & Telegram Recorder (TP Bus Load & ETS Formats)](#professional-bus-monitor--telegram-recorder-tp-bus-load--ets-formats)
+  - [Project Comparison & Revision Diff (Project Diff & Selective Merge)](#project-comparison--revision-diff-project-diff--selective-merge)
   - [Differential Programming Engine & KNX Data Secure (TP)](#differential-programming-engine--knx-data-secure-tp)
   - [Parameter Memory Mapping & LoadedImage Patching](#parameter-memory-mapping--loadedimage-patching)
   - [KNX Datapoint Type (DPT) Registry & Input Validation](#knx-datapoint-type-dpt-registry--input-validation)
@@ -87,7 +89,7 @@ The header features a clean, modern three-zone layout (Left: Branding, key metri
 
 ---
 
-### 2. Topology & Filters (Areas, Lines & 8192-Byte Filter Tables)
+### 2. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)
 * **Hierarchical KNX Topology:**
   * Management of areas (0..15) and lines (x.0..x.15).
   * Support for multiple transmission media: **TP** (Twisted Pair), **IP** (KNXnet/IP Routing), **RF** (Radio Frequency).
@@ -97,6 +99,10 @@ The header features a clean, modern three-zone layout (Left: Branding, key metri
   * The engine analyzes the visual canvas wiring and project group addresses automatically:
     * **Forward (`Bit = 1`):** When a group address is required both on the subline and externally (on other lines or consumed by 24/7 server canvas blocks).
     * **Filter / Block (`Bit = 0`):** Purely line-internal telegrams are filtered at the coupler boundary, reducing main line bus load by up to 95%.
+* **Topologie-Integrität & Coupler Health Dashboard:**
+  * **0–100% Topology Health Score:** Live evaluation of hierarchical line consistency, isolated devices, and routing issues.
+  * **Cross-Line Filter Validation:** Proactively detects group addresses communicating across coupler boundaries that are erroneously blocked by line couplers (`blocked_cross_line_gas`), displaying actionable warning badges.
+  * **Line Bandwidth & Bus Load Modeling:** Live table displaying medium (TP/IP), device density, communication object counts, and estimated relative bus load (Optimal, Normal, High).
 * **Selectable Coupler Modes:**
   * *Filter (Normal):* Fully automatic protection mode according to calculated filter table.
   * *Route / Forward (Diagnostics):* All telegrams pass unfiltered (ideal for commissioning and troubleshooting).
@@ -110,15 +116,21 @@ The header features a clean, modern three-zone layout (Left: Branding, key metri
 
 ---
 
-### 3. ETS Diagnostics & Addressing (Line Scanner & Flasher)
+### 3. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)
 * **255-Address Matrix (16x16 Line Scan):**
   * Fast line scan of all physical addresses on a line (e.g. `1.1.1` to `1.1.255`).
   * Color-coded states: *Occupied* (green), *Free* (dark grey), *Programming Mode* (pulsing red).
   * Measures round-trip time (RTT in ms), mask version, and manufacturer ID.
-* **Programming Mode Scanner:**
-  * Instantly detects any device on the network whose physical programming button has been pressed (`A_IndividualAddress_Read` broadcast).
+* **Address Collision Detection:**
+  * Real-time audit cross-checking the project database against live bus scan responses.
+  * Displays an interactive warning banner detailing colliding devices with 1-click navigation to the conflict.
+* **Optical Device Locator (LED Blinking):**
+  * Trigger 5-second LED blinking on the target device via KNX management cEMI directly from the inspector to locate devices in crowded cabinets.
+* **Dual-Mode Physical Address Programming:**
+  * **Method 1 (Standard):** Programming button detection with automatic broadcast verification and multi-device interlock safety.
+  * **Method 2 (Hardware Wizard):** Direct programming by **6-Byte KNX Serial Number** (`A_IndividualAddress_SerialNumber_Write`) — program addresses without pressing physical buttons!
 * **Integrated Physical Address Flasher:**
-  * Program physical addresses directly from the web interface (`A_IndividualAddress_Write`) — without requiring an expensive ETS license.
+  * Program physical addresses directly from the web interface (`A_IndividualAddress_Write`) followed by clean automatic restart (`A_Restart`).
 
 ---
 
@@ -158,6 +170,34 @@ By default, all project data is managed locally in the user's home directory und
 ---
 
 ## Additional Core Features
+
+### Professional Bus Monitor & Telegram Recorder (TP Bus Load & ETS Formats)
+* **High-Capacity Ring Buffer (50,000 Telegrams):**
+  * Persistent in-memory ring buffer with complete session management (**REC**, **PAUSE**, **STOP**) and buffer purge.
+  * Real-time WebSocket streaming (`/ws/bus`) with sub-millisecond response latency.
+* **Physical TP Frame Bus Load Calculator (`TpFrameLoadCalculator`):**
+  * Models the exact timing characteristics of KNX Twisted Pair at **9,600 Baud**:
+    $$\text{Bit-Dauer} = \frac{1}{9600} \text{ s} \approx 104.17\,\mu\text{s}$$
+  * Accounts for **11 bits per UART character** (1 start bit, 8 data bits, 1 even parity bit, 1 stop bit) plus the mandatory **50-bit inter-frame pause** between successive telegrams.
+  * Provides a dynamic sliding-window bus load gauge (% of max theoretical throughput) with peak load monitoring (`peak_bus_load_percent`) and color-coded status badges (Optimal, Normal, High).
+* **Multi-Parameter Wildcard Filter Matrix:**
+  * Real-time filtering by source address (e.g. `1.1.*`), destination group address (e.g. `4/0/*`), service type (`GroupValue_Write`, `GroupValue_Read`, `GroupValue_Response`), transmission priority (`System`, `Urgent`, `Normal`, `Low`), and Datapoint Type (DPT).
+* **Standardized ETS XML & CSV Interoperability:**
+  * **ETS `<KNXMonitor>` XML Format:** Export and import traces fully compatible with official ETS 5 & ETS 6 diagnostic monitors.
+  * **ETS CSV Format:** Semicolon-delimited spreadsheet export with timestamps, source/destination names, routing counters, DPTs, and formatted payload values.
+
+### Project Comparison & Revision Diff (Project Diff & Selective Merge)
+* **4-Tier Hierarchical Difference Engine:**
+  * Compares the active project side-by-side against any local project file (`~/.konfix/projects`), uploaded `.knxproj` archive, or historical revision:
+    1. *Topology & Devices:* New, deleted, or relocated devices across areas and lines.
+    2. *Group Addresses:* Added, removed, or renamed GAs and DPT mismatches.
+    3. *Device Parameters:* Value deviations down to single byte and bitfield parameters.
+    4. *KO Associations:* Diverging group address links on communication object level.
+* **Selective Merge Matrix (`ProjectCompareModal`):**
+  * Visual side-by-side inspection with color-coded diff badges (Green: Added, Red: Deleted, Yellow: Modified).
+  * Fine-grained checkbox selection allows cherry-picking specific changes or executing a full atomic merge (`merge_all`).
+* **Accessible via Header Menu:**
+  * Open directly from the primary navigation bar via *"Projekt & ETS"* -> *"Projekt-Diff & Merge"*.
 
 ### Differential Programming Engine & KNX Data Secure (TP)
 * **Smart Flashing (Partial Flashing):**
@@ -406,11 +446,11 @@ The Vite development server at `http://localhost:5173` reflects all frontend mod
 
 ### Running Automated Test Suites
 
-**Backend Unit & Integration Tests (51 Tests):**
+**Backend Unit & Integration Tests (80 Tests):**
 ```bash
 cargo test --workspace
 ```
-*Validates PBKDF2 key derivation, filesystem persistence (~/.konfix), Auto-GA routing, collision protection, NOAA solar mathematics, 8192-byte filter table bitmasks, line scanning, KNX Data Secure TP encryption, differential dirty-state detection, LoadedImage memory patch verification, KNX DPT formatting, and signal propagation.*
+*Validates PBKDF2 key derivation, filesystem persistence (~/.konfix), Auto-GA routing, collision protection, NOAA solar mathematics, 8192-byte filter table bitmasks, line scanning, KNX Data Secure TP encryption, differential dirty-state detection, LoadedImage memory patch verification, KNX DPT formatting, telegram recorder ring buffer, TP bus load modeling, project diff & selective merge, and signal propagation.*
 
 **Frontend Typecheck & Production Build:**
 ```bash
@@ -437,13 +477,15 @@ bun run build
 │       │   │   └── knx_sniffer.rs  # Standalone KNXnet/IP Sniffer & ETS6 Proxy
 │       │   ├── model.rs        # Core data structures (Project, Devices, Topology, Blocks, Pins)
 │       │   ├── storage.rs      # Filesystem manager (~/.konfix), persistence engine
-│       │   ├── topology.rs     # Topology manager & 8192-byte filter table engine
+│       │   ├── topology.rs     # Topology manager, 8192-byte filter table engine & coupler health
 │       │   ├── auto_ga.rs      # Multi-schema auto-GA routing (Floor/Trade/Function)
-│       │   ├── diagnostics.rs  # ETS diagnostics, line scan & address flasher
+│       │   ├── diagnostics.rs  # ETS diagnostics, line scan, collisions & address flasher
 │       │   ├── programming.rs  # Differential job manager & smart flashing
 │       │   ├── data_secure.rs  # KNX Data Secure on TP (FDSK, Tool Key, AES-128-CCM)
 │       │   ├── knxprod.rs      # Native .knxprod ZIP/XML parser & SQLite catalog
 │       │   ├── dpt.rs          # Central KNX Datapoint Type (DPT) definitions & formatters
+│       │   ├── recorder.rs     # Telegram ring buffer, TP bus load calculator & ETS XML/CSV export
+│       │   ├── project_compare.rs # Hierarchical project compare & selective revision merge
 │       │   ├── astro.rs        # Autonomous NOAA solar position & azimuth calculation
 │       │   ├── simulator.rs    # Signal propagation (FIFO queue, max 48 hops)
 │       │   ├── knx_secure.rs   # KNXnet/IP Secure TCP client (AES-128-CCM)
@@ -462,20 +504,22 @@ bun run build
 │       │   ├── components/
 │       │   │   ├── canvas/     # FlowCanvas & custom blueprint nodes
 │       │   │   ├── topology/   # Topology & filter table workspace
-│       │   │   ├── diagnostics/# Diagnostics matrix & line scan workspace
+│       │   │   ├── diagnostics/# Diagnostics matrix, collisions & line scan workspace
+│       │   │   ├── compare/    # Side-by-side project compare & revision merge modal
 │       │   │   ├── storage/    # Project & path management modals
 │       │   │   ├── programming/# Flashing job drawer
 │       │   │   ├── devices/    # .knxprod catalog, KO & parameter modals, ParameterInputField, Data Secure
 │       │   │   ├── scenes/     # Studio lighting mixer modal
 │       │   │   ├── layout/     # Header with workspace switcher, room tabs & menus
 │       │   │   ├── inspector/  # Block, device & auto-GA inspector
-│       │   │   └── monitor/    # Live KNX telegram monitor
+│       │   │   └── monitor/    # Live KNX telegram monitor with TP load gauge & filter matrix
 │       │   ├── services/       # REST API client & bus monitor hooks
 │       │   └── types/          # TypeScript definitions (knx.ts, topology.ts, storage.ts)
 │       └── package.json
 ├── database/                   # SQLite seed database (catalog.sql)
 ├── docs/                       # Official ETS 6.2 XML Schema 23 specifications
 ├── tools/
+│   ├── bump-version.sh         # CalVer version bumper and synchronizer
 │   └── knx-mcp/                # Model Context Protocol (MCP) server for AI assistants
 ├── CHANGELOG.md                # Detailed version history
 ├── LICENSE                     # GNU Affero General Public License v3 (AGPLv3)

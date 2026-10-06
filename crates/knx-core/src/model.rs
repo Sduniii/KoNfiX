@@ -143,7 +143,7 @@ impl Default for ComObjectFlags {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct CommunicationObject {
     pub id: String,                  // e.g. "O-0"
     pub number: u32,                 // e.g. 0
@@ -157,6 +157,8 @@ pub struct CommunicationObject {
     pub group_address_ids: Vec<Uuid>,
     #[serde(default)]
     pub group_addresses: Vec<String>, // e.g. ["1/0/0"]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub depends_on: Option<ParameterDependency>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -516,6 +518,10 @@ pub struct KnxTelegram {
     pub value_raw: Vec<u8>,
     pub value_formatted: String,
     pub telegram_type: String, // "Write", "Read", "Response"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_repeat: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -708,6 +714,42 @@ pub struct ProgrammingJob {
     pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub log_messages: Vec<String>,
     pub verification_report: Option<VerificationReport>,
+}
+
+/// Berechnet die aktiven Kommunikationsobjekt-Nummern eines Geräts anhand seiner aktuellen Parameterwerte und depends_on-Bedingungen.
+pub fn calculate_active_ko_numbers(dev: &KnxDevice) -> Vec<u32> {
+    let mut active = Vec::new();
+    for ko in &dev.communication_objects {
+        let is_active = match &ko.depends_on {
+            None => true,
+            Some(dep) => {
+                let fallback = vec![ParameterCondition {
+                    param_id: dep.param_id.clone(),
+                    when_values: dep.when_values.clone(),
+                }];
+                let conditions = if !dep.conditions.is_empty() {
+                    &dep.conditions
+                } else {
+                    &fallback
+                };
+
+                conditions.iter().all(|c| {
+                    if let Some(param) = dev.parameters.iter().find(|p| p.id == c.param_id || p.name == c.param_id) {
+                        c.when_values.contains(&param.value)
+                    } else {
+                        false
+                    }
+                })
+            }
+        };
+
+        if is_active {
+            active.push(ko.number);
+        }
+    }
+    active.sort_unstable();
+    active.dedup();
+    active
 }
 
 

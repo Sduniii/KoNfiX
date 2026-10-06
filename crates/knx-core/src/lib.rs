@@ -16,4 +16,5 @@ pub mod data_secure;
 pub mod programming;
 pub mod storage;
 pub mod dpt;
-
+pub mod recorder;
+pub mod project_compare;

@@ -54,6 +54,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
           })
           if (running && !selectedJobId) {
             setSelectedJobId(running.id)
+            setIsOpen(true)
           }
         }
       } catch (err) {

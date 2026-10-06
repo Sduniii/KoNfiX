@@ -89,6 +89,8 @@ impl Simulator {
                         value_raw: vec![],
                         value_formatted: val_fmt,
                         telegram_type: "Write (Gerät)".to_string(),
+                        priority: Some("Normal".to_string()),
+                        is_repeat: Some(false),
                     });
                 }
 
@@ -506,6 +508,8 @@ impl Simulator {
                         value_raw: vec![],
                         value_formatted: formatted,
                         telegram_type: "Write (Engine)".to_string(),
+                        priority: Some("Normal".to_string()),
+                        is_repeat: Some(false),
                     });
                 }
 
@@ -802,6 +806,7 @@ mod tests {
             },
             group_address_ids: vec![],
             group_addresses: vec!["4/0/18".to_string()],
+            depends_on: None,
         };
 
         let dev = KnxDevice {

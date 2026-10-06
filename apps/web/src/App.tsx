@@ -48,6 +48,7 @@ const ExportKnxprojModal = React.lazy(() => import('./components/export/ExportKn
 const ProgrammingJobDrawer = React.lazy(() => import('./components/programming/ProgrammingJobDrawer').then(m => ({ default: m.ProgrammingJobDrawer })))
 const OpenProjectModal = React.lazy(() => import('./components/storage/OpenProjectModal').then(m => ({ default: m.OpenProjectModal })))
 const StorageSettingsModal = React.lazy(() => import('./components/storage/StorageSettingsModal').then(m => ({ default: m.StorageSettingsModal })))
+const ProjectCompareModal = React.lazy(() => import('./components/compare/ProjectCompareModal').then(m => ({ default: m.ProjectCompareModal })))
 
 function WorkspaceFallback({ label }: { label: string }) {
   return (
@@ -89,6 +90,7 @@ export function App() {
   const [isExportKnxprojModalOpen, setIsExportKnxprojModalOpen] = useState<boolean>(false)
   const [isOpenProjectModalOpen, setIsOpenProjectModalOpen] = useState<boolean>(false)
   const [isStorageSettingsModalOpen, setIsStorageSettingsModalOpen] = useState<boolean>(false)
+  const [isProjectCompareModalOpen, setIsProjectCompareModalOpen] = useState<boolean>(false)
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState<boolean>(false)
 
@@ -1147,6 +1149,7 @@ export function App() {
         onOpenExportKnxprojModal={() => setIsExportKnxprojModalOpen(true)}
         onOpenProjectModal={() => setIsOpenProjectModalOpen(true)}
         onOpenStorageSettingsModal={() => setIsStorageSettingsModalOpen(true)}
+        onOpenProjectCompareModal={() => setIsProjectCompareModalOpen(true)}
         onSaveProject={handleSaveProject}
         lastSavedTime={lastSavedTime}
         isSaving={isSaving}
@@ -1401,6 +1404,17 @@ export function App() {
         <StorageSettingsModal
           isOpen={isStorageSettingsModalOpen}
           onClose={() => setIsStorageSettingsModalOpen(false)}
+        />
+
+        {/* 13. Project Compare & Selective Merge Modal */}
+        <ProjectCompareModal
+          isOpen={isProjectCompareModalOpen}
+          onClose={() => setIsProjectCompareModalOpen(false)}
+          currentProject={project}
+          onProjectUpdated={(p) => {
+            setProject(p)
+            handleReloadProject()
+          }}
         />
       </React.Suspense>
     </div>

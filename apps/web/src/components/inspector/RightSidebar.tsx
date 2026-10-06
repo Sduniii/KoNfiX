@@ -85,6 +85,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   const [deviceDirty, setDeviceDirty] = useState<DeviceDirtyStatus | null>(null)
   const [isProgrammingDropdownOpen, setIsProgrammingDropdownOpen] = useState<boolean>(false)
   const [isStartingJob, setIsStartingJob] = useState<boolean>(false)
+  const [verifyBeforeFlash, setVerifyBeforeFlash] = useState<boolean>(() => {
+    return localStorage.getItem('konfix_verify_before_flash') === 'true'
+  })
+
+  const handleToggleVerifyBeforeFlash = (checked: boolean) => {
+    setVerifyBeforeFlash(checked)
+    localStorage.setItem('konfix_verify_before_flash', checked ? 'true' : 'false')
+  }
 
   const handleStartEditGa = (ga: GroupAddress) => {
     setEditingGaId(ga.id)
@@ -167,7 +175,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     setIsStartingJob(true)
     setIsProgrammingDropdownOpen(false)
     try {
-      await createProgrammingJob(selectedDevice.id, jobType)
+      const targetJobType =
+        verifyBeforeFlash && (jobType === 'Partial' || jobType === 'Full')
+          ? 'Verify'
+          : jobType
+      await createProgrammingJob(selectedDevice.id, targetJobType)
       const status = await checkDeviceDirty(selectedDevice.id)
       setDeviceDirty(status)
     } catch (err: any) {
@@ -797,22 +809,60 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
               {/* Programming Action Buttons */}
               <div className="space-y-1.5 pt-1">
+                {/* 2-Stage Mode Toggle */}
+                <div className="flex items-center justify-between px-1 pb-1">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-slate-300 hover:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={verifyBeforeFlash}
+                      onChange={(e) => handleToggleVerifyBeforeFlash(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-medium">Vorher verifizieren (Dry-Run)</span>
+                  </label>
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-1 py-0.2 rounded border border-slate-800">
+                    {verifyBeforeFlash ? '2-Stufig' : 'Direkt'}
+                  </span>
+                </div>
+
                 <div className="relative">
                   <div className="flex rounded-lg overflow-hidden shadow-sm">
                     <button
                       type="button"
                       disabled={isStartingJob}
                       onClick={() => handleStartProgramming('Partial')}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                      title="Flasht differentiell nur geänderte Gruppenadressen und Parameter"
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 ${
+                        verifyBeforeFlash
+                          ? 'bg-cyan-700 hover:bg-cyan-600'
+                          : 'bg-amber-600 hover:bg-amber-500'
+                      } disabled:opacity-50 text-white text-xs font-semibold transition-colors`}
+                      title={
+                        verifyBeforeFlash
+                          ? 'Führt erst einen Lese-Prüflauf durch und verlangt Freigabe vor dem Schreiben'
+                          : 'Flasht differentiell nur geänderte Gruppenadressen und Parameter'
+                      }
                     >
-                      <Zap className="w-3.5 h-3.5 text-amber-200" />
-                      <span>{isStartingJob ? 'Starte...' : 'Partiell flashen (Smart)'}</span>
+                      {verifyBeforeFlash ? (
+                        <ShieldCheck className="w-3.5 h-3.5 text-cyan-200" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-amber-200" />
+                      )}
+                      <span>
+                        {isStartingJob
+                          ? 'Starte...'
+                          : verifyBeforeFlash
+                          ? 'Prüfen & Flashen (2-Stufig)'
+                          : 'Partiell flashen (Smart)'}
+                      </span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsProgrammingDropdownOpen(!isProgrammingDropdownOpen)}
-                      className="px-2 bg-amber-700 hover:bg-amber-600 text-white border-l border-amber-500/30 transition-colors flex items-center justify-center"
+                      className={`px-2 ${
+                        verifyBeforeFlash
+                          ? 'bg-cyan-800 hover:bg-cyan-700 border-cyan-600/30'
+                          : 'bg-amber-700 hover:bg-amber-600 border-amber-500/30'
+                      } text-white border-l transition-colors flex items-center justify-center`}
                       title="Weitere Programmier-Modi"
                     >
                       <ChevronDown className="w-3.5 h-3.5" />

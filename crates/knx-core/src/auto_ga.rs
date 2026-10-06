@@ -842,25 +842,57 @@ impl AutoGaRouter {
                         .or_else(|| to_dev_info.as_ref().and_then(|(_, _, ko)| ko.as_ref().map(|(_, _, d)| d.clone())))
                         .unwrap_or_else(|| "1.001".to_string());
 
+                    let dpt_from = from_dev_info.as_ref()
+                        .and_then(|(_, _, ko)| ko.as_ref().map(|(_, _, d)| d.clone()))
+                        .unwrap_or_default();
+                    let dpt_to = to_dev_info.as_ref()
+                        .and_then(|(_, _, ko)| ko.as_ref().map(|(_, _, d)| d.clone()))
+                        .unwrap_or_default();
+
+                    if !crate::dpt::are_dpts_compatible(&dpt_from, &dpt_to) {
+                        tracing::warn!(
+                            "ETS-Kompatibilitätsprüfung: DPT-Abweichung bei Verbindung zwischen KO {} ({}) und KO {} ({})",
+                            f_num, dpt_from, t_num, dpt_to
+                        );
+                    }
+
                     let func_name = from_dev_info.as_ref()
                         .and_then(|(_, _, ko)| ko.as_ref().map(|(_, f, _)| f.clone()))
                         .filter(|f| !f.is_empty())
                         .or_else(|| to_dev_info.as_ref().and_then(|(_, _, ko)| ko.as_ref().map(|(_, f, _)| f.clone())))
                         .unwrap_or_else(|| "Schalten".to_string());
 
-                    let middle = if func_name.contains("Jalousie") || func_name.contains("Auf/Ab") || func_name.contains("Lamelle") {
-                        2
+                    let trade_main = if func_name.contains("Jalousie") || func_name.contains("Auf/Ab") || func_name.contains("Lamelle") {
+                        2u8
                     } else if func_name.contains("Temperatur") || func_name.contains("Heizung") || dpt_str.starts_with("9.") {
-                        3
+                        3u8
+                    } else if func_name.contains("Zentral") || func_name.contains("Alarm") {
+                        0u8
                     } else {
-                        1
+                        1u8
                     };
 
                     let room_id_opt = from_dev_info.as_ref().and_then(|(_, r, _)| *r)
                         .or_else(|| to_dev_info.as_ref().and_then(|(_, r, _)| *r));
+                    let room_idx = room_id_opt
+                        .and_then(|r_id| project.rooms.iter().position(|r| r.id == r_id))
+                        .map(|pos| (pos + 1) as u8)
+                        .unwrap_or(1u8);
                     let floor = room_id_opt.and_then(|r_id| project.rooms.iter().find(|r| r.id == r_id))
                         .and_then(|room| project.floors.iter().find(|f| f.id == room.floor_id));
-                    let main = Self::get_main_group(floor);
+
+                    let (main, middle) = match project.ga_scheme {
+                        GaScheme::FloorTradeFunction => {
+                            let m = Self::get_main_group(floor);
+                            (m, trade_main)
+                        }
+                        GaScheme::TradeRoomFunction => {
+                            (trade_main, room_idx)
+                        }
+                        GaScheme::TradeFunctionDevice => {
+                            (trade_main, 1u8)
+                        }
+                    };
 
                     let sub = Self::find_next_free_sub_group(&project.group_addresses, main, middle, 1);
                     let addr = format!("{}/{}/{}", main, middle, sub);
@@ -1465,6 +1497,7 @@ mod tests {
             },
             group_address_ids: vec![],
             group_addresses: vec![],
+            depends_on: None,
         };
 
         let ko_actuator = CommunicationObject {
@@ -1484,6 +1517,7 @@ mod tests {
             },
             group_address_ids: vec![],
             group_addresses: vec![],
+            depends_on: None,
         };
 
         let dev1 = KnxDevice {

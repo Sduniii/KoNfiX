@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Activity,
   Trash2,
@@ -12,9 +12,25 @@ import {
   Sliders,
   Check,
   Tag,
+  BarChart3,
+  Filter,
+  Download,
+  Upload,
+  Circle,
+  Clock,
+  Zap,
 } from 'lucide-react'
-import { KnxTelegram, Project } from '../../types/knx'
-import { sendKnxTelegram } from '../../services/api'
+import { KnxTelegram, Project, BusStatistics, TelegramFilter } from '../../types/knx'
+import {
+  sendKnxTelegram,
+  fetchBusStatistics,
+  startBusRecorder,
+  stopBusRecorder,
+  pauseBusRecorder,
+  clearBusRecorder,
+  getBusExportUrl,
+  importBusTelegrams,
+} from '../../services/api'
 import { lookupDpt } from '../../utils/dptRegistry'
 import { useTranslation } from '../../i18n/I18nContext'
 
@@ -39,6 +55,20 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
   const [isOpen, setIsOpen] = useState(true)
   const [filterText, setFilterText] = useState('')
   const [showSender, setShowSender] = useState(false)
+  const [showStats, setShowStats] = useState(false)
+  const [showFilterMatrix, setShowFilterMatrix] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  // Filter matrix states
+  const [sourceFilter, setSourceFilter] = useState('')
+  const [destFilter, setDestFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('ALL')
+  const [dptFilter, setDptFilter] = useState('ALL')
+
+  // Recording status & statistics
+  const [isRecording, setIsRecording] = useState(true)
+  const [busStats, setBusStats] = useState<BusStatistics | null>(null)
+  const [importStatus, setImportStatus] = useState<string | null>(null)
 
   // Send telegram form states
   const [sendGa, setSendGa] = useState('')
@@ -49,6 +79,26 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
   const [sendValNum, setSendValNum] = useState<number>(30)
   const [sending, setSending] = useState(false)
   const [sendSuccess, setSendSuccess] = useState(false)
+
+  // Polling for live bus statistics
+  useEffect(() => {
+    let isMounted = true
+    const interval = setInterval(async () => {
+      if (isOpen) {
+        try {
+          const stats = await fetchBusStatistics()
+          if (isMounted) setBusStats(stats)
+        } catch {
+          // ignore error if backend not yet running
+        }
+      }
+    }, 2000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [isOpen])
 
   // Helper to find GA info from project
   const getGaInfo = (address: string) => {
@@ -95,24 +145,95 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
     }
   }
 
+  const toggleRecording = async () => {
+    try {
+      if (isRecording) {
+        await stopBusRecorder()
+        setIsRecording(false)
+      } else {
+        await startBusRecorder()
+        setIsRecording(true)
+      }
+    } catch (err) {
+      console.error('Toggle recording error:', err)
+    }
+  }
+
+  const handleClearAll = async () => {
+    onClear()
+    try {
+      await clearBusRecorder()
+    } catch (err) {
+      console.error('Clear recorder error:', err)
+    }
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const res = await importBusTelegrams(text)
+      setImportStatus(res.message)
+      setTimeout(() => setImportStatus(null), 3500)
+    } catch (err: any) {
+      setImportStatus(`Fehler: ${err.message}`)
+      setTimeout(() => setImportStatus(null), 4000)
+    }
+  }
+
   const filteredTelegrams = (telegrams || []).filter((t) => {
     if (!t || typeof t !== 'object' || !t.destination) return false
-    const q = filterText.toLowerCase()
-    const info = getGaInfo(t.destination)
-    const dest = (t.destination || '').toLowerCase()
-    const src = (t.source || '').toLowerCase()
-    const val = (t.value_formatted || '').toLowerCase()
-    const dpt = (t.dpt || '').toLowerCase()
-    const name = (info?.name || '').toLowerCase()
-    const desc = (info?.description || '').toLowerCase()
-    return (
-      dest.includes(q) ||
-      src.includes(q) ||
-      val.includes(q) ||
-      dpt.includes(q) ||
-      name.includes(q) ||
-      desc.includes(q)
-    )
+
+    // Filter matrix checks
+    if (sourceFilter) {
+      const s = sourceFilter.toLowerCase()
+      if (s.endsWith('*')) {
+        if (!t.source.toLowerCase().startsWith(s.slice(0, -1))) return false
+      } else if (!t.source.toLowerCase().includes(s)) {
+        return false
+      }
+    }
+
+    if (destFilter) {
+      const d = destFilter.toLowerCase()
+      if (d.endsWith('*')) {
+        if (!t.destination.toLowerCase().startsWith(d.slice(0, -1))) return false
+      } else if (!t.destination.toLowerCase().includes(d)) {
+        return false
+      }
+    }
+
+    if (typeFilter !== 'ALL') {
+      if (!t.telegram_type.toLowerCase().includes(typeFilter.toLowerCase())) return false
+    }
+
+    if (dptFilter !== 'ALL') {
+      if (!t.dpt.startsWith(dptFilter)) return false
+    }
+
+    // Quick text filter
+    if (filterText) {
+      const q = filterText.toLowerCase()
+      const info = getGaInfo(t.destination)
+      const dest = (t.destination || '').toLowerCase()
+      const src = (t.source || '').toLowerCase()
+      const val = (t.value_formatted || '').toLowerCase()
+      const dpt = (t.dpt || '').toLowerCase()
+      const name = (info?.name || '').toLowerCase()
+      const desc = (info?.description || '').toLowerCase()
+      return (
+        dest.includes(q) ||
+        src.includes(q) ||
+        val.includes(q) ||
+        dpt.includes(q) ||
+        name.includes(q) ||
+        desc.includes(q)
+      )
+    }
+
+    return true
   })
 
   // Tag color by trade
@@ -130,10 +251,19 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
     return 'bg-slate-800 text-slate-400 border-slate-700'
   }
 
+  const loadPercent = busStats?.bus_load_percent ?? 0
+  const tlgSec = busStats?.telegrams_per_sec ?? 0
+
   return (
     <div
       className={`border-t border-slate-800 bg-slate-900/95 flex flex-col shrink-0 transition-all z-20 ${
-        isOpen ? (showSender ? 'h-72' : 'h-60') : 'h-9'
+        isOpen
+          ? showStats
+            ? 'h-96'
+            : showSender || showFilterMatrix
+            ? 'h-72'
+            : 'h-60'
+          : 'h-9'
       }`}
     >
       {/* Header bar */}
@@ -151,9 +281,45 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
             <span>{t('monitor.title')}</span>
             <span className="text-[10px] font-mono bg-slate-800 px-1.5 py-0.2 rounded text-slate-400">
-              {t('monitor.telegramsCount', { count: telegrams.length })}
+              {filteredTelegrams.length} / {telegrams.length}
             </span>
           </button>
+
+          {/* Recording Status Dot */}
+          <button
+            onClick={toggleRecording}
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+              isRecording
+                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                : 'bg-slate-800 text-slate-500 hover:text-slate-300'
+            }`}
+            title={isRecording ? 'Aufzeichnung stoppen' : 'Aufzeichnung starten'}
+          >
+            <Circle className={`w-2 h-2 ${isRecording ? 'fill-rose-500 text-rose-500 animate-pulse' : 'text-slate-500'}`} />
+            <span>{isRecording ? 'REC' : 'STOP'}</span>
+          </button>
+
+          {/* Live Bus Load Gauge */}
+          <div
+            className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded bg-slate-900 border border-slate-800"
+            title="Berechnete KNX TP1-Buslast (9.600 Baud inklusive Frame-Pausen)"
+          >
+            <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 ${
+                  loadPercent > 50
+                    ? 'bg-rose-500'
+                    : loadPercent > 20
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(4, loadPercent))}%` }}
+              />
+            </div>
+            <span className="text-[10px] font-mono text-slate-300 font-semibold">{loadPercent}% Buslast</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-[10px] font-mono text-slate-400">{tlgSec} Tlg/s</span>
+          </div>
 
           {isConnected ? (
             <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono">
@@ -165,10 +331,44 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
               <span>Simulator</span>
             </div>
           )}
+
+          {importStatus && (
+            <span className="text-[10px] text-sky-400 font-sans px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/20 animate-fade-in">
+              {importStatus}
+            </span>
+          )}
         </div>
 
         {isOpen && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Stats HUD toggle */}
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
+                showStats
+                  ? 'bg-emerald-600 text-white font-medium'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="Bus-Statistik & Analyse öffnen"
+            >
+              <BarChart3 className="w-3 h-3" />
+              <span className="text-[10px]">Statistik</span>
+            </button>
+
+            {/* Filter Matrix toggle */}
+            <button
+              onClick={() => setShowFilterMatrix(!showFilterMatrix)}
+              className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition-colors ${
+                showFilterMatrix || sourceFilter || destFilter || typeFilter !== 'ALL' || dptFilter !== 'ALL'
+                  ? 'bg-indigo-600 text-white font-medium'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+              }`}
+              title="Filtermatrix öffnen"
+            >
+              <Filter className="w-3 h-3" />
+              <span className="text-[10px]">Filter</span>
+            </button>
+
             {/* Sender toggle button */}
             <button
               onClick={() => setShowSender(!showSender)}
@@ -191,9 +391,50 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
                 placeholder={t('monitor.filterPlaceholder')}
                 value={filterText}
                 onChange={(e) => setFilterText(e.target.value)}
-                className="bg-slate-800 border border-slate-700 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-500 w-44 focus:w-56 transition-all"
+                className="bg-slate-800 border border-slate-700 rounded-md pl-6 pr-2 py-0.5 text-xs text-slate-200 placeholder-slate-500 w-36 focus:w-48 transition-all"
               />
             </div>
+
+            {/* Export Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+                title="Telegramme exportieren"
+              >
+                <Download className="w-3 h-3" />
+              </button>
+
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 z-30 w-44 text-xs font-sans">
+                  <a
+                    href={getBusExportUrl('csv')}
+                    download="busmonitor_export.csv"
+                    onClick={() => setShowExportMenu(false)}
+                    className="block px-3 py-1.5 hover:bg-slate-700 text-slate-200"
+                  >
+                    ETS CSV exportieren
+                  </a>
+                  <a
+                    href={getBusExportUrl('xml')}
+                    download="busmonitor_export.xml"
+                    onClick={() => setShowExportMenu(false)}
+                    className="block px-3 py-1.5 hover:bg-slate-700 text-slate-200"
+                  >
+                    ETS XML exportieren
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Import Log */}
+            <label
+              className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition-colors"
+              title="ETS-Logdatei (CSV/XML) importieren"
+            >
+              <Upload className="w-3 h-3" />
+              <input type="file" accept=".csv,.xml,.txt" onChange={handleImportFile} className="hidden" />
+            </label>
 
             {/* Pause / Resume */}
             <button
@@ -211,7 +452,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
 
             {/* Clear button */}
             <button
-              onClick={onClear}
+              onClick={handleClearAll}
               className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
               title={t('monitor.clearLog')}
             >
@@ -220,6 +461,141 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
           </div>
         )}
       </div>
+
+      {/* Filter Matrix Toolbar */}
+      {isOpen && showFilterMatrix && (
+        <div className="px-4 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center gap-3 flex-wrap text-xs">
+          <div className="flex items-center gap-1 text-slate-400">
+            <Filter className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-semibold text-slate-200">Filtermatrix:</span>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Quelle z.B. 1.1.*"
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-sky-400 font-mono w-28 focus:outline-none focus:border-indigo-500"
+          />
+
+          <input
+            type="text"
+            placeholder="Ziel z.B. 2/0/*"
+            value={destFilter}
+            onChange={(e) => setDestFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-emerald-400 font-mono w-28 focus:outline-none focus:border-indigo-500"
+          />
+
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="ALL">Alle Dienste</option>
+            <option value="Write">Write (Schreiben)</option>
+            <option value="Read">Read (Lesen)</option>
+            <option value="Response">Response (Antwort)</option>
+          </select>
+
+          <select
+            value={dptFilter}
+            onChange={(e) => setDptFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
+          >
+            <option value="ALL">Alle DPTs</option>
+            <option value="1.">DPT 1.* (1 Bit / Schalten)</option>
+            <option value="5.">DPT 5.* (1 Byte / Prozent)</option>
+            <option value="9.">DPT 9.* (2 Byte / Temperatur/Sensor)</option>
+          </select>
+
+          {(sourceFilter || destFilter || typeFilter !== 'ALL' || dptFilter !== 'ALL') && (
+            <button
+              onClick={() => {
+                setSourceFilter('')
+                setDestFilter('')
+                setTypeFilter('ALL')
+                setDptFilter('ALL')
+              }}
+              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline ml-2"
+            >
+              Filter zurücksetzen
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Statistics HUD Bar */}
+      {isOpen && showStats && busStats && (
+        <div className="px-4 py-3 bg-slate-950/95 border-b border-slate-800 text-xs shrink-0 grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in">
+          {/* Box 1: Counts & Load */}
+          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Telegramme & Rate</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-base font-bold text-slate-100">{busStats.total_telegrams}</span>
+              <span className="text-[11px] text-slate-400">gesamt ({busStats.telegrams_per_sec} Tlg/s)</span>
+            </div>
+            <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
+              <span>Buslast:</span>
+              <span className={`font-mono font-bold ${loadPercent > 50 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {busStats.bus_load_percent}%
+              </span>
+            </div>
+          </div>
+
+          {/* Box 2: Services */}
+          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Dienste</span>
+            <div className="space-y-1 text-[11px]">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Write:</span>
+                <span className="font-mono text-emerald-400 font-semibold">{busStats.write_count}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Read:</span>
+                <span className="font-mono text-sky-400 font-semibold">{busStats.read_count}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Response:</span>
+                <span className="font-mono text-indigo-400 font-semibold">{busStats.response_count}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Box 3: Top Senders */}
+          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Top Sender (IA)</span>
+            <div className="space-y-1 text-[11px] font-mono">
+              {busStats.top_senders.length === 0 ? (
+                <span className="text-slate-600 italic">Keine Daten</span>
+              ) : (
+                busStats.top_senders.slice(0, 3).map(([ia, count]) => (
+                  <div key={ia} className="flex justify-between">
+                    <span className="text-sky-400 font-semibold">{ia}</span>
+                    <span className="text-slate-400">{count}x</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Box 4: Top GAs */}
+          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Top Zieladressen (GA)</span>
+            <div className="space-y-1 text-[11px] font-mono">
+              {busStats.top_destinations.length === 0 ? (
+                <span className="text-slate-600 italic">Keine Daten</span>
+              ) : (
+                busStats.top_destinations.slice(0, 3).map(([ga, count]) => (
+                  <div key={ga} className="flex justify-between">
+                    <span className="text-emerald-400 font-semibold">{ga}</span>
+                    <span className="text-slate-400">{count}x</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Telegram Sender Toolbar */}
       {isOpen && showSender && (
@@ -252,75 +628,83 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
           <select
             value={sendDpt}
             onChange={(e) => setSendDpt(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-sky-500"
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
           >
-            <option value="1.001">DPT 1.001 (Schalten)</option>
-            <option value="1.008">DPT 1.008 (Auf/Ab)</option>
-            <option value="1.010">DPT 1.010 (Stopp)</option>
+            <option value="1.001">DPT 1.001 (Schalten Ein/Aus)</option>
+            <option value="1.008">DPT 1.008 (Auf/Ab Jalousie)</option>
+            <option value="1.010">DPT 1.010 (Stop/Schritt)</option>
             <option value="5.001">DPT 5.001 (Prozent 0-100%)</option>
-            <option value="7.005">DPT 7.005 (Zeit Sekunden s)</option>
             <option value="9.001">DPT 9.001 (Temperatur °C)</option>
-            <option value="18.001">DPT 18.001 (Szene)</option>
+            <option value="7.001">DPT 7.001 (2-Byte Unsigned)</option>
           </select>
 
-          {/* Value Inputs based on DPT */}
+          {/* Interactive Value Inputs */}
           {sendDpt.startsWith('1.') && sendDpt !== '1.008' && sendDpt !== '1.010' && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-700">
               <button
                 type="button"
                 onClick={() => setSendValBool(true)}
-                className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                  sendValBool
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                  sendValBool ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                EIN (1)
+                Ein (1)
               </button>
               <button
                 type="button"
                 onClick={() => setSendValBool(false)}
-                className={`px-2.5 py-1 rounded text-xs font-semibold ${
-                  !sendValBool
-                    ? 'bg-red-600 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                  !sendValBool ? 'bg-rose-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                AUS (0)
+                Aus (0)
               </button>
             </div>
           )}
 
           {sendDpt === '1.008' && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-700">
               <button
                 type="button"
                 onClick={() => handleSend(false)}
-                className="px-2.5 py-1 rounded text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white"
+                disabled={sending}
+                className="px-2 py-0.5 rounded text-xs bg-sky-700 hover:bg-sky-600 text-white font-semibold"
               >
-                ▲ AUF (0)
+                Auf (0)
               </button>
               <button
                 type="button"
                 onClick={() => handleSend(true)}
-                className="px-2.5 py-1 rounded text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white"
+                disabled={sending}
+                className="px-2 py-0.5 rounded text-xs bg-indigo-700 hover:bg-indigo-600 text-white font-semibold"
               >
-                ▼ AB (1)
+                Ab (1)
               </button>
             </div>
           )}
 
           {sendDpt === '1.010' && (
-            <button
-              type="button"
-              onClick={() => handleSend(true)}
-              className="px-3 py-1 rounded text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white"
-            >
-              ◼ STOPP (1)
-            </button>
+            <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded border border-slate-700">
+              <button
+                type="button"
+                onClick={() => handleSend(false)}
+                disabled={sending}
+                className="px-2 py-0.5 rounded text-xs bg-amber-700 hover:bg-amber-600 text-white font-semibold"
+              >
+                Stop (0)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSend(true)}
+                disabled={sending}
+                className="px-2 py-0.5 rounded text-xs bg-amber-700 hover:bg-amber-600 text-white font-semibold"
+              >
+                Schritt (1)
+              </button>
+            </div>
           )}
 
-          {sendDpt.startsWith('5.') && (
+          {sendDpt === '5.001' && (
             <div className="flex items-center gap-2">
               <input
                 type="range"
@@ -328,52 +712,22 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
                 max="100"
                 value={sendValPercent}
                 onChange={(e) => setSendValPercent(Number(e.target.value))}
-                className="w-24 accent-sky-500"
+                className="w-24 accent-sky-400"
               />
               <span className="font-mono text-xs text-sky-400 w-10">{sendValPercent}%</span>
             </div>
           )}
 
-          {sendDpt.startsWith('7.') && (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                max="65535"
-                value={sendValNum}
-                onChange={(e) => setSendValNum(parseInt(e.target.value) || 0)}
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-400 font-mono w-20 text-right"
-              />
-              <span className="text-slate-400 font-mono text-xs">s</span>
-            </div>
-          )}
-
-          {sendDpt.startsWith('18.') && (
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                step="1"
-                min="1"
-                max="64"
-                value={sendValNum}
-                onChange={(e) => setSendValNum(parseInt(e.target.value) || 1)}
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-amber-400 font-mono w-16 text-right"
-              />
-              <span className="text-slate-400 font-mono text-xs">Nr. (1–64)</span>
-            </div>
-          )}
-
           {sendDpt.startsWith('9.') && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <input
                 type="number"
                 step="0.5"
                 value={sendValFloat}
                 onChange={(e) => setSendValFloat(Number(e.target.value))}
-                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-400 font-mono w-20"
+                className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-sky-400 font-mono w-16 focus:outline-none focus:border-sky-500"
               />
-              <span className="text-slate-400">°C</span>
+              <span className="text-slate-400 text-xs">°C</span>
             </div>
           )}
 

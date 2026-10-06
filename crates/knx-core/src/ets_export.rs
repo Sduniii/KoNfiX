@@ -1483,6 +1483,7 @@ mod tests {
                     },
                     group_addresses: vec!["1/1/5".to_string()],
                     group_address_ids: vec![ga_id],
+                    depends_on: None,
                 }],
                 parameters: vec![DeviceParameter {
                     id: "P-1".to_string(),
@@ -1628,6 +1629,7 @@ mod tests {
                     },
                     group_addresses: vec!["1/1/20".to_string()],
                     group_address_ids: vec![ga_id],
+                    depends_on: None,
                 }],
                 parameters: vec![],
                 assign_rules: vec![],

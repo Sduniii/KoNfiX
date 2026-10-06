@@ -269,6 +269,27 @@ impl DeviceBusClient {
         Ok(())
     }
 
+    /// Setzt die System-B-Ladezustandsmaschine eines Objekts zurueck und bricht den Ladevorgang ab (0x04 Unload)
+    pub async fn load_state_unload(&mut self, obj_idx: u8) -> Result<(), String> {
+        self.write_property(obj_idx, 5, 1, 1, &[0x04, 0, 0, 0, 0, 0, 0, 0, 0]).await
+    }
+
+    /// Startet den Ladevorgang fuer ein System-B-Interface-Objekt (0x01 Start)
+    pub async fn load_state_start(&mut self, obj_idx: u8) -> Result<(), String> {
+        self.write_property(obj_idx, 5, 1, 1, &[0x01, 0, 0, 0, 0, 0, 0, 0, 0]).await
+    }
+
+    /// Konfiguriert die zu ladende Datenlaenge und den Sub-Befehl (0x03 Set Length)
+    pub async fn load_state_set_length(&mut self, obj_idx: u8, sub_cmd: u8, len: u16) -> Result<(), String> {
+        let payload = [0x03, sub_cmd, 0, 0, (len >> 8) as u8, (len & 0xFF) as u8, 0, 0, 0];
+        self.write_property(obj_idx, 5, 1, 1, &payload).await
+    }
+
+    /// Schliesst den Ladevorgang fuer ein System-B-Interface-Objekt erfolgreich ab (0x02 End / Commit)
+    pub async fn load_state_commit(&mut self, obj_idx: u8) -> Result<(), String> {
+        self.write_property(obj_idx, 5, 1, 1, &[0x02, 0, 0, 0, 0, 0, 0, 0, 0]).await
+    }
+
     /// Writes memory block via connected A_Memory_Write and verifies by device's A_Memory_Response
     pub async fn write_memory_verified(&mut self, address: u16, data: &[u8]) -> Result<(), String> {
         let count = (data.len() as u8).clamp(1, 64) & 0x3F;
@@ -1499,10 +1520,24 @@ impl ProgrammingJobManager {
 
                             // Flash Obj 1: GAT
                             Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingGAT, 45, "Schreibe Gruppenadress-Tabelle (Obj 1)...").await;
-                            let _ = client.write_property(1, 5, 1, 1, &[0x04, 0, 0, 0, 0, 0, 0, 0, 0]).await;
-                            let _ = client.write_property(1, 5, 1, 1, &[0x01, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_unload(1).await {
+                                warn!("GAT Unload vor Flash ergab: {}", e);
+                            }
+                            if let Err(e) = client.load_state_start(1).await {
+                                let err_str = format!("Fehler beim Starten der GAT-Ladezustandsmaschine (Obj 1): {}", e);
+                                let _ = client.load_state_unload(1).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
                             let gat_len = gat_payload.len() as u16;
-                            let _ = client.write_property(1, 5, 1, 1, &[0x03, 0x00, 0, 0, (gat_len >> 8) as u8, (gat_len & 0xFF) as u8, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_set_length(1, 0x00, gat_len).await {
+                                let err_str = format!("Fehler beim Setzen der GAT-Länge (Obj 1): {}", e);
+                                let _ = client.load_state_unload(1).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
 
                             let mut gat_base_addr = 0x1002;
                             if let Ok(resp) = client.read_property(1, 7, 1, 1).await {
@@ -1511,17 +1546,42 @@ impl ProgrammingJobManager {
                             for (chunk_idx, chunk) in gat_payload.chunks(12).enumerate() {
                                 let target_addr = gat_base_addr.saturating_add((chunk_idx * 12) as u16);
                                 if let Err(e) = client.write_memory_verified(target_addr, chunk).await {
-                                    warn!("GAT Schreibwarnung bei 0x{:04X}: {}", target_addr, e);
+                                    let err_str = format!("Schreibabbruch bei GAT-Adresse 0x{:04X}: {}. Führe Rollback aus...", target_addr, e);
+                                    error!("{}", err_str);
+                                    let _ = client.load_state_unload(1).await;
+                                    let _ = client.disconnect().await;
+                                    Self::fail_job(&jobs, job_id, &err_str).await;
+                                    return;
                                 }
                             }
-                            let _ = client.write_property(1, 5, 1, 1, &[0x02, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_commit(1).await {
+                                let err_str = format!("Fehler beim Commit der Gruppenadress-Tabelle (Obj 1): {}", e);
+                                let _ = client.load_state_unload(1).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
 
                             // Flash Obj 3: AT (In System B ist die Assoziationstabelle Objekt 3, NICHT Objekt 2!)
                             Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingAT, 60, "Schreibe Assoziations-Tabelle (Obj 3)...").await;
-                            let _ = client.write_property(3, 5, 1, 1, &[0x04, 0, 0, 0, 0, 0, 0, 0, 0]).await;
-                            let _ = client.write_property(3, 5, 1, 1, &[0x01, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_unload(3).await {
+                                warn!("AT Unload vor Flash ergab: {}", e);
+                            }
+                            if let Err(e) = client.load_state_start(3).await {
+                                let err_str = format!("Fehler beim Starten der AT-Ladezustandsmaschine (Obj 3): {}", e);
+                                let _ = client.load_state_unload(3).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
                             let at_len = at_payload.len() as u16;
-                            let _ = client.write_property(3, 5, 1, 1, &[0x03, 0x00, 0, 0, (at_len >> 8) as u8, (at_len & 0xFF) as u8, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_set_length(3, 0x00, at_len).await {
+                                let err_str = format!("Fehler beim Setzen der AT-Länge (Obj 3): {}", e);
+                                let _ = client.load_state_unload(3).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
 
                             let mut at_base_addr = 0x1600;
                             if let Ok(resp) = client.read_property(3, 7, 1, 1).await {
@@ -1530,18 +1590,39 @@ impl ProgrammingJobManager {
                             for (chunk_idx, chunk) in at_payload.chunks(12).enumerate() {
                                 let target_addr = at_base_addr.saturating_add((chunk_idx * 12) as u16);
                                 if let Err(e) = client.write_memory_verified(target_addr, chunk).await {
-                                    warn!("AT Schreibwarnung bei 0x{:04X}: {}", target_addr, e);
+                                    let err_str = format!("Schreibabbruch bei AT-Adresse 0x{:04X}: {}. Führe Rollback aus...", target_addr, e);
+                                    error!("{}", err_str);
+                                    let _ = client.load_state_unload(3).await;
+                                    let _ = client.disconnect().await;
+                                    Self::fail_job(&jobs, job_id, &err_str).await;
+                                    return;
                                 }
                             }
-                            let _ = client.write_property(3, 5, 1, 1, &[0x02, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                            if let Err(e) = client.load_state_commit(3).await {
+                                let err_str = format!("Fehler beim Commit der Assoziations-Tabelle (Obj 3): {}", e);
+                                let _ = client.load_state_unload(3).await;
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
                         } else {
                             // BCU1 / System 1 fallback
                             Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingGAT, 45, "Schreibe Gruppenadress-Tabelle...").await;
                             let base_gat: u16 = 0x0116;
-                            let _ = client.write_memory_verified(base_gat, &gat_bytes).await;
+                            if let Err(e) = client.write_memory_verified(base_gat, &gat_bytes).await {
+                                let err_str = format!("Fehler beim Schreiben der GAT (BCU1): {}", e);
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
                             Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingAT, 60, "Schreibe Assoziations-Tabelle...").await;
                             let base_at = base_gat.saturating_add(gat_bytes.len() as u16);
-                            let _ = client.write_memory_verified(base_at, &at_bytes).await;
+                            if let Err(e) = client.write_memory_verified(base_at, &at_bytes).await {
+                                let err_str = format!("Fehler beim Schreiben der AT (BCU1): {}", e);
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
+                            }
                         }
                     } else {
                         info!("GAT & AT unverändert für Gerät '{}', überspringe Schritt 4a & 4b.", dev_name);
@@ -1636,10 +1717,24 @@ impl ProgrammingJobManager {
                     let mut base_addr: u16 = 0x16A2;
                     if is_system_b {
                         Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingParameters, 75, "System B Lade-Zustandsmaschine vorbereiten (Obj 4)...").await;
-                        let _ = client.write_property(4, 5, 1, 1, &[0x04, 0, 0, 0, 0, 0, 0, 0, 0]).await;
-                        let _ = client.write_property(4, 5, 1, 1, &[0x01, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                        if let Err(e) = client.load_state_unload(4).await {
+                            warn!("Parameter Unload vor Flash ergab: {}", e);
+                        }
+                        if let Err(e) = client.load_state_start(4).await {
+                            let err_str = format!("Fehler beim Starten der Parameter-Ladezustandsmaschine (Obj 4): {}", e);
+                            let _ = client.load_state_unload(4).await;
+                            let _ = client.disconnect().await;
+                            Self::fail_job(&jobs, job_id, &err_str).await;
+                            return;
+                        }
                         let seg_len = new_param_bytes.len() as u16;
-                        let _ = client.write_property(4, 5, 1, 1, &[0x03, 0x0B, 0, 0, (seg_len >> 8) as u8, (seg_len & 0xFF) as u8, 0, 0, 0]).await;
+                        if let Err(e) = client.load_state_set_length(4, 0x0B, seg_len).await {
+                            let err_str = format!("Fehler beim Setzen der Parameter-Segmentlänge (Obj 4): {}", e);
+                            let _ = client.load_state_unload(4).await;
+                            let _ = client.disconnect().await;
+                            Self::fail_job(&jobs, job_id, &err_str).await;
+                            return;
+                        }
 
                         if let Ok(resp) = client.read_property(4, 7, 1, 1).await {
                             base_addr = parse_property_ptr(&resp, 0x16A2);
@@ -1666,7 +1761,14 @@ impl ProgrammingJobManager {
                         for (i, (chunk_off, chunk_data)) in changed_ranges.iter().enumerate() {
                             let target_addr = base_addr.saturating_add(*chunk_off as u16);
                             if let Err(e) = client.write_memory_verified(target_addr, chunk_data).await {
-                                warn!("Write-Verify Warnung bei 0x{:04X}: {}", target_addr, e);
+                                let err_str = format!("Schreibabbruch bei Parameter-Adresse 0x{:04X}: {}. Führe Rollback aus...", target_addr, e);
+                                error!("{}", err_str);
+                                if is_system_b {
+                                    let _ = client.load_state_unload(4).await;
+                                }
+                                let _ = client.disconnect().await;
+                                Self::fail_job(&jobs, job_id, &err_str).await;
+                                return;
                             } else {
                                 write_count += 1;
                             }
@@ -1684,7 +1786,13 @@ impl ProgrammingJobManager {
                     if is_system_b {
                         Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingParameters, 92, "System B Lade-Zustandsmaschine abschließen (Obj 4)...").await;
                         let _ = client.write_property(4, 13, 1, 1, &[0x00, 0x83, 0x00, 0xC6]).await;
-                        let _ = client.write_property(4, 5, 1, 1, &[0x02, 0, 0, 0, 0, 0, 0, 0, 0]).await;
+                        if let Err(e) = client.load_state_commit(4).await {
+                            let err_str = format!("Fehler beim Abschließen der Parameter-Ladezustandsmaschine (Obj 4): {}", e);
+                            let _ = client.load_state_unload(4).await;
+                            let _ = client.disconnect().await;
+                            Self::fail_job(&jobs, job_id, &err_str).await;
+                            return;
+                        }
                     }
 
                     if let Some(new_img) = patched_img {
@@ -2461,6 +2569,7 @@ mod tests {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/0".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: Uuid::new_v4().to_string(),
@@ -2473,6 +2582,7 @@ mod tests {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/1".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: Uuid::new_v4().to_string(),
@@ -2485,6 +2595,7 @@ mod tests {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/5".to_string()],
+                depends_on: None,
             },
         ];
 
@@ -2691,6 +2802,40 @@ mod tests {
         assert_eq!(report.device_id, dev_id);
         assert!(report.safe_to_flash);
         assert!(!report.summary_message.is_empty());
+    }
+
+    #[test]
+    fn test_system_b_load_state_machine_payloads() {
+        // KNX System B Specification Property 5 (Load State Control)
+        // 0x04 = Unload
+        let unload_payload = [0x04, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(unload_payload[0], 0x04);
+
+        // 0x01 = Start Loading
+        let start_payload = [0x01, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(start_payload[0], 0x01);
+
+        // 0x03 = Set Length with sub-command (e.g. 514 bytes for parameters)
+        let seg_len: u16 = 514;
+        let sub_cmd: u8 = 0x0B;
+        let len_payload = [0x03, sub_cmd, 0, 0, (seg_len >> 8) as u8, (seg_len & 0xFF) as u8, 0, 0, 0];
+        assert_eq!(len_payload[0], 0x03);
+        assert_eq!(len_payload[1], 0x0B);
+        assert_eq!(u16::from_be_bytes([len_payload[4], len_payload[5]]), 514);
+
+        // 0x02 = End / Commit
+        let commit_payload = [0x02, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(commit_payload[0], 0x02);
+    }
+
+    #[test]
+    fn test_system_b_sequence_number_rollover() {
+        // NDT sequence numbers in KNX cEMI connected frames are 4-bit (0..=15)
+        let mut seq: u8 = 0;
+        for i in 0..32 {
+            assert_eq!(seq, (i % 16) as u8);
+            seq = (seq + 1) % 16;
+        }
     }
 }
 

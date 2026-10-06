@@ -19,6 +19,7 @@ import {
   FolderCog,
   Check,
   Globe,
+  GitCompare,
 } from 'lucide-react'
 import { Project, GatewayConnectionStatus } from '../../types/knx'
 import { downloadEtsCsv, downloadEtsXml, downloadKnxproj } from '../../services/api'
@@ -41,6 +42,7 @@ interface HeaderProps {
   onOpenExportKnxprojModal?: () => void
   onOpenProjectModal?: () => void
   onOpenStorageSettingsModal?: () => void
+  onOpenProjectCompareModal?: () => void
   onSaveProject?: () => void
   lastSavedTime?: string | null
   isSaving?: boolean
@@ -65,6 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExportKnxprojModal,
   onOpenProjectModal,
   onOpenStorageSettingsModal,
+  onOpenProjectCompareModal,
   onSaveProject,
   lastSavedTime,
   isSaving = false,
@@ -268,6 +271,27 @@ export const Header: React.FC<HeaderProps> = ({
                     <div>
                       <div className="font-semibold text-slate-100">{t('header.importEtsProject')}</div>
                       <div className="text-[10px] text-slate-400">.knxproj oder GA-CSV einlesen</div>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenProjectCompareModal && (
+                  <button
+                    onClick={() => {
+                      setShowProjectMenu(false)
+                      onOpenProjectCompareModal()
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-slate-800 text-left transition-colors mb-1"
+                  >
+                    <GitCompare className="w-4 h-4 text-purple-400 shrink-0" />
+                    <div>
+                      <div className="font-semibold text-slate-100 flex items-center gap-1.5">
+                        <span>Projekt-Diff & Merge</span>
+                        <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 py-0.2 rounded font-bold font-mono">
+                          ETS Parität
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">Zwei Stände vergleichen & selektiv mergen</div>
                     </div>
                   </button>
                 )}

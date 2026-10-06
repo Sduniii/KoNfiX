@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 use tracing::info;
+use serde::{Deserialize, Serialize};
 use crate::model::{
     FilterAction, FilterTableEntry, FilterTableSummary, KnxMediumType, LineCouplerFilterMode,
     Project, ProjectTopology, TopologyArea, TopologyLine,
@@ -13,6 +14,39 @@ pub struct TopologyValidationIssue {
     pub device_id: Option<Uuid>,
     pub device_address: Option<String>,
     pub line_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CouplerDiagnosticInfo {
+    pub coupler_address: String,
+    pub line_address: String,
+    pub is_configured: bool,
+    pub filter_mode: LineCouplerFilterMode,
+    pub forwarded_gas_count: usize,
+    pub blocked_gas_count: usize,
+    pub blocked_cross_line_gas: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LineBandwidthInfo {
+    pub line_address: String,
+    pub medium: KnxMediumType,
+    pub device_count: usize,
+    pub total_kos: usize,
+    pub estimated_load_percent: f32,
+    pub status: String, // "Optimal", "Normal", "Hoch"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopologyHealthReport {
+    pub health_score: u8, // 0 - 100
+    pub total_areas: usize,
+    pub total_lines: usize,
+    pub total_couplers: usize,
+    pub couplers: Vec<CouplerDiagnosticInfo>,
+    pub lines: Vec<LineBandwidthInfo>,
+    pub isolated_devices: Vec<String>,
+    pub issues: Vec<TopologyValidationIssue>,
 }
 
 pub struct TopologyManager;
@@ -403,6 +437,148 @@ impl TopologyManager {
         issues
     }
 
+    /// Comprehensive topology diagnostics & line coupler health check
+    pub fn diagnose_topology(project: &Project) -> TopologyHealthReport {
+        let issues = Self::validate_topology(project);
+        let mut couplers_diag = Vec::new();
+        let mut lines_bandwidth = Vec::new();
+        let mut isolated_devices = Vec::new();
+
+        let topo = match &project.topology {
+            Some(t) => t,
+            None => {
+                return TopologyHealthReport {
+                    health_score: 50,
+                    total_areas: 0,
+                    total_lines: 0,
+                    total_couplers: 0,
+                    couplers: vec![],
+                    lines: vec![],
+                    isolated_devices: vec![],
+                    issues,
+                };
+            }
+        };
+
+        let mut total_lines = 0;
+        let mut total_couplers = 0;
+
+        for area in &topo.areas {
+            for line in &area.lines {
+                total_lines += 1;
+                let line_prefix = format!("{}.", line.address);
+
+                // Devices in this line
+                let line_devices: Vec<&crate::model::KnxDevice> = project
+                    .devices
+                    .iter()
+                    .filter(|d| d.individual_address.starts_with(&line_prefix))
+                    .collect();
+
+                let dev_count = line_devices.len();
+                let total_kos: usize = line_devices
+                    .iter()
+                    .map(|d| d.communication_objects.len())
+                    .sum();
+
+                // Estimate bus load: each active device contributes ~0.2%, each KO ~0.02%
+                let est_load = ((dev_count as f32) * 0.25 + (total_kos as f32) * 0.03).clamp(0.5, 95.0);
+                let est_load_rounded = (est_load * 10.0).round() / 10.0;
+                let status = if est_load_rounded < 20.0 {
+                    "Optimal".to_string()
+                } else if est_load_rounded < 50.0 {
+                    "Normal".to_string()
+                } else {
+                    "Hoch".to_string()
+                };
+
+                lines_bandwidth.push(LineBandwidthInfo {
+                    line_address: line.address.clone(),
+                    medium: line.medium,
+                    device_count: dev_count,
+                    total_kos,
+                    estimated_load_percent: est_load_rounded,
+                    status,
+                });
+
+                // Coupler check
+                let coupler_addr = format!("{}.0", line.address);
+                let has_coupler = line.coupler_device_id.is_some()
+                    || project.devices.iter().any(|d| d.individual_address == coupler_addr);
+
+                if line.line_number != 0 {
+                    if has_coupler {
+                        total_couplers += 1;
+                        let filter_summary = Self::calculate_filter_table(project, line.id).ok();
+
+                        let mut blocked_cross_gas = Vec::new();
+                        let fwd_count = filter_summary.as_ref().map(|s| s.forwarded_count).unwrap_or(0);
+                        let blk_count = filter_summary.as_ref().map(|s| s.filtered_count).unwrap_or(0);
+
+                        // If coupler is set to BlockAll, find which cross-line GAs are blocked
+                        if line.coupler_filter_mode == LineCouplerFilterMode::BlockAll {
+                            if let Some(ref sum) = filter_summary {
+                                for entry in &sum.entries {
+                                    if entry.action == FilterAction::Block && entry.reason.contains("Blockiert: Koppler-Modus 'Sperren'") {
+                                        blocked_cross_gas.push(entry.ga_address.clone());
+                                    }
+                                }
+                            }
+                        }
+
+                        couplers_diag.push(CouplerDiagnosticInfo {
+                            coupler_address: coupler_addr,
+                            line_address: line.address.clone(),
+                            is_configured: true,
+                            filter_mode: line.coupler_filter_mode,
+                            forwarded_gas_count: fwd_count,
+                            blocked_gas_count: blk_count,
+                            blocked_cross_line_gas: blocked_cross_gas,
+                        });
+                    } else if dev_count > 0 {
+                        // Subline has devices, but no coupler to route to main line!
+                        for d in line_devices {
+                            isolated_devices.push(format!("{} ({})", d.name, d.individual_address));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Calculate Health Score (0 - 100)
+        let mut score: i32 = 100;
+        for issue in &issues {
+            match issue.severity.as_str() {
+                "error" => score -= 20,
+                "warning" => score -= 5,
+                _ => score -= 2,
+            }
+        }
+
+        if !isolated_devices.is_empty() {
+            score -= 15;
+        }
+
+        for c in &couplers_diag {
+            if !c.blocked_cross_line_gas.is_empty() {
+                score -= 10;
+            }
+        }
+
+        let final_score = score.clamp(0, 100) as u8;
+
+        TopologyHealthReport {
+            health_score: final_score,
+            total_areas: topo.areas.len(),
+            total_lines,
+            total_couplers,
+            couplers: couplers_diag,
+            lines: lines_bandwidth,
+            isolated_devices,
+            issues,
+        }
+    }
+
     /// Suggests the next available individual address on a given line (e.g. "1.1.17")
     pub fn suggest_next_address(project: &Project, line_address: &str) -> String {
         let prefix = format!("{}.", line_address);
@@ -575,6 +751,7 @@ mod tests {
                             flags: ComObjectFlags { communication: true, read: false, write: false, transmit: true, update: false },
                             group_address_ids: vec![ga_id_shared],
                             group_addresses: vec!["1/1/10".to_string()],
+                            depends_on: None,
                         },
                         CommunicationObject {
                             id: "ko-2".to_string(),
@@ -587,6 +764,7 @@ mod tests {
                             flags: ComObjectFlags { communication: true, read: false, write: false, transmit: true, update: false },
                             group_address_ids: vec![ga_id_local],
                             group_addresses: vec!["1/1/20".to_string()],
+                            depends_on: None,
                         },
                     ],
                     parameters: vec![],
@@ -624,6 +802,7 @@ mod tests {
                             flags: ComObjectFlags { communication: true, read: false, write: true, transmit: false, update: false },
                             group_address_ids: vec![ga_id_local],
                             group_addresses: vec!["1/1/20".to_string()],
+                            depends_on: None,
                         },
                     ],
                     parameters: vec![],
@@ -661,6 +840,7 @@ mod tests {
                             flags: ComObjectFlags { communication: true, read: false, write: true, transmit: false, update: false },
                             group_address_ids: vec![ga_id_shared],
                             group_addresses: vec!["1/1/10".to_string()],
+                            depends_on: None,
                         },
                     ],
                     parameters: vec![],
@@ -724,5 +904,31 @@ mod tests {
 
         // Verify hex bitmap is 8192 bytes = 16384 hex chars
         assert_eq!(summary.raw_bitmap_hex.len(), 16384);
+    }
+
+    #[test]
+    fn test_diagnose_topology_health_and_bandwidth() {
+        let mut project = Project::default();
+        project.devices.push(KnxDevice {
+            id: Uuid::new_v4(),
+            individual_address: "1.1.1".to_string(),
+            name: "Schaltaktor".to_string(),
+            ..Default::default()
+        });
+        project.devices.push(KnxDevice {
+            id: Uuid::new_v4(),
+            individual_address: "1.1.0".to_string(),
+            name: "Linienkoppler".to_string(),
+            ..Default::default()
+        });
+
+        TopologyManager::ensure_topology(&mut project);
+        let report = TopologyManager::diagnose_topology(&project);
+
+        assert!(report.health_score > 70);
+        assert_eq!(report.total_couplers, 1);
+        assert_eq!(report.lines.len(), 1);
+        assert_eq!(report.lines[0].line_address, "1.1");
+        assert_eq!(report.lines[0].device_count, 2);
     }
 }

@@ -116,6 +116,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["4/0/15".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "AKD_KO_1".to_string(),
@@ -128,6 +129,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec![],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "AKD_KO_2".to_string(),
@@ -140,6 +142,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["4/0/16".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "AKD_KO_3".to_string(),
@@ -158,6 +161,7 @@ pub fn create_demo_project() -> Project {
                 },
                 group_address_ids: vec![],
                 group_addresses: vec!["4/0/17".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "AKD_KO_4".to_string(),
@@ -176,6 +180,7 @@ pub fn create_demo_project() -> Project {
                 },
                 group_address_ids: vec![],
                 group_addresses: vec!["4/0/18".to_string()],
+                depends_on: None,
             },
         ],
         parameters: vec![
@@ -285,6 +290,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/0".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "JAL_KO_1".to_string(),
@@ -297,6 +303,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/1".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "JAL_KO_2".to_string(),
@@ -309,6 +316,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/2".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "JAL_KO_3".to_string(),
@@ -321,6 +329,7 @@ pub fn create_demo_project() -> Project {
                 flags: ComObjectFlags::default(),
                 group_address_ids: vec![],
                 group_addresses: vec![],
+                depends_on: None,
             },
         ],
         parameters: vec![
@@ -454,6 +463,7 @@ pub fn create_demo_project() -> Project {
                 },
                 group_address_ids: vec![],
                 group_addresses: vec!["4/0/15".to_string()],
+                depends_on: None,
             },
             CommunicationObject {
                 id: "GT_KO_2".to_string(),
@@ -472,6 +482,7 @@ pub fn create_demo_project() -> Project {
                 },
                 group_address_ids: vec![],
                 group_addresses: vec!["2/0/0".to_string()],
+                depends_on: None,
             },
         ],
         parameters: vec![

@@ -18,6 +18,13 @@ import {
   WireConnection,
   GroupAddress,
   DeviceLiveStateResult,
+  BusStatistics,
+  TelegramFilter,
+  AddressCollisionInfo,
+  ProjectDiff,
+  SelectiveMergeRequest,
+  MergeSummary,
+  TopologyHealthReport,
 } from '../types/knx'
 import {
   TopologyResponse,
@@ -919,6 +926,150 @@ export async function saveStorageView(viewData: ProjectViewState, project?: stri
     body: JSON.stringify(payload),
   })
 }
+
+// =========================================================================
+// Bus Monitor & Recorder APIs
+// =========================================================================
+
+export async function startBusRecorder(): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/bus/recorder/start`, { method: 'POST' })
+  return res.json()
+}
+
+export async function stopBusRecorder(): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/bus/recorder/stop`, { method: 'POST' })
+  return res.json()
+}
+
+export async function pauseBusRecorder(): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/bus/recorder/pause`, { method: 'POST' })
+  return res.json()
+}
+
+export async function clearBusRecorder(): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/bus/recorder/clear`, { method: 'POST' })
+  return res.json()
+}
+
+export async function fetchBusStatistics(): Promise<BusStatistics> {
+  const res = await fetch(`${API_BASE}/bus/recorder/stats`)
+  if (!res.ok) throw new Error('Fehler beim Abrufen der Bus-Statistik')
+  return res.json()
+}
+
+export async function fetchRecordedTelegrams(
+  filter?: TelegramFilter,
+  limit: number = 500
+): Promise<KnxTelegram[]> {
+  const params = new URLSearchParams()
+  if (limit) params.set('limit', limit.toString())
+  if (filter?.source) params.set('source', filter.source)
+  if (filter?.destination) params.set('destination', filter.destination)
+  if (filter?.telegram_type) params.set('type', filter.telegram_type)
+  if (filter?.dpt) params.set('dpt', filter.dpt)
+  if (filter?.search_text) params.set('search', filter.search_text)
+
+  const res = await fetch(`${API_BASE}/bus/recorder/telegrams?${params.toString()}`)
+  if (!res.ok) throw new Error('Fehler beim Laden der aufgezeichneten Telegramme')
+  return res.json()
+}
+
+export function getBusExportUrl(format: 'csv' | 'xml'): string {
+  return `${API_BASE}/bus/recorder/export?format=${format}`
+}
+
+export async function importBusTelegrams(csvContent: string): Promise<{ success: boolean; imported_count: number; message: string }> {
+  const res = await fetch(`${API_BASE}/bus/recorder/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    body: csvContent,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Importieren der Telegramme')
+  }
+  return res.json()
+}
+
+// =========================================================================
+// Hardware Diagnostics Wizard APIs
+// =========================================================================
+
+export async function fetchAddressCollisions(): Promise<AddressCollisionInfo[]> {
+  const res = await fetch(`${API_BASE}/diagnostics/collisions`)
+  if (!res.ok) throw new Error('Fehler beim Abrufen der Adresskollisionen')
+  return res.json()
+}
+
+export async function locateDevice(address: string, durationSecs: number = 5): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/diagnostics/locate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, duration_secs: durationSecs }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim optischen Blinken')
+  }
+  return res.json()
+}
+
+export async function programAddressBySerial(
+  serialNumber: string,
+  targetAddress: string
+): Promise<ProgramAddressResult> {
+  const res = await fetch(`${API_BASE}/diagnostics/program-serial`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ serial_number: serialNumber, target_address: targetAddress }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Programmieren per Seriennummer')
+  }
+  return res.json()
+}
+
+// =========================================================================
+// Project Compare & Merge APIs
+// =========================================================================
+
+export async function compareProjects(compareProject: Project): Promise<ProjectDiff> {
+  const res = await fetch(`${API_BASE}/project/compare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(compareProject),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Vergleichen der Projekte')
+  }
+  return res.json()
+}
+
+export async function mergeProjects(request: SelectiveMergeRequest): Promise<MergeSummary> {
+  const res = await fetch(`${API_BASE}/project/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Zusammenführen der Projekte')
+  }
+  return res.json()
+}
+
+// =========================================================================
+// Topology Diagnostics API
+// =========================================================================
+
+export async function fetchTopologyDiagnostics(): Promise<TopologyHealthReport> {
+  const res = await fetch(`${API_BASE}/topology/diagnostics`)
+  if (!res.ok) throw new Error('Fehler beim Abrufen der Topologie-Diagnose')
+  return res.json()
+}
+
 
 
 

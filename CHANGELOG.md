@@ -5,6 +5,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.2] - 2026-10-06 (ETS 6.2 Full Parity: Telegram Recorder, Project Diff/Merge, Hardware Wizard & Topology Integrity)
+
+### Professional Bus Monitor & Telegram Recorder (`recorder.rs`, `BusMonitor.tsx`)
+- **Configurable Telegram Ring Buffer (`recorder.rs`):** High-capacity in-memory ring buffer supporting up to 50,000 telegrams with full session controls (REC/PAUSE/STOP) and memory cleanup.
+- **Physical TP Bus Load Calculation (`TpFrameLoadCalculator`):** Precise mathematical modeling following the KNX TP physical standard: 11 bits per octet (1 start, 8 data, 1 parity, 1 stop bit) + 50 bit inter-frame pause at 9,600 baud. Features real-time sliding-window bus load calculation (gauge with green-yellow-red thresholding) and peak load detection (`peak_bus_load_percent`).
+- **Comprehensive Wildcard Filter Matrix (`TelegramFilter`):** Multi-criteria filtering supporting wildcards for source and destination addresses (e.g. `1.1.*`, `4/0/*`), telegram service types (`Write`, `Read`, `Response`), priorities (`System`, `Urgent`, `Normal`, `Low`), and datapoint types (DPTs).
+- **Official ETS XML & CSV Format Support:** 100% interoperable export and import supporting ETS `<KNXMonitor>` XML format (`KNXMonitor.xsd`) and standard ETS semicolon-delimited CSV for offline trace inspection.
+
+### Advanced Diagnostic Suite & Hardware Wizard (`diagnostics.rs`, `DiagnosticsWorkspace.tsx`)
+- **Automated Physical Address Collision Detection:** Actively scans the project database and real-time bus scan responses to detect conflicting physical addresses, displaying an interactive alert banner with quick-jump to conflicts.
+- **Optical Device Locator (LED Blinking):** Direct cEMI management trigger (`locate_device`) pulsing the device's programming LED for 5 seconds for rapid visual identification inside electrical distribution cabinets.
+- **Programming Without Button Press via 6-Byte Serial Number:** Direct support for `A_IndividualAddress_SerialNumber_Write` allowing physical address assignment to hard-to-reach actuators using their factory 6-byte KNX serial number (e.g. `00:83:7B:40:02:85`).
+- **Dual-Mode Address Flasher UI:** Integrated tabbed wizard in `DiagnosticsWorkspace.tsx` supporting traditional programming button detection (with multi-device safety interlock) and direct serial number provisioning.
+
+### Project Comparison & Revision Diff (`project_compare.rs`, `ProjectCompareModal.tsx`)
+- **Granular 4-Tier Hierarchical Diff:** Deep structural comparison between active project and arbitrary `.knxproj` files or historical snapshots across:
+  1. *Topology & Devices:* Added, deleted, and modified devices.
+  2. *Group Addresses:* Added, deleted, and modified GAs (name, DPT).
+  3. *Parameters:* Per-device parameter value deviations.
+  4. *Communication Objects:* Linked group address discrepancies on KO level.
+- **Selective Merge Engine:** Interactive visual diff matrix with color badges (green/red/yellow) and granular checkboxes enabling selective or complete (`merge_all`) synchronization into the active project.
+- **Central Menu Access:** Directly accessible from the main header dropdown under *"Projekt & ETS"* -> *"Projekt-Diff & Merge"*.
+
+### Topology Integrity & Coupler Diagnostics (`topology.rs`, `TopologyWorkspace.tsx`)
+- **Line Coupler Health & Cross-Line Filter Validation:** Analyzes coupler filter tables (`x.y.0`) and flags erroneously blocked cross-line group addresses (`blocked_cross_line_gas`) where devices communicate across coupler boundaries without proper pass-through rules.
+- **Line Bandwidth & Load Estimation:** Live tabular breakdown of all project lines showing transmission medium (TP/IP), device count, KO density, and estimated bus load (Optimal, Normal, High).
+- **Topologie-Integritäts-Score (0–100%):** Comprehensive health score dashboard evaluating area/line structure, isolated devices, and routing issues in `TopologyWorkspace.tsx`.
+
+### Dynamic Tree & Visual KO Wiring (Phases 1–3 Parity)
+- **Dynamic Parameter Tree & Quick-Jump (`DeviceKoParamModal.tsx`):** ETS-compliant `TrySelectFirst` page focus handling when conditions hide tabs, with interactive "Jump to parameter" navigation and green halo highlighting for condition-controlling parameters.
+- **Visual KO-to-KO Auto-GA Wiring on Canvas (`auto_ga.rs`, `dpt.rs`):** Intelligent multi-schema group address allocation when dragging wires directly between device KO pins, with strict DPT size compatibility checks (`are_dpts_compatible`).
+- **Safety Multi-Device Programming Interlock (`diagnostics.rs`):** Broadcast `A_IndividualAddress_Read` safety scan preventing accidental simultaneous address writes when multiple devices have their programming buttons active.
+
+
 ## [2026.10.1] - 2026-10-05 (Official ETS 6.2 XML Schema 23 Parity, Directory Manifest RSA Signing & Hardware ID Resolution)
 
 ### 100% Official ETS 6.2 XML Schema 23 & Master Data Parity

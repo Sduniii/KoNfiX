@@ -743,6 +743,34 @@ pub fn format_dpt_json_value(dpt: &str, value: &serde_json::Value) -> String {
     }
 }
 
+/// Checks if two DPT strings are compatible (e.g. "1.001" and "1.002", or "5.001" and "5.004", or either is empty/generic)
+/// Modeled after ETS LinkGroupAddressDatapointQuestion & MismatchingObjectSize
+pub fn are_dpts_compatible(dpt_a: &str, dpt_b: &str) -> bool {
+    let clean_a = dpt_a.trim()
+        .trim_start_matches("DPST-")
+        .trim_start_matches("DPST_")
+        .trim_start_matches("DPST")
+        .trim_start_matches("DPT-")
+        .trim_start_matches("DPT_")
+        .trim_start_matches("DPT");
+    let clean_b = dpt_b.trim()
+        .trim_start_matches("DPST-")
+        .trim_start_matches("DPST_")
+        .trim_start_matches("DPST")
+        .trim_start_matches("DPT-")
+        .trim_start_matches("DPT_")
+        .trim_start_matches("DPT");
+
+    if clean_a.is_empty() || clean_b.is_empty() || clean_a == "var" || clean_b == "var" {
+        return true;
+    }
+
+    let main_a = clean_a.split(|c| c == '.' || c == '-').next().unwrap_or(clean_a);
+    let main_b = clean_b.split(|c| c == '.' || c == '-').next().unwrap_or(clean_b);
+
+    main_a == main_b
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -780,5 +808,15 @@ mod tests {
         let (dpt, formatted) = format_dpt_value("9.001", &raw);
         assert_eq!(dpt, "9.001");
         assert_eq!(formatted, "21.5 °C");
+    }
+
+    #[test]
+    fn test_are_dpts_compatible() {
+        assert!(are_dpts_compatible("1.001", "1.002"));
+        assert!(are_dpts_compatible("DPST-1-1", "1.001"));
+        assert!(are_dpts_compatible("5.001", "5.004"));
+        assert!(are_dpts_compatible("", "1.001"));
+        assert!(!are_dpts_compatible("1.001", "9.001"));
+        assert!(!are_dpts_compatible("1.001", "5.001"));
     }
 }

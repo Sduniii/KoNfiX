@@ -80,8 +80,21 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
   // Local parameter edits: Map<param_id, value>
   const [paramEdits, setParamEdits] = useState<Record<string, string>>({})
   const [selectedPage, setSelectedPage] = useState<string>('')
+  const [highlightedParamId, setHighlightedParamId] = useState<string | null>(null)
   const [isReadingLive, setIsReadingLive] = useState(false)
   const [liveResult, setLiveResult] = useState<DeviceLiveStateResult | null>(null)
+
+  const handleJumpToParam = (targetPage: string, targetParamId?: string) => {
+    setSelectedPage(targetPage)
+    if (targetParamId) {
+      setHighlightedParamId(targetParamId)
+      setTimeout(() => setHighlightedParamId(null), 2500)
+      setTimeout(() => {
+        const el = document.getElementById(`param-row-${targetParamId}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    }
+  }
 
   React.useEffect(() => {
     if (device) {
@@ -129,6 +142,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
     ctrlParamName: string
     requiredValuesText: string
     targetPage?: string
+    targetParamId?: string
   }
 
   const getParamConditionStatus = (p: DeviceParameter): ParamConditionStatus => {
@@ -172,11 +186,41 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
           ctrlParamName: ctrlName,
           requiredValuesText: reqText,
           targetPage: ctrlParam?.page || undefined,
+          targetParamId: ctrlParam?.id || undefined,
         }
       }
     }
 
     return { isActive: true, ctrlParamName: '', requiredValuesText: '' }
+  }
+
+  // Check if a KO is active based on its depends_on conditions evaluated against paramEdits & params
+  const isKoActive = (ko: CommunicationObject): boolean => {
+    if (!ko.depends_on) {
+      if (device?.visible_ko_numbers && device.visible_ko_numbers.length > 0) {
+        return device.visible_ko_numbers.includes(ko.number)
+      }
+      return true
+    }
+
+    const conditions =
+      ko.depends_on.conditions && ko.depends_on.conditions.length > 0
+        ? ko.depends_on.conditions
+        : [{ param_id: ko.depends_on.param_id, when_values: ko.depends_on.when_values }]
+
+    for (const cond of conditions) {
+      const ctrlParam = params.find((x) => x.id === cond.param_id || x.name === cond.param_id)
+      const currentVal =
+        paramEdits[cond.param_id] !== undefined
+          ? paramEdits[cond.param_id]
+          : ctrlParam?.value ?? ''
+
+      const isMatch = Array.isArray(cond.when_values) && cond.when_values.includes(currentVal)
+      if (!isMatch) {
+        return false
+      }
+    }
+    return true
   }
 
   const isParamVisible = (p: DeviceParameter): boolean => {
@@ -251,21 +295,30 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
       }))
   }, [params, paramEdits, showAllParams])
 
-  // Automatically select the first visible page if not set
+  // Automatically select the first visible page if current becomes invalid (ETS TrySelectFirst parity)
   React.useEffect(() => {
     if (pageTree.length > 0) {
       const exists = pageTree.some(
         (p) => p.fullPath === selectedPage || p.children.some((c) => c.fullPath === selectedPage)
       )
       if (!exists || !selectedPage) {
-        const firstVisibleRoot = pageTree.find((p) => p.visibleCount > 0) || pageTree[0]
-        if (firstVisibleRoot) {
-          const firstVisibleChild = firstVisibleRoot.children.find((c) => c.visibleCount > 0)
-          setSelectedPage(firstVisibleChild?.fullPath || firstVisibleRoot.fullPath)
+        // ETS TrySelectFirst: 1. Try to stay within current root category if visible sibling exists
+        const currentRootName = selectedPage ? selectedPage.split(' > ')[0] : null
+        const currentRoot = currentRootName ? pageTree.find((p) => p.name === currentRootName) : null
+        if (currentRoot && (showAllParams || currentRoot.visibleCount > 0)) {
+          const firstVisibleChild = currentRoot.children.find((c) => showAllParams || c.visibleCount > 0)
+          setSelectedPage(firstVisibleChild?.fullPath || currentRoot.fullPath)
+        } else {
+          // 2. Fallback to first visible root and its first visible child
+          const firstVisibleRoot = pageTree.find((p) => showAllParams || p.visibleCount > 0) || pageTree[0]
+          if (firstVisibleRoot) {
+            const firstVisibleChild = firstVisibleRoot.children.find((c) => showAllParams || c.visibleCount > 0)
+            setSelectedPage(firstVisibleChild?.fullPath || firstVisibleRoot.fullPath)
+          }
         }
       }
     }
-  }, [pageTree, selectedPage])
+  }, [pageTree, selectedPage, showAllParams])
 
   // Count of modified parameters
   const changedCount = useMemo(() => {
@@ -284,12 +337,8 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
   }, [params, paramEdits])
 
   const activeKosCount = useMemo(() => {
-    if (device?.visible_ko_numbers && device.visible_ko_numbers.length > 0) {
-      return kos.filter((k) => device.visible_ko_numbers!.includes(k.number)).length
-    }
-    const linked = kos.filter((k) => (k.group_addresses ?? []).length > 0).length
-    return linked > 0 ? linked : kos.length
-  }, [kos, device])
+    return kos.filter((k) => isKoActive(k)).length
+  }, [kos, device, paramEdits, params])
 
   const totalVisibleParamsCount = useMemo(() => {
     return params.filter((p) => isParamVisible(p)).length
@@ -359,17 +408,14 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
         gas.some((ga) => ga && ga.toLowerCase().includes(q))
 
       const isLinked = gas.length > 0 || gaIds.length > 0
-      const isDeviceActive =
-        device?.visible_ko_numbers && device.visible_ko_numbers.length > 0
-          ? device.visible_ko_numbers.includes(ko.number)
-          : isLinked || kos.length <= 20
+      const isDeviceActive = isKoActive(ko)
 
       if (koFilter === 'active') return matchesSearch && isDeviceActive
       if (koFilter === 'linked') return matchesSearch && isLinked
       if (koFilter === 'unlinked') return matchesSearch && !isLinked
       return matchesSearch
     })
-  }, [kos, searchQuery, koFilter, device])
+  }, [kos, searchQuery, koFilter, device, paramEdits, params])
 
   // Link a GA to a KO
   const handleLinkGa = async (ko: CommunicationObject, ga: GroupAddress) => {
@@ -559,7 +605,8 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
         ...p,
         value: paramEdits[p.id] !== undefined ? paramEdits[p.id] : p.value,
       }))
-      onUpdateDevice({ ...device, parameters: updatedParams })
+      const activeKoNums = kos.filter(isKoActive).map((k) => k.number)
+      onUpdateDevice({ ...device, parameters: updatedParams, visible_ko_numbers: activeKoNums })
       setSaveSuccess(true)
       setTimeout(() => setSaveSuccess(false), 3000)
     } finally {
@@ -585,7 +632,8 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
             ...p,
             value: paramEdits[p.id] !== undefined ? paramEdits[p.id] : p.value,
           }))
-          updatedDev = { ...device, parameters: updatedParams }
+          const activeKoNums = kos.filter(isKoActive).map((k) => k.number)
+          updatedDev = { ...device, parameters: updatedParams, visible_ko_numbers: activeKoNums }
           onUpdateDevice(updatedDev)
         }
       }
@@ -1254,18 +1302,25 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                               )}
                               <span className="truncate">{root.name}</span>
                             </div>
-                            <span
-                              className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                                isRootSelected
-                                  ? 'bg-emerald-700/80 text-white'
-                                  : root.visibleCount > 0
-                                  ? 'bg-slate-800 text-slate-400'
-                                  : 'bg-slate-900 text-slate-600'
-                              }`}
-                              title={`${root.visibleCount} aktiv von ${root.count} Parametern`}
-                            >
-                              {root.visibleCount < root.count ? `${root.visibleCount}/${root.count}` : root.count}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                              {root.visibleCount < root.count && (
+                                <span title="Einige Parameter sind bedingt deaktiviert">
+                                  <Lock className={`w-2.5 h-2.5 ${isRootSelected ? 'text-white/80' : 'text-amber-400'}`} />
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                                  isRootSelected
+                                    ? 'bg-emerald-700/80 text-white'
+                                    : root.visibleCount > 0
+                                    ? 'bg-slate-800 text-slate-400'
+                                    : 'bg-slate-900 text-slate-600'
+                                }`}
+                                title={`${root.visibleCount} aktiv von ${root.count} Parametern`}
+                              >
+                                {root.visibleCount < root.count ? `${root.visibleCount}/${root.count}` : root.count}
+                              </span>
+                            </div>
                           </button>
 
                           {/* Sub-Pages */}
@@ -1290,17 +1345,24 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                     }`}
                                   >
                                     <span className="truncate">{child.name}</span>
-                                    <span
-                                      className={`text-[9px] px-1 rounded font-mono ${
-                                        isChildSelected
-                                          ? 'bg-emerald-700 text-white'
-                                          : isChildActive
-                                          ? 'bg-slate-800/80 text-slate-400'
-                                          : 'text-slate-600'
-                                      }`}
-                                    >
-                                      {child.visibleCount < child.count ? `${child.visibleCount}/${child.count}` : child.count}
-                                    </span>
+                                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                                      {child.visibleCount < child.count && (
+                                        <span title="Bedingt eingeschränkt">
+                                          <Lock className={`w-2 h-2 ${isChildSelected ? 'text-white/80' : 'text-amber-400'}`} />
+                                        </span>
+                                      )}
+                                      <span
+                                        className={`text-[9px] px-1 rounded font-mono ${
+                                          isChildSelected
+                                            ? 'bg-emerald-700 text-white'
+                                            : isChildActive
+                                            ? 'bg-slate-800/80 text-slate-400'
+                                            : 'text-slate-600'
+                                        }`}
+                                      >
+                                        {child.visibleCount < child.count ? `${child.visibleCount}/${child.count}` : child.count}
+                                      </span>
+                                    </div>
                                   </button>
                                 )
                               })}
@@ -1355,8 +1417,11 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                             return (
                               <div
                                 key={p.id}
+                                id={`param-row-${p.id}`}
                                 className={`flex flex-col gap-2 p-2.5 rounded-lg border transition-all ${
-                                  !isActive
+                                  highlightedParamId === p.id
+                                    ? 'ring-2 ring-amber-400 bg-amber-500/15 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.35)] animate-pulse'
+                                    : !isActive
                                     ? 'opacity-60 bg-slate-950/40 border-dashed border-slate-800'
                                     : isChanged
                                     ? 'bg-emerald-950/20 border-emerald-800/50'
@@ -1495,12 +1560,12 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                         <strong>{condStatus.ctrlParamName}</strong> = <span className="font-bold text-amber-200">{condStatus.requiredValuesText}</span>
                                       </span>
                                     </div>
-                                    {condStatus.targetPage && condStatus.targetPage !== selectedPage && (
+                                    {condStatus.targetPage && (
                                       <button
                                         type="button"
-                                        onClick={() => setSelectedPage(condStatus.targetPage!)}
+                                        onClick={() => handleJumpToParam(condStatus.targetPage!, condStatus.targetParamId)}
                                         className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[10px] font-semibold transition-colors cursor-pointer"
-                                        title={`Zu "${condStatus.targetPage}" wechseln`}
+                                        title={`Zu "${condStatus.targetPage}" springen und Parameter hervorheben`}
                                       >
                                         <span>Zur Einstellung</span>
                                         <ArrowUpRight className="w-3 h-3" />

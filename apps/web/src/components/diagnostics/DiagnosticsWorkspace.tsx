@@ -19,6 +19,10 @@ import {
   Layers,
   Clock,
   ShieldCheck,
+  Eye,
+  AlertTriangle,
+  Zap,
+  Hash,
 } from 'lucide-react'
 import {
   Project,
@@ -28,6 +32,7 @@ import {
   DeviceProgModeInfo,
   DeviceDetailedInfo,
   AddressScanStatus,
+  AddressCollisionInfo,
 } from '../../types/knx'
 import {
   getDiagnosticsResults,
@@ -37,6 +42,9 @@ import {
   scanProgrammingMode,
   queryDeviceInfo,
   programIndividualAddress,
+  fetchAddressCollisions,
+  locateDevice,
+  programAddressBySerial,
 } from '../../services/api'
 import { useTranslation } from '../../i18n/I18nContext'
 
@@ -95,6 +103,14 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
   const [programSelectedDeviceId, setProgramSelectedDeviceId] = useState<string>('')
   const [isProgramming, setIsProgramming] = useState<boolean>(false)
   const [programResult, setProgramResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [programTab, setProgramTab] = useState<'button' | 'serial'>('button')
+  const [programSerialNumber, setProgramSerialNumber] = useState<string>('')
+
+  // Collisions and Hardware-Wizard State
+  const [collisions, setCollisions] = useState<AddressCollisionInfo[]>([])
+  const [isCheckingCollisions, setIsCheckingCollisions] = useState<boolean>(false)
+  const [isLocating, setIsLocating] = useState<boolean>(false)
+  const [locateStatus, setLocateStatus] = useState<string | null>(null)
 
   // Fetch initial results and poll progress when running
   const refreshResults = useCallback(async () => {
@@ -236,7 +252,18 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
     }
   }
 
-  // Program Address Handler
+  const isTargetAddressOccupied = useMemo(() => {
+    return scanResults.some((r) => r.address === programTargetAddress && r.status === 'Occupied')
+  }, [scanResults, programTargetAddress])
+
+  // Automatically scan for devices in programming mode when opening program address modal
+  useEffect(() => {
+    if (isProgramModalOpen) {
+      handleScanProgMode()
+    }
+  }, [isProgramModalOpen])
+
+  // Program Address Handler (via Programming Button)
   const handleExecuteProgramAddress = async () => {
     setIsProgramming(true)
     setProgramResult(null)
@@ -256,6 +283,66 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
       setIsProgramming(false)
     }
   }
+
+  // Program Address Handler (via 6-Byte Serial Number)
+  const handleExecuteProgramBySerial = async () => {
+    if (!programSerialNumber.trim()) {
+      setProgramResult({ success: false, message: 'Bitte geben Sie die 6-Byte KNX-Seriennummer des Geräts ein (z. B. 00:83:7B:40:02:85)' })
+      return
+    }
+    setIsProgramming(true)
+    setProgramResult(null)
+    try {
+      const res = await programAddressBySerial(programSerialNumber.trim(), programTargetAddress)
+      setProgramResult({ success: res.success, message: res.message })
+      refreshResults()
+      if (onReloadProject) {
+        onReloadProject()
+      }
+    } catch (err: any) {
+      setProgramResult({ success: false, message: err.message || 'Fehler beim Programmieren per Seriennummer' })
+    } finally {
+      setIsProgramming(false)
+    }
+  }
+
+  // Optical locate / blink device
+  const handleLocateSelectedDevice = async () => {
+    if (!selectedAddress) return
+    setIsLocating(true)
+    setLocateStatus('Blink-Signal wird gesendet (5s)...')
+    try {
+      const res = await locateDevice(selectedAddress, 5)
+      setLocateStatus(res.message || 'Blink-Signal aktiv')
+      setTimeout(() => {
+        setLocateStatus(null)
+        setIsLocating(false)
+      }, 5000)
+    } catch (err: any) {
+      setLocateStatus(`Fehler: ${err.message}`)
+      setTimeout(() => {
+        setLocateStatus(null)
+        setIsLocating(false)
+      }, 4000)
+    }
+  }
+
+  // Check Address Collisions
+  const handleCheckCollisions = useCallback(async () => {
+    setIsCheckingCollisions(true)
+    try {
+      const cols = await fetchAddressCollisions()
+      setCollisions(Array.isArray(cols) ? cols : [])
+    } catch (err) {
+      console.error('Fehler bei Prüfung auf Adresskollisionen:', err)
+    } finally {
+      setIsCheckingCollisions(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    handleCheckCollisions()
+  }, [handleCheckCollisions])
 
   // Map project devices by individual address
   const projectDevicesMap = useMemo(() => {
@@ -408,6 +495,24 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
           </button>
 
           <button
+            onClick={handleCheckCollisions}
+            disabled={isCheckingCollisions}
+            className={`px-3.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              collisions.length > 0
+                ? 'bg-rose-950/60 border-rose-500/50 text-rose-300 hover:bg-rose-900/60'
+                : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border-slate-700/80'
+            }`}
+            title="Prüft das gesamte Projekt und den Bus-Scan auf doppelt belegte physikalische Adressen"
+          >
+            {isCheckingCollisions ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            ) : (
+              <ShieldCheck className={`w-3.5 h-3.5 ${collisions.length > 0 ? 'text-rose-400' : 'text-emerald-400'}`} />
+            )}
+            <span>Kollisionen {collisions.length > 0 ? `(${collisions.length})` : ''}</span>
+          </button>
+
+          <button
             onClick={() => setIsProgramModalOpen(true)}
             className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
           >
@@ -416,6 +521,31 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Collision Alert Banner */}
+      {collisions.length > 0 && (
+        <div className="bg-rose-950/70 border-b border-rose-500/40 px-6 py-2.5 flex items-center justify-between text-xs text-rose-200 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <div>
+              <span className="font-bold text-rose-300">
+                Achtung: {collisions.length} Adresskollision(en) erkannt!
+              </span>
+              <span className="ml-2 text-rose-200/90 font-mono">
+                {collisions.map((c) => `${c.address} (${c.device_names.join(' / ')})`).join(' • ')}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (collisions[0]?.address) setSelectedAddress(collisions[0].address)
+            }}
+            className="px-2.5 py-1 rounded bg-rose-800/80 hover:bg-rose-700 text-white font-semibold text-[11px] transition-colors cursor-pointer"
+          >
+            Zur ersten Kollision
+          </button>
+        </div>
+      )}
 
       {/* Offline-Mode Banner (no live gateway) */}
       {!progress.is_running && scanResults.length === 0 && projectDevicesOnLine.length > 0 && (
@@ -730,6 +860,26 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
               <span>Auf diese Adresse programmieren</span>
             </button>
 
+            {/* Optical Locate / Blink Button */}
+            <button
+              onClick={handleLocateSelectedDevice}
+              disabled={isLocating || !selectedAddress}
+              className={`w-full py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                isLocating
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                  : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/30 hover:border-amber-500/60'
+              }`}
+              title="Lässt die Programmier-LED des Geräts 5 Sekunden optisch blinken zur schnellen Lokalisierung im Schaltschrank"
+            >
+              <Eye className={`w-3.5 h-3.5 ${isLocating ? 'animate-bounce text-amber-400' : 'text-amber-400'}`} />
+              <span>{isLocating ? 'Gerät blinkt...' : 'Gerät lokalisieren (LED blinken)'}</span>
+            </button>
+            {locateStatus && (
+              <div className="text-[11px] text-center text-amber-300 font-medium py-1 px-2 rounded bg-amber-950/40 border border-amber-500/30">
+                {locateStatus}
+              </div>
+            )}
+
             <button
               onClick={() => {
                 if (selectedAddress) {
@@ -806,24 +956,152 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
               </button>
             </div>
 
+            {/* Programming Method Switcher */}
+            <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setProgramTab('button')}
+                className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                  programTab === 'button'
+                    ? 'bg-slate-800 text-slate-100 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5 text-amber-400" />
+                <span>Programmiertaste (LED)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setProgramTab('serial')}
+                className={`flex-1 py-1.5 rounded-md flex items-center justify-center gap-1.5 transition-all ${
+                  programTab === 'serial'
+                    ? 'bg-slate-800 text-slate-100 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Hash className="w-3.5 h-3.5 text-sky-400" />
+                <span>Per Seriennummer</span>
+              </button>
+            </div>
+
             <div className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  Ziel-Adresse (z. B. 1.1.10):
-                </label>
-                <input
-                  type="text"
-                  value={programTargetAddress}
-                  onChange={(e) => setProgramTargetAddress(e.target.value)}
-                  placeholder="1.1.10"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:outline-none focus:border-emerald-500"
-                />
+              {programTab === 'button' ? (
+                /* STEP 1: Program Mode Detection (ETS Parity) */
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold">1</span>
+                      <span>Programmiermodus am Gerät</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleScanProgMode}
+                      disabled={isScanningProgMode}
+                      className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors"
+                    >
+                      <RotateCcw className={`w-3 h-3 ${isScanningProgMode ? 'animate-spin' : ''}`} />
+                      <span>Erneut suchen</span>
+                    </button>
+                  </div>
+
+                  {isScanningProgMode ? (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-400">
+                      <Loader2 className="w-4 h-4 text-sky-400 animate-spin shrink-0" />
+                      <span>Scanne KNX-Bus nach Geräten im Programmiermodus...</span>
+                    </div>
+                  ) : progModeDevices.length === 1 ? (
+                    <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                        <div>
+                          <div className="font-bold text-emerald-200">
+                            Gerät im Programmiermodus erkannt!
+                          </div>
+                          <div className="text-[11px] font-mono text-emerald-300/80 mt-0.5">
+                            Alte Adresse: <span className="font-bold text-white">{progModeDevices[0].address}</span>
+                            {progModeDevices[0].mask_version && ` · ${progModeDevices[0].mask_version}`}
+                          </div>
+                        </div>
+                      </div>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    </div>
+                  ) : progModeDevices.length > 1 ? (
+                    <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-500/40 flex items-start gap-2.5 text-xs text-rose-200">
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold">Mehrere Geräte im Programmiermodus ({progModeDevices.length})!</div>
+                        <div className="text-[11px] text-rose-300/80 mt-0.5">
+                          Gefunden: {progModeDevices.map((d) => d.address).join(', ')}. Bitte stellen Sie sicher, dass nur an genau einem Gerät die rote Taste aktiv ist.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-200">
+                      <div className="w-3.5 h-3.5 rounded-full bg-rose-500/80 shrink-0 mt-0.5 animate-pulse" />
+                      <div>
+                        <div className="font-bold">Warten auf Tastendruck am Gerät</div>
+                        <div className="text-[11px] text-amber-300/80 mt-0.5">
+                          Drücken Sie die Programmiertaste am KNX-Gerät (rote LED muss leuchten), und klicken Sie anschließend auf „Erneut suchen“.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Hardware Wizard: KNX 6-Byte Serial Number Input */
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/40 flex items-center justify-center text-[10px] font-bold">1</span>
+                    <span>Geräte-Seriennummer (6 Bytes)</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={programSerialNumber}
+                    onChange={(e) => setProgramSerialNumber(e.target.value)}
+                    placeholder="00:83:7B:40:02:85 oder 00837B400285"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-sky-500 rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Programmierung ohne Tastendruck via Broadcast <code>A_IndividualAddress_SerialNumber_Write</code> nach KNX-Spezifikation.
+                  </p>
+                </div>
+              )}
+
+              {/* STEP 2: Target Address & Collision Check */}
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold">2</span>
+                  <span>Neue physikalische Ziel-Adresse</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={programTargetAddress}
+                    onChange={(e) => setProgramTargetAddress(e.target.value)}
+                    placeholder="1.1.10"
+                    className={`w-full bg-slate-950 border rounded-lg px-3 py-2 text-sm font-mono text-slate-100 focus:outline-none transition-colors ${
+                      isTargetAddressOccupied
+                        ? 'border-amber-500/80 focus:border-amber-400'
+                        : 'border-slate-800 focus:border-emerald-500'
+                    }`}
+                  />
+                  {isTargetAddressOccupied && (
+                    <div className="mt-1.5 p-2 rounded-lg bg-amber-950/40 border border-amber-500/40 flex items-center gap-2 text-[11px] text-amber-300">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>
+                        Achtung: Die Adresse <strong>{programTargetAddress}</strong> ist auf dem Bus laut Scan bereits belegt!
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
+              {/* STEP 3: Project Device Association */}
               {project && project.devices.length > 0 && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1">
-                    Mit Projekt-Gerät verknüpfen (optional):
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-[10px] font-bold">3</span>
+                    <span>Projekt-Gerät zuweisen (optional)</span>
                   </label>
                   <select
                     value={programSelectedDeviceId}
@@ -840,17 +1118,17 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
                 </div>
               )}
 
-              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-2">
+              {/* STEP 4: Execution & Feedback */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1.5">
                 <div className="font-semibold text-slate-300 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Ablauf:</span>
+                  <span>Ablauf nach ETS-Standard:</span>
                 </div>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed">
-                  <li>Stellen Sie sicher, dass die Programmiertaste am Gerät gedrückt ist (rote LED an).</li>
-                  <li>knx-config sendet den Management-Schreibbefehl (A_IndividualAddress_Write).</li>
-                  <li>Die rote LED am Gerät erlischt bei erfolgreicher Programmierung.</li>
-                  <li>Automatische Verifikation über Gerätedeskriptor-Abfrage.</li>
-                </ol>
+                <div className="text-slate-400 space-y-1">
+                  <div>1. Broadcast-Schreiben ({programTab === 'serial' ? 'A_IndividualAddress_SerialNumber_Write' : 'A_IndividualAddress_Write'}).</div>
+                  <div>2. Geräteneustart (<code>A_Restart</code>), rote LED erlischt automatisch.</div>
+                  <div>3. Lese-Verifikation via Gerätedeskriptor (<code>A_DeviceDescriptor_Read</code>).</div>
+                </div>
               </div>
 
               {programResult && (
@@ -873,6 +1151,7 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
 
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
               <button
+                type="button"
                 onClick={() => {
                   setIsProgramModalOpen(false)
                   setProgramResult(null)
@@ -882,9 +1161,10 @@ export const DiagnosticsWorkspace: React.FC<DiagnosticsWorkspaceProps> = ({
                 Schließen
               </button>
               <button
-                onClick={handleExecuteProgramAddress}
-                disabled={isProgramming}
-                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                type="button"
+                onClick={programTab === 'serial' ? handleExecuteProgramBySerial : handleExecuteProgramAddress}
+                disabled={isProgramming || (programTab === 'button' && progModeDevices.length > 1)}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
               >
                 {isProgramming ? (
                   <>

@@ -29,13 +29,16 @@ use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 use crate::diagnostics::{
-    DeviceDetailedInfo, DeviceProgModeInfo, DiagnosticsManager, LineScanProgress,
-    ProgramAddressRequest, ProgramAddressResult, ScannedAddressInfo,
+    AddressCollisionInfo, DeviceDetailedInfo, DeviceProgModeInfo, DiagnosticsManager,
+    LineScanProgress, LocateDeviceRequest, ProgramAddressRequest, ProgramAddressResult,
+    ProgramBySerialRequest, ScannedAddressInfo,
 };
 use crate::knxprod::CatalogManager;
-use crate::topology::TopologyManager;
+use crate::topology::{TopologyHealthReport, TopologyManager};
 use crate::programming::ProgrammingJobManager;
 use crate::storage::{ProjectMetadata, StorageManager, StorageSettings};
+use crate::recorder::{BusStatistics, TelegramFilter, TelegramRecorder};
+use crate::project_compare::{MergeSummary, ProjectComparer, ProjectDiff, SelectiveMergeRequest};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -46,6 +49,7 @@ pub struct AppState {
     pub catalog: Arc<CatalogManager>,
     pub programming: Arc<ProgrammingJobManager>,
     pub storage: Arc<StorageManager>,
+    pub recorder: Arc<RwLock<TelegramRecorder>>,
 }
 
 async fn security_headers_middleware(
@@ -171,7 +175,37 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/devices/:device_id/read-state", post(handle_read_device_live_state))
         .route("/api/devices/:device_id/mark-synced", post(handle_mark_device_synced))
         .route("/api/devices/:device_id/security", post(handle_device_security))
+        // Bus Monitor & Recorder
+        .route("/api/bus/recorder/start", post(handle_recorder_start))
+        .route("/api/bus/recorder/stop", post(handle_recorder_stop))
+        .route("/api/bus/recorder/pause", post(handle_recorder_pause))
+        .route("/api/bus/recorder/clear", post(handle_recorder_clear))
+        .route("/api/bus/recorder/telegrams", get(handle_recorder_telegrams))
+        .route("/api/bus/recorder/stats", get(handle_recorder_stats))
+        .route("/api/bus/recorder/export", get(handle_recorder_export))
+        .route("/api/bus/recorder/import", post(handle_recorder_import))
+        // Hardware Diagnostics Wizard
+        .route("/api/diagnostics/collisions", get(handle_diag_collisions))
+        .route("/api/diagnostics/locate", post(handle_diag_locate))
+        .route("/api/diagnostics/program-serial", post(handle_diag_program_serial))
+        // Project Compare & Merge
+        .route("/api/project/compare", post(handle_project_compare))
+        .route("/api/project/merge", post(handle_project_merge))
+        // Topology Diagnostics
+        .route("/api/topology/diagnostics", get(handle_topology_diagnostics))
         .route("/ws/bus", get(ws_bus_handler));
+
+    // Background task: stream all simulated & gateway telegrams into the TelegramRecorder
+    {
+        let recorder = state.recorder.clone();
+        let mut rx = state.simulator.tx_telegram.subscribe();
+        tokio::spawn(async move {
+            while let Ok(tlg) = rx.recv().await {
+                let mut rec = recorder.write().await;
+                rec.record(tlg);
+            }
+        });
+    }
 
     let dist_candidates = ["apps/web/dist", "../apps/web/dist", "../../apps/web/dist", "dist"];
     for dist_dir in dist_candidates {
@@ -1030,6 +1064,8 @@ async fn handle_knx_send_telegram(
             value_raw: vec![],
             value_formatted: val_fmt,
             telegram_type: "Write (SIM)".to_string(),
+            priority: Some("Normal".to_string()),
+            is_repeat: Some(false),
         };
         state.simulator.emit_telegram(sim_tg.clone()).await;
         Ok(Json(serde_json::json!({
@@ -1398,7 +1434,9 @@ async fn handle_device_update_parameters(
         }
     }
 
+    crate::programming::evaluate_assign_rules(&mut device.parameters, &device.assign_rules);
     crate::programming::synchronize_dependent_parameters(&mut device.parameters);
+    device.visible_ko_numbers = crate::model::calculate_active_ko_numbers(device);
 
     let res_dev = device.clone();
     let cloned = proj.clone();
@@ -1954,6 +1992,205 @@ async fn handle_device_security(
     })))
 }
 
+// =========================================================================
+// Bus Monitor & Telegram Recorder Handlers
+// =========================================================================
+
+async fn handle_recorder_start(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.recorder.write().await.start();
+    Json(serde_json::json!({ "status": "recording" }))
+}
+
+async fn handle_recorder_stop(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.recorder.write().await.stop();
+    Json(serde_json::json!({ "status": "idle" }))
+}
+
+async fn handle_recorder_pause(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.recorder.write().await.pause();
+    Json(serde_json::json!({ "status": "paused" }))
+}
+
+async fn handle_recorder_clear(State(state): State<AppState>) -> Json<serde_json::Value> {
+    state.recorder.write().await.clear();
+    Json(serde_json::json!({ "status": "cleared" }))
+}
+
+async fn handle_recorder_stats(State(state): State<AppState>) -> Json<BusStatistics> {
+    let mut rec = state.recorder.write().await;
+    Json(rec.get_statistics())
+}
+
+async fn handle_recorder_telegrams(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Json<Vec<KnxTelegram>> {
+    let filter = if params.is_empty() {
+        None
+    } else {
+        Some(TelegramFilter {
+            source: params.get("source").cloned(),
+            destination: params.get("destination").cloned(),
+            telegram_type: params.get("type").cloned(),
+            dpt: params.get("dpt").cloned(),
+            search_text: params.get("search").cloned(),
+        })
+    };
+    let limit = params
+        .get("limit")
+        .and_then(|l| l.parse::<usize>().ok())
+        .unwrap_or(500);
+
+    let rec = state.recorder.read().await;
+    Json(rec.get_telegrams(filter.as_ref(), limit))
+}
+
+async fn handle_recorder_export(
+    State(state): State<AppState>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Response {
+    let format = params.get("format").map(|f| f.to_lowercase()).unwrap_or_else(|| "csv".to_string());
+    let rec = state.recorder.read().await;
+
+    if format == "xml" {
+        let content = rec.export_xml();
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/xml; charset=utf-8")
+            .header(header::CONTENT_DISPOSITION, "attachment; filename=\"busmonitor_export.xml\"")
+            .body(content.into())
+            .unwrap()
+    } else {
+        let content = rec.export_csv();
+        Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "text/csv; charset=utf-8")
+            .header(header::CONTENT_DISPOSITION, "attachment; filename=\"busmonitor_export.csv\"")
+            .body(content.into())
+            .unwrap()
+    }
+}
+
+async fn handle_recorder_import(
+    State(state): State<AppState>,
+    body: String,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match TelegramRecorder::import_csv(&body) {
+        Ok(telegrams) => {
+            let count = telegrams.len();
+            let mut rec = state.recorder.write().await;
+            for tlg in telegrams {
+                rec.record(tlg);
+            }
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "imported_count": count,
+                "message": format!("{} Telegramme erfolgreich importiert.", count)
+            })))
+        }
+        Err(err) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err })),
+        )),
+    }
+}
+
+// =========================================================================
+// Hardware Diagnostics Wizard Handlers
+// =========================================================================
+
+async fn handle_diag_collisions(State(state): State<AppState>) -> Json<Vec<AddressCollisionInfo>> {
+    Json(state.diagnostics.check_address_collisions().await)
+}
+
+async fn handle_diag_locate(
+    State(state): State<AppState>,
+    Json(req): Json<LocateDeviceRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match state
+        .diagnostics
+        .locate_device(&req.address, req.duration_secs.unwrap_or(5))
+        .await
+    {
+        Ok(msg) => Ok(Json(serde_json::json!({ "success": true, "message": msg }))),
+        Err(err) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err })),
+        )),
+    }
+}
+
+async fn handle_diag_program_serial(
+    State(state): State<AppState>,
+    Json(req): Json<ProgramBySerialRequest>,
+) -> Result<Json<ProgramAddressResult>, (StatusCode, Json<serde_json::Value>)> {
+    match state
+        .diagnostics
+        .program_individual_address_by_serial(&req.serial_number, &req.target_address)
+        .await
+    {
+        Ok(res) => Ok(Json(res)),
+        Err(err) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err })),
+        )),
+    }
+}
+
+// =========================================================================
+// Project Compare & Merge Handlers
+// =========================================================================
+
+async fn handle_project_compare(
+    State(state): State<AppState>,
+    Json(compare_proj): Json<Project>,
+) -> Json<ProjectDiff> {
+    let base = state.project.read().await;
+    Json(ProjectComparer::compare(&base, &compare_proj))
+}
+
+async fn handle_project_merge(
+    State(state): State<AppState>,
+    Json(req): Json<SelectiveMergeRequest>,
+) -> Result<Json<MergeSummary>, (StatusCode, Json<serde_json::Value>)> {
+    let compare_proj = match req.compare_project.as_ref() {
+        Some(p) => p.clone(),
+        None => {
+            if let Some(ref fname) = req.compare_project_filename {
+                let projects = state.storage.list_projects().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e }))))?;
+                let meta = projects.into_iter().find(|p| &p.filename == fname);
+                if let Some(m) = meta {
+                    match state.storage.load_project(&m.filename).await {
+                        Ok(p) => p,
+                        Err(e) => return Err((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": format!("Projekt konnte nicht geladen werden: {}", e) })))),
+                    }
+                } else {
+                    return Err((StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Vergleichsprojekt nicht gefunden" }))));
+                }
+            } else {
+                return Err((StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Kein Vergleichsprojekt übergeben" }))));
+            }
+        }
+    };
+
+    let mut base = state.project.write().await;
+    let summary = ProjectComparer::apply_merge(&mut base, &compare_proj, &req);
+    let cloned = base.clone();
+    drop(base);
+    auto_save_if_enabled(&state, &cloned).await;
+
+    Ok(Json(summary))
+}
+
+// =========================================================================
+// Topology Diagnostics Handler
+// =========================================================================
+
+async fn handle_topology_diagnostics(State(state): State<AppState>) -> Json<TopologyHealthReport> {
+    let proj = state.project.read().await;
+    Json(TopologyManager::diagnose_topology(&proj))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1961,7 +2198,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.10.1");
+        assert_eq!(res.0.version, "2026.10.2");
         assert_eq!(res.0.name, "knx-core");
     }
 
@@ -1989,6 +2226,7 @@ mod tests {
             catalog,
             programming,
             storage,
+            recorder: Arc::new(RwLock::new(TelegramRecorder::new(1000))),
         }
     }
 

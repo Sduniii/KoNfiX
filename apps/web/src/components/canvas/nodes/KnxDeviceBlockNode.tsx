@@ -85,7 +85,8 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
     e.stopPropagation()
     setIsFlashing(true)
     try {
-      await createProgrammingJob(device.id, 'Partial')
+      const verifyBefore = localStorage.getItem('konfix_verify_before_flash') === 'true'
+      await createProgrammingJob(device.id, verifyBefore ? 'Verify' : 'Partial')
     } catch (err: any) {
       alert(err.message || 'Fehler beim Starten des Programmier-Jobs')
     } finally {
@@ -334,7 +335,11 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
             onClick={handleQuickFlash}
             disabled={isFlashing}
             title="Gerät partiell flashen (GAs & Parameter übertragen)"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+            className={`p-1.5 rounded-lg transition-all disabled:opacity-50 ${
+              isFlashing
+                ? 'text-amber-400 bg-amber-500/20 border border-amber-500/50 shadow-[0_0_10px_rgba(251,191,36,0.3)] animate-pulse'
+                : 'text-slate-400 hover:text-amber-400 hover:bg-amber-500/10'
+            }`}
           >
             <Zap className={`w-3.5 h-3.5 ${isFlashing ? 'animate-bounce text-amber-400' : ''}`} />
           </button>

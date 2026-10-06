@@ -885,6 +885,8 @@ pub fn parse_tunnelling_request(buf: &[u8]) -> Option<(u8, u8, KnxTelegram)> {
         value_raw,
         value_formatted: value_fmt,
         telegram_type: tg_type.to_string(),
+        priority: Some("Normal".to_string()),
+        is_repeat: Some(false),
     };
 
     Some((channel_id, seq_counter, telegram))
@@ -1353,6 +1355,8 @@ impl KnxNetManager {
             value_raw: vec![],
             value_formatted: value_fmt,
             telegram_type: "Write (LIVE)".to_string(),
+            priority: Some("Normal".to_string()),
+            is_repeat: Some(false),
         };
 
         Ok(Some(telegram))

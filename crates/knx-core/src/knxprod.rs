@@ -458,6 +458,13 @@ fn clean_knx_template(text: &str) -> String {
     cleaned
 }
 
+#[derive(Clone, Default)]
+pub struct ParsedComObjectRef {
+    pub ref_id: String,
+    pub text: Option<String>,
+    pub function_text: Option<String>,
+}
+
 pub type ParsedAppProgram = (
     Vec<CommunicationObject>,
     Vec<DeviceParameter>,
@@ -478,6 +485,8 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
     let mut param_type_meta: HashMap<String, ParamTypeMeta> = HashMap::new();
     let mut pref_to_param: HashMap<String, String> = HashMap::new();
     let mut pref_to_access: HashMap<String, String> = HashMap::new();
+    let mut coref_to_co: HashMap<String, String> = HashMap::new();
+    let mut coref_map: HashMap<String, ParsedComObjectRef> = HashMap::new();
 
     let mut mask_version = None;
     let mut app_name = None;
@@ -664,6 +673,42 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             }
                         }
                     }
+                    "ComObjectRef" => {
+                        let mut cor_id = String::new();
+                        let mut cor_ref = String::new();
+                        let mut cor_text = None;
+                        let mut cor_func = None;
+                        for attr in e.attributes().flatten() {
+                            match attr.key.as_ref() {
+                                b"Id" => cor_id = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"RefId" => cor_ref = String::from_utf8_lossy(&attr.value).to_string(),
+                                b"Text" => {
+                                    let s = String::from_utf8_lossy(&attr.value).to_string();
+                                    if !s.is_empty() {
+                                        cor_text = Some(s);
+                                    }
+                                }
+                                b"FunctionText" => {
+                                    let s = String::from_utf8_lossy(&attr.value).to_string();
+                                    if !s.is_empty() {
+                                        cor_func = Some(s);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        if !cor_id.is_empty() && !cor_ref.is_empty() {
+                            coref_to_co.insert(cor_id.clone(), cor_ref.clone());
+                            coref_map.insert(
+                                cor_id,
+                                ParsedComObjectRef {
+                                    ref_id: cor_ref,
+                                    text: cor_text,
+                                    function_text: cor_func,
+                                },
+                            );
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -717,6 +762,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
             flags: ComObjectFlags::default(),
             group_address_ids: vec![],
             group_addresses: vec![],
+            depends_on: None,
         };
 
         for attr in e.attributes().flatten() {
@@ -748,6 +794,102 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
             Some(co)
         } else {
             None
+        }
+    };
+
+    let handle_com_object_ref_ref = |e: &quick_xml::events::BytesStart,
+                                     cos: &mut Vec<CommunicationObject>,
+                                     coref_map: &HashMap<String, ParsedComObjectRef>,
+                                     coref_to_co: &HashMap<String, String>,
+                                     de_trans: &HashMap<String, HashMap<String, String>>,
+                                     choose_stack: &[(String, Option<String>)]| {
+        let mut corref_id = String::new();
+        for attr in e.attributes().flatten() {
+            if attr.key.as_ref() == b"RefId" {
+                corref_id = String::from_utf8_lossy(&attr.value).to_string();
+            }
+        }
+        if corref_id.is_empty() {
+            return;
+        }
+
+        let target_co_id = coref_to_co.get(&corref_id).cloned().unwrap_or_else(|| {
+            if let Some(pos) = corref_id.rfind("_R-") {
+                corref_id[..pos].to_string()
+            } else {
+                corref_id.clone()
+            }
+        });
+
+        let active_conditions: Vec<ParameterCondition> = choose_stack
+            .iter()
+            .filter_map(|(pid, val_opt)| {
+                val_opt.as_ref().map(|v| ParameterCondition {
+                    param_id: pid.clone(),
+                    when_values: vec![v.clone()],
+                })
+            })
+            .collect();
+
+        if let Some(co) = cos.iter_mut().find(|c| c.id == target_co_id || c.id == corref_id) {
+            if let Some(txt) = de_trans.get(&corref_id).and_then(|m| m.get("Text")) {
+                let clean = clean_knx_template(txt);
+                if !clean.is_empty() {
+                    co.object_text = clean;
+                }
+            } else if let Some(cor) = coref_map.get(&corref_id) {
+                if let Some(ref t) = cor.text {
+                    let clean = clean_knx_template(t);
+                    if !clean.is_empty() {
+                        co.object_text = clean;
+                    }
+                }
+            }
+
+            if let Some(ftxt) = de_trans.get(&corref_id).and_then(|m| m.get("FunctionText")) {
+                let clean = clean_knx_template(ftxt);
+                if !clean.is_empty() {
+                    co.function_text = clean;
+                }
+            } else if let Some(cor) = coref_map.get(&corref_id) {
+                if let Some(ref ft) = cor.function_text {
+                    let clean = clean_knx_template(ft);
+                    if !clean.is_empty() {
+                        co.function_text = clean;
+                    }
+                }
+            }
+
+            if !active_conditions.is_empty() {
+                if let Some(last_cond) = active_conditions.last() {
+                    if let Some(ref mut dep) = co.depends_on {
+                        if dep.param_id == last_cond.param_id {
+                            for v in &last_cond.when_values {
+                                if !dep.when_values.contains(v) {
+                                    dep.when_values.push(v.clone());
+                                }
+                            }
+                        }
+                        for ac in &active_conditions {
+                            if let Some(existing_cond) = dep.conditions.iter_mut().find(|c| c.param_id == ac.param_id) {
+                                for v in &ac.when_values {
+                                    if !existing_cond.when_values.contains(v) {
+                                        existing_cond.when_values.push(v.clone());
+                                    }
+                                }
+                            } else {
+                                dep.conditions.push(ac.clone());
+                            }
+                        }
+                    } else {
+                        co.depends_on = Some(ParameterDependency {
+                            param_id: last_cond.param_id.clone(),
+                            when_values: last_cond.when_values.clone(),
+                            conditions: active_conditions,
+                        });
+                    }
+                }
+            }
         }
     };
 
@@ -1188,6 +1330,9 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             params_map.insert(pid, p);
                         }
                     }
+                    "ComObjectRefRef" if in_dynamic => {
+                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &choose_stack);
+                    }
                     _ => {}
                 }
             }
@@ -1313,6 +1458,9 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             }
                             cos.push(co);
                         }
+                    }
+                    "ComObjectRefRef" if in_dynamic => {
+                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &choose_stack);
                     }
                     "Memory" => {
                         let mut m_offset = None;
@@ -1815,6 +1963,7 @@ impl CatalogManager {
                     flags: ComObjectFlags::default(),
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
                 CommunicationObject {
                     id: "AKD_1".to_string(),
@@ -1827,6 +1976,7 @@ impl CatalogManager {
                     flags: ComObjectFlags::default(),
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
                 CommunicationObject {
                     id: "AKD_2".to_string(),
@@ -1839,6 +1989,7 @@ impl CatalogManager {
                     flags: ComObjectFlags::default(),
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
                 CommunicationObject {
                     id: "AKD_3".to_string(),
@@ -1857,6 +2008,7 @@ impl CatalogManager {
                     },
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
             ],
             parameters: vec![
@@ -1949,6 +2101,7 @@ impl CatalogManager {
                     },
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
                 CommunicationObject {
                     id: "GT_1".to_string(),
@@ -1967,6 +2120,7 @@ impl CatalogManager {
                     },
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
             ],
             parameters: vec![
@@ -2217,6 +2371,9 @@ impl CatalogManager {
                 if existing_ko.object_size.is_empty() {
                     existing_ko.object_size = cat_ko.object_size.clone();
                 }
+                if existing_ko.depends_on.is_none() {
+                    existing_ko.depends_on = cat_ko.depends_on.clone();
+                }
             } else {
                 device.communication_objects.push(cat_ko.clone());
             }
@@ -2246,6 +2403,10 @@ impl CatalogManager {
         device.parameters = enriched_params;
         if !catalog_prod.assign_rules.is_empty() {
             device.assign_rules = catalog_prod.assign_rules.clone();
+        }
+
+        if device.visible_ko_numbers.is_empty() {
+            device.visible_ko_numbers = crate::model::calculate_active_ko_numbers(device);
         }
     }
 
@@ -2368,7 +2529,7 @@ impl CatalogManager {
             .map(|s| s.to_string())
             .unwrap_or_else(|| product.name.clone());
 
-        Ok(KnxDevice {
+        let mut dev = KnxDevice {
             id: dev_id,
             individual_address: individual_address.to_string(),
             manufacturer: product.manufacturer.clone(),
@@ -2390,7 +2551,9 @@ impl CatalogManager {
             loaded_image: None,
             checksums: None,
             ..Default::default()
-        })
+        };
+        dev.visible_ko_numbers = crate::model::calculate_active_ko_numbers(&dev);
+        Ok(dev)
     }
 }
 
@@ -2489,6 +2652,7 @@ mod tests {
                     flags: ComObjectFlags::default(),
                     group_address_ids: vec![],
                     group_addresses: vec![],
+                    depends_on: None,
                 },
             ],
             parameters: vec![
@@ -2546,6 +2710,7 @@ mod tests {
                     flags: ComObjectFlags::default(),
                     group_address_ids: vec![ga_uuid],
                     group_addresses: vec!["1/1/1".to_string()],
+                    depends_on: None,
                 },
             ],
             parameters: vec![
@@ -2745,6 +2910,95 @@ mod tests {
         assert_eq!(cos[0].object_text, "Schaltaktor");
         assert_eq!(cos[0].function_text, "Schalten");
         assert_eq!(cos[0].dpt, "1.001");
+    }
+
+    #[test]
+    fn test_dynamic_com_object_ref_ref() {
+        let xml = r#"<?xml version="1.0" encoding="utf-8"?>
+<KNX xmlns="http://knx.org/xml/project/23">
+  <ManufacturerData>
+    <Manufacturer RefId="M-0002">
+      <ApplicationPrograms>
+        <ApplicationProgram Id="M-0002_A-TEST" Name="Dynamic KO Test" ApplicationNumber="1" ApplicationVersion="1" ProgramVersion="1.0" MaskVersion="MV-07B0">
+          <Static>
+            <Parameters>
+              <Parameter Id="M-0002_A-TEST_P-MODE" Name="ChannelMode" ParameterType="PT-1" Value="1" />
+            </Parameters>
+            <ParameterTypes>
+              <ParameterType Id="PT-1">
+                <TypeRestriction Base="Value" SizeInBit="8" />
+              </ParameterType>
+            </ParameterTypes>
+            <ParameterRefs>
+              <ParameterRef Id="M-0002_A-TEST_P-MODE_R" RefId="M-0002_A-TEST_P-MODE" />
+            </ParameterRefs>
+            <ComObjectTable>
+              <ComObject Id="M-0002_A-TEST_O-1" Number="0" Name="Switch_KO" Text="Kanal A" FunctionText="Schalten" ObjectSize="1 Bit" DatapointType="DPST-1-1" />
+              <ComObject Id="M-0002_A-TEST_O-2" Number="1" Name="Blind_KO" Text="Kanal A" FunctionText="Auf/Ab" ObjectSize="1 Bit" DatapointType="DPST-1-8" />
+            </ComObjectTable>
+            <ComObjectRefs>
+              <ComObjectRef Id="M-0002_A-TEST_O-1_R" RefId="M-0002_A-TEST_O-1" Text="Kanal A Schalten" />
+              <ComObjectRef Id="M-0002_A-TEST_O-2_R" RefId="M-0002_A-TEST_O-2" Text="Kanal A Jalousie" />
+            </ComObjectRefs>
+          </Static>
+          <Dynamic>
+            <Channel Id="M-0002_A-TEST_CH-1" Name="Kanal A">
+              <choose ParamRefId="M-0002_A-TEST_P-MODE_R">
+                <when test="1">
+                  <ComObjectRefRef RefId="M-0002_A-TEST_O-1_R" />
+                </when>
+                <when test="2">
+                  <ComObjectRefRef RefId="M-0002_A-TEST_O-2_R" />
+                </when>
+              </choose>
+            </Channel>
+          </Dynamic>
+        </ApplicationProgram>
+      </ApplicationPrograms>
+    </Manufacturer>
+  </ManufacturerData>
+</KNX>"#;
+
+        let (cos, params, _, _, _, _) = parse_app_program_xml(xml);
+        assert_eq!(cos.len(), 2);
+
+        // Verify O-1 has dependency on P-MODE == "1"
+        let ko1 = cos.iter().find(|c| c.number == 0).expect("KO 0 must exist");
+        assert_eq!(ko1.object_text, "Kanal A Schalten");
+        assert!(ko1.depends_on.is_some(), "KO 0 must have depends_on");
+        let dep1 = ko1.depends_on.as_ref().unwrap();
+        assert_eq!(dep1.when_values, vec!["1"]);
+
+        // Verify O-2 has dependency on P-MODE == "2"
+        let ko2 = cos.iter().find(|c| c.number == 1).expect("KO 1 must exist");
+        assert_eq!(ko2.object_text, "Kanal A Jalousie");
+        assert!(ko2.depends_on.is_some(), "KO 1 must have depends_on");
+        let dep2 = ko2.depends_on.as_ref().unwrap();
+        assert_eq!(dep2.when_values, vec!["2"]);
+
+        // Test calculate_active_ko_numbers
+        let mut dev = KnxDevice {
+            id: Uuid::new_v4(),
+            individual_address: "1.1.1".to_string(),
+            communication_objects: cos.clone(),
+            parameters: params.clone(),
+            ..Default::default()
+        };
+
+        // When mode is "1": only KO 0 is active
+        dev.parameters[0].value = "1".to_string();
+        let active = crate::model::calculate_active_ko_numbers(&dev);
+        assert_eq!(active, vec![0]);
+
+        // When mode is "2": only KO 1 is active
+        dev.parameters[0].value = "2".to_string();
+        let active2 = crate::model::calculate_active_ko_numbers(&dev);
+        assert_eq!(active2, vec![1]);
+
+        // When mode is "3": neither is active
+        dev.parameters[0].value = "3".to_string();
+        let active3 = crate::model::calculate_active_ko_numbers(&dev);
+        assert!(active3.is_empty());
     }
 }
 

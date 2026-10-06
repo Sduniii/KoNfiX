@@ -1,3 +1,5 @@
+import type { LineCouplerFilterMode, KnxMediumType, TopologyValidationIssue } from './topology'
+
 export type DptType =
   | '1.001'
   | '1.005'
@@ -71,6 +73,7 @@ export interface CommunicationObject {
   flags: ComObjectFlags
   group_addresses: string[]
   group_address_ids: string[]
+  depends_on?: ParameterDependency | null
 }
 
 export interface ParameterOption {
@@ -400,5 +403,169 @@ export interface DeviceLiveStateResult {
   diff_count: number
   diff_details: string[]
   message: string
+}
+
+// =========================================================================
+// Bus Monitor & Recorder Types
+// =========================================================================
+
+export interface BusStatistics {
+  total_telegrams: number
+  telegrams_per_sec: number
+  bus_load_percent: number
+  write_count: number
+  read_count: number
+  response_count: number
+  priority_system: number
+  priority_alarm: number
+  priority_normal: number
+  priority_low: number
+  top_senders: [string, number][]
+  top_destinations: [string, number][]
+}
+
+export interface TelegramFilter {
+  source?: string
+  destination?: string
+  telegram_type?: string
+  dpt?: string
+  search_text?: string
+}
+
+// =========================================================================
+// Hardware Diagnostics Wizard Types
+// =========================================================================
+
+export interface AddressCollisionInfo {
+  address: string
+  count: number
+  device_names: string[]
+  is_bus_collision: boolean
+}
+
+export interface ProgramBySerialRequest {
+  serial_number: string
+  target_address: string
+}
+
+export interface LocateDeviceRequest {
+  address: string
+  duration_secs?: number
+}
+
+// =========================================================================
+// Project Compare & Diff Types
+// =========================================================================
+
+export type DiffStatus = 'Added' | 'Deleted' | 'Modified' | 'Unchanged'
+
+export interface DeviceDiff {
+  individual_address: string
+  name_base?: string | null
+  name_compare?: string | null
+  model_base?: string | null
+  model_compare?: string | null
+  status: DiffStatus
+}
+
+export interface GaDiff {
+  address: string
+  name_base?: string | null
+  name_compare?: string | null
+  dpt_base?: string | null
+  dpt_compare?: string | null
+  status: DiffStatus
+}
+
+export interface ParameterDiff {
+  device_address: string
+  device_name: string
+  param_id: string
+  param_name: string
+  value_base?: string | null
+  value_compare?: string | null
+}
+
+export interface KoLinkDiff {
+  device_address: string
+  device_name: string
+  ko_number: number
+  ko_name: string
+  gas_base: string[]
+  gas_compare: string[]
+}
+
+export interface ProjectDiff {
+  base_project_name: string
+  compare_project_name: string
+  total_differences: number
+  devices: DeviceDiff[]
+  group_addresses: GaDiff[]
+  parameters: ParameterDiff[]
+  ko_links: KoLinkDiff[]
+}
+
+export interface ParameterMergeItem {
+  device_address: string
+  param_id: string
+  value: string
+}
+
+export interface KoLinkMergeItem {
+  device_address: string
+  ko_number: number
+  gas: string[]
+}
+
+export interface SelectiveMergeRequest {
+  compare_project?: Project | null
+  compare_project_filename?: string | null
+  merge_gas: string[]
+  merge_devices: string[]
+  merge_parameters: ParameterMergeItem[]
+  merge_ko_links: KoLinkMergeItem[]
+  merge_all: boolean
+}
+
+export interface MergeSummary {
+  gas_merged: number
+  devices_merged: number
+  parameters_merged: number
+  ko_links_merged: number
+  message: string
+}
+
+// =========================================================================
+// Topology Diagnostics Types
+// =========================================================================
+
+export interface CouplerDiagnosticInfo {
+  coupler_address: string
+  line_address: string
+  is_configured: boolean
+  filter_mode: LineCouplerFilterMode
+  forwarded_gas_count: number
+  blocked_gas_count: number
+  blocked_cross_line_gas: string[]
+}
+
+export interface LineBandwidthInfo {
+  line_address: string
+  medium: KnxMediumType
+  device_count: number
+  total_kos: number
+  estimated_load_percent: number
+  status: 'Optimal' | 'Normal' | 'Hoch' | string
+}
+
+export interface TopologyHealthReport {
+  health_score: number
+  total_areas: number
+  total_lines: number
+  total_couplers: number
+  couplers: CouplerDiagnosticInfo[]
+  lines: LineBandwidthInfo[]
+  isolated_devices: string[]
+  issues: TopologyValidationIssue[]
 }
 

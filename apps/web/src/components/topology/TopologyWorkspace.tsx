@@ -28,11 +28,16 @@ import {
   ExternalLink,
   HelpCircle,
   Zap,
+  Activity,
+  HeartPulse,
 } from 'lucide-react'
 import {
   Project,
   KnxDevice,
   GroupAddress,
+  TopologyHealthReport,
+  CouplerDiagnosticInfo,
+  LineBandwidthInfo,
 } from '../../types/knx'
 import {
   ProjectTopology,
@@ -54,6 +59,7 @@ import {
   moveDeviceToLine,
   validateTopology,
   flashFilterTable,
+  fetchTopologyDiagnostics,
 } from '../../services/api'
 import { useTranslation } from '../../i18n/I18nContext'
 
@@ -82,8 +88,12 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
   const [loadingFilter, setLoadingFilter] = useState<boolean>(false)
   const [filterSearch, setFilterSearch] = useState<string>('')
   const [filterTab, setFilterTab] = useState<'all' | 'forward' | 'block' | 'manual'>('all')
-  const [activeMainTab, setActiveMainTab] = useState<'filter' | 'devices' | 'coupler'>('filter')
+  const [activeMainTab, setActiveMainTab] = useState<'filter' | 'devices' | 'coupler' | 'diagnostics'>('filter')
   const [showHexBitmap, setShowHexBitmap] = useState<boolean>(false)
+
+  // Topology Health & Coupler Diagnostics State
+  const [healthReport, setHealthReport] = useState<TopologyHealthReport | null>(null)
+  const [loadingHealth, setLoadingHealth] = useState<boolean>(false)
 
   // Area / Line Modals
   const [isAddAreaOpen, setIsAddAreaOpen] = useState<boolean>(false)
@@ -120,10 +130,17 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
   // Load Topology
   const loadTopologyData = useCallback(async () => {
     setLoading(true)
+    setLoadingHealth(true)
     try {
-      const res = await fetchTopology()
+      const [res, diagReport] = await Promise.all([
+        fetchTopology(),
+        fetchTopologyDiagnostics().catch(() => null),
+      ])
       setTopology(res.topology)
       setIssues(res.issues || [])
+      if (diagReport) {
+        setHealthReport(diagReport)
+      }
       // Select first line if none selected
       if (!selectedLineId && res.topology.areas.length > 0) {
         const firstArea = res.topology.areas[0]
@@ -135,6 +152,7 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
       console.error('Fehler beim Laden der Topologie:', err)
     } finally {
       setLoading(false)
+      setLoadingHealth(false)
     }
   }, [selectedLineId])
 
@@ -661,6 +679,29 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
                   <Cpu className="w-4 h-4" />
                   <span>Geräte auf dieser Linie ({lineDevices.length})</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveMainTab('diagnostics')}
+                  className={`py-3 border-b-2 flex items-center gap-2 transition-colors ${
+                    activeMainTab === 'diagnostics'
+                      ? 'border-amber-400 text-amber-400'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Topologie-Integrität & Koppler-Health</span>
+                  {healthReport && (
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      healthReport.health_score >= 90
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : healthReport.health_score >= 70
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}>
+                      {healthReport.health_score}% Score
+                    </span>
+                  )}
+                </button>
               </div>
 
               {/* Bitmask Download / Inspection Button */}
@@ -1049,6 +1090,307 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
                     </table>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* TAB 3: Topology Health & Coupler Diagnostics View */}
+            {activeMainTab === 'diagnostics' && (
+              <div className="flex-1 flex flex-col overflow-y-auto p-6 gap-6">
+                {/* Hero Header & Score */}
+                <div className="bg-gradient-to-r from-slate-900 to-slate-950 rounded-2xl border border-slate-800 p-6 flex flex-wrap items-center justify-between gap-6 shadow-xl">
+                  <div className="flex items-center gap-5">
+                    <div
+                      className={`w-18 h-18 rounded-2xl border flex flex-col items-center justify-center p-3 shadow-lg ${
+                        (healthReport?.health_score ?? 100) >= 90
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-950/40'
+                          : (healthReport?.health_score ?? 100) >= 70
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-amber-950/40'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-rose-950/40'
+                      }`}
+                    >
+                      <span className="text-2xl font-black font-mono leading-none">
+                        {healthReport?.health_score ?? 100}%
+                      </span>
+                      <span className="text-[10px] uppercase font-bold tracking-wider mt-1 opacity-80">
+                        Score
+                      </span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base font-bold text-slate-100">
+                          {(healthReport?.health_score ?? 100) >= 90
+                            ? 'Topologie-Integrität: Exzellent'
+                            : (healthReport?.health_score ?? 100) >= 70
+                            ? 'Topologie-Integrität: Optimierungsbedarf'
+                            : 'Topologie-Integrität: Kritische Warnungen'}
+                        </h2>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono">
+                          ETS-Topologie-Engine
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                        Automatische Prüfung der Linienkoppler-Filtertabellen auf Querverweis-Blockaden,
+                        Berechnung der theoretischen TP-Buslast und Erkennung isolierter KNX-Geräte.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={loadTopologyData}
+                      disabled={loadingHealth}
+                      className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700 transition-all cursor-pointer"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingHealth ? 'animate-spin' : ''}`} />
+                      <span>Neu analysieren</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* KPI Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4">
+                    <div className="text-[11px] text-slate-400 font-medium">Bereiche (Subnetze)</div>
+                    <div className="text-xl font-bold font-mono text-amber-400 mt-1">
+                      {healthReport?.total_areas ?? totalAreas}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4">
+                    <div className="text-[11px] text-slate-400 font-medium">KNX Linien</div>
+                    <div className="text-xl font-bold font-mono text-sky-400 mt-1">
+                      {healthReport?.total_lines ?? totalLines}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4">
+                    <div className="text-[11px] text-slate-400 font-medium">Linienkoppler</div>
+                    <div className="text-xl font-bold font-mono text-emerald-400 mt-1">
+                      {healthReport?.total_couplers ?? totalCouplers}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-4">
+                    <div className="text-[11px] text-slate-400 font-medium">Isolierte Geräte</div>
+                    <div className={`text-xl font-bold font-mono mt-1 ${
+                      (healthReport?.isolated_devices?.length ?? 0) > 0 ? 'text-rose-400' : 'text-slate-400'
+                    }`}>
+                      {healthReport?.isolated_devices?.length ?? 0}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coupler Health & Cross-Line Filter Validation */}
+                <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <ArrowLeftRight className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-sm font-bold text-slate-100">
+                        Linienkoppler-Filtertabellen & Querverweis-Prüfung
+                      </h3>
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">
+                      {healthReport?.couplers?.length ?? 0} Koppler analysiert
+                    </span>
+                  </div>
+
+                  {healthReport?.couplers && healthReport.couplers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {healthReport.couplers.map((c) => {
+                        const hasBlockedCrossLine = c.blocked_cross_line_gas.length > 0
+                        return (
+                          <div
+                            key={c.coupler_address}
+                            className={`rounded-xl border p-4 transition-all ${
+                              hasBlockedCrossLine
+                                ? 'bg-rose-950/20 border-rose-500/40 shadow-lg shadow-rose-950/20'
+                                : 'bg-slate-950/60 border-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-amber-400 text-sm">
+                                  {c.coupler_address}
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  (Linie {c.line_address})
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                  c.filter_mode === 'Filter'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : c.filter_mode === 'RouteAll'
+                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                }`}
+                              >
+                                {c.filter_mode}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-xs py-2 border-y border-slate-800/60">
+                              <div>
+                                <span className="text-slate-500 block text-[10px]">Weitergeleitet:</span>
+                                <span className="font-mono text-emerald-400 font-bold">
+                                  {c.forwarded_gas_count} GAs
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block text-[10px]">Gesperrt:</span>
+                                <span className="font-mono text-slate-400 font-bold">
+                                  {c.blocked_gas_count} GAs
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Blocked Cross-Line GAs Warning */}
+                            {hasBlockedCrossLine ? (
+                              <div className="mt-3 p-2.5 rounded-lg bg-rose-950/50 border border-rose-500/40 text-xs text-rose-200 space-y-1">
+                                <div className="font-bold flex items-center gap-1.5 text-rose-300">
+                                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                  <span>
+                                    {c.blocked_cross_line_gas.length} Querverweis-GA(s) fälschlich blockiert!
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-rose-200/80">
+                                  Diese Gruppenadressen sind über Koppler-Grenzen hinweg verdrahtet, werden jedoch nicht weitergeleitet:
+                                </div>
+                                <div className="flex flex-wrap gap-1 pt-1">
+                                  {c.blocked_cross_line_gas.map((ga) => (
+                                    <span
+                                      key={ga}
+                                      className="font-mono text-[10px] bg-rose-900/60 border border-rose-500/50 text-rose-200 px-1.5 py-0.5 rounded"
+                                    >
+                                      {ga}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-3 text-[11px] text-emerald-400/80 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                                <span>Alle linienübergreifenden GAs werden korrekt weitergeleitet.</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-slate-500 text-xs">
+                      Keine Linienkoppler in der Topologie konfiguriert (Einzellinien-System).
+                    </div>
+                  )}
+                </div>
+
+                {/* Line Bandwidth & Load Estimation */}
+                <div className="bg-slate-900/60 rounded-xl border border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Network className="w-4 h-4 text-sky-400" />
+                      <h3 className="text-sm font-bold text-slate-100">
+                        Linien-Bandbreiten & Lastanalyse (9600 Baud TP / IP)
+                      </h3>
+                    </div>
+                    <span className="text-xs text-slate-400 font-mono">
+                      TP-Frame-Modell (11 Bit/Byte + 50 Bit Pausen)
+                    </span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-950/80 border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        <tr>
+                          <th className="py-2.5 px-4">Linie</th>
+                          <th className="py-2.5 px-4">Medium</th>
+                          <th className="py-2.5 px-4">Geräte</th>
+                          <th className="py-2.5 px-4">KOs gesamt</th>
+                          <th className="py-2.5 px-4">Geschätzte Buslast</th>
+                          <th className="py-2.5 px-4 text-right">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-sans">
+                        {(healthReport?.lines ?? []).map((l) => (
+                          <tr key={l.line_address} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4 font-mono font-bold text-sky-400">
+                              Linie {l.line_address}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                {l.medium}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-200">
+                              {l.device_count} Geräte
+                            </td>
+                            <td className="py-3 px-4 font-mono text-slate-300">
+                              {l.total_kos} KOs
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-24 h-2 rounded-full bg-slate-950 border border-slate-800 overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all duration-300 ${
+                                      l.estimated_load_percent > 70
+                                        ? 'bg-rose-500'
+                                        : l.estimated_load_percent > 40
+                                        ? 'bg-amber-400'
+                                        : 'bg-emerald-400'
+                                    }`}
+                                    style={{ width: `${Math.min(100, Math.max(5, l.estimated_load_percent))}%` }}
+                                  />
+                                </div>
+                                <span className="font-mono text-slate-300 text-[11px]">
+                                  {l.estimated_load_percent.toFixed(1)}%
+                                </span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-right font-medium">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  l.status === 'Optimal'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : l.status === 'Normal'
+                                    ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                                    : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                }`}
+                              >
+                                {l.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Validation Issues / Isolated Devices List if any */}
+                {(healthReport?.issues?.length ?? 0) > 0 && (
+                  <div className="bg-rose-950/30 rounded-xl border border-rose-500/30 p-5 space-y-3">
+                    <div className="flex items-center gap-2 text-rose-300 text-sm font-bold">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>Gefundene Topologie-Konflikte & Warnungen ({healthReport?.issues.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {healthReport?.issues.map((issue, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-lg bg-slate-950/60 border border-rose-500/20 text-xs text-rose-200 flex items-start justify-between gap-3"
+                        >
+                          <div>
+                            <span className="font-semibold text-rose-300">
+                              {issue.line_address ? `Linie ${issue.line_address}` : issue.device_address ? `Gerät ${issue.device_address}` : 'Topologie'}:
+                            </span>{' '}
+                            <span>{issue.message}</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-rose-900/40 text-rose-300 border border-rose-500/30 shrink-0">
+                            {issue.severity || 'Warnung'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </main>

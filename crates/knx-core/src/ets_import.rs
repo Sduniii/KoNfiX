@@ -1876,6 +1876,7 @@ pub fn parse_ets_project_xml(
                                     flags: ComObjectFlags::default(),
                                     group_address_ids: vec![],
                                     group_addresses: vec![],
+                                    depends_on: None,
                                 };
                                 cos.push(new_co);
                                 cos.last_mut().unwrap()
