@@ -1020,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "knx-core"
-version = "2026.10.3"
+version = "2026.10.4"
 dependencies = [
  "aes 0.8.4",
  "axum",

@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.4] - 2026-10-12
+
+### changed
+- Bumb up version to 2026.10.4.
+
 ## [2026.10.3] - 2026-10-12 (Full Multilingual Parity: Dynamic Parameters & KOs, Complete UI Localization, Catalog YAML & Performance)
 
 ### Full UI & Parameter Internationalization (`i18n`, `knxprod.rs`, `RightSidebar.tsx`, `DeviceKoParamModal.tsx`)
