@@ -68,7 +68,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   onOpenDeviceKoModal,
   onOpenSecurityModal,
 }) => {
-  const { t } = useTranslation()
+  const { t, locale } = useTranslation()
   const [editingGaId, setEditingGaId] = useState<string | null>(null)
   const [editAddressInput, setEditAddressInput] = useState<string>('')
   const [editError, setEditError] = useState<string | null>(null)
@@ -272,11 +272,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           <Sliders className="w-3.5 h-3.5 text-emerald-400" />
           <span>
             {selectedBlock
-              ? 'Baustein-Eigenschaften'
+              ? t('inspector.blockProperties')
               : selectedChannelInfo
-              ? 'Kanal-Eigenschaften'
+              ? t('inspector.channelProperties')
               : selectedDevice
-              ? 'Geräte-Eigenschaften'
+              ? t('inspector.deviceProperties')
               : t('inspector.projectInspector')}
           </span>
         </div>
@@ -284,7 +284,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           <button
             onClick={() => onDeleteBlock(selectedBlock.id)}
             className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Baustein löschen"
+            title={t('inspector.deleteBlock')}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -301,7 +301,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               }
             }}
             className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Gerät löschen"
+            title={t('inspector.deleteDevice')}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -310,7 +310,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           <button
             onClick={() => onRemoveChannel(selectedChannelInfo.channel.id)}
             className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-            title="Kanal von Canvas entfernen"
+            title={t('inspector.removeFromCanvas')}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -323,11 +323,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {/* General Info */}
             <div className="space-y-3">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Allgemein
+                {t('sidebar.project')}
               </div>
               <div className="space-y-2 text-xs">
                 <div>
-                  <label className="text-slate-400 text-[11px] block mb-1">Baustein-Name</label>
+                  <label className="text-slate-400 text-[11px] block mb-1">{t('inspector.deviceName')}</label>
                   <input
                     type="text"
                     value={selectedBlock.name}
@@ -336,9 +336,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 text-[11px] block mb-1">Zugewiesener Raum</label>
+                  <label className="text-slate-400 text-[11px] block mb-1">{t('inspector.assignedRoom')}</label>
                   <div className="bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-300">
-                    {room ? room.name : 'Kein Raum (Global)'}
+                    {room ? room.name : t('inspector.noRoomAssigned')}
                   </div>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   Auto-GAs (KNX)
                 </span>
                 <span className="text-emerald-400 font-mono text-[10px]">
-                  {blockGas.length} zugewiesen
+                  {blockGas.length} {t('sidebar.autoGaGas')}
                 </span>
               </div>
 
@@ -406,11 +406,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </span>
                             {ga.is_custom ? (
                               <span className="flex items-center gap-0.5 text-[9px] font-sans font-semibold text-amber-400 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/30">
-                                <Lock className="w-2.5 h-2.5" /> Fixiert
+                                <Lock className="w-2.5 h-2.5" /> {t('inspector.gaFixed')}
                               </span>
                             ) : (
                               <span className="flex items-center gap-0.5 text-[9px] font-sans text-emerald-400/80 bg-emerald-500/10 px-1 py-0.2 rounded">
-                                <Sparkles className="w-2.5 h-2.5" /> Auto
+                                <Sparkles className="w-2.5 h-2.5" /> {t('inspector.gaAuto')}
                               </span>
                             )}
                           </div>
@@ -425,7 +425,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                               <button
                                 onClick={() => handleStartEditGa(ga)}
                                 className="p-0.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-                                title="Gruppenadresse manuell anpassen"
+                                title={t('inspector.editGaTooltip')}
                               >
                                 <Edit2 className="w-3 h-3" />
                               </button>
@@ -433,7 +433,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 <button
                                   onClick={() => handleResetGaToAuto(ga)}
                                   className="p-0.5 rounded text-amber-400 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                                  title="Auf Auto-Routing zurücksetzen"
+                                  title={t('inspector.resetGaAutoTooltip')}
                                 >
                                   <Unlock className="w-3 h-3" />
                                 </button>
@@ -526,30 +526,30 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Hardware-Kanal (Klemme)
+                {t('inspector.channelProperties')}
               </div>
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2 text-xs">
                 <div>
-                  <label className="text-slate-400 text-[11px] block mb-1">Kanal-Bezeichnung</label>
+                  <label className="text-slate-400 text-[11px] block mb-1">{t('inspector.channelName')}</label>
                   <div className="font-semibold text-slate-200">{selectedChannelInfo.channel.name}</div>
                 </div>
                 <div className="flex justify-between border-t border-slate-800/80 pt-2">
-                  <span className="text-slate-400">Kanal-Code:</span>
+                  <span className="text-slate-400">{t('inspector.channelCode')}:</span>
                   <span className="font-mono text-sky-400 font-bold bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/40">
                     {selectedChannelInfo.channel.channel_code}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Kanal-Typ:</span>
+                  <span className="text-slate-400">{t('inspector.channelType')}:</span>
                   <span className="text-slate-300 font-mono">{selectedChannelInfo.channel.channel_type}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Raum:</span>
-                  <span className="text-slate-200 font-medium">{room ? room.name : 'Kein Raum (Global)'}</span>
+                  <span className="text-slate-400">{t('rooms.title')}:</span>
+                  <span className="text-slate-200 font-medium">{room ? room.name : t('inspector.noRoomAssigned')}</span>
                 </div>
                 {selectedChannelInfo.channel.position && (
                   <div className="flex justify-between border-t border-slate-800/80 pt-2">
-                    <span className="text-slate-400">Position (X, Y):</span>
+                    <span className="text-slate-400">{t('inspector.positionLabel')}</span>
                     <span className="text-slate-300 font-mono">
                       {Math.round(selectedChannelInfo.channel.position.x)}, {Math.round(selectedChannelInfo.channel.position.y)}
                     </span>
@@ -561,22 +561,22 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {/* Parent Hardware Device Info */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Zugehöriges KNX-Gerät
+                {t('inspector.deviceDetails')}
               </div>
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2 text-xs">
                 <div className="font-semibold text-slate-200">{selectedChannelInfo.device.name}</div>
                 <div className="flex justify-between border-t border-slate-800/80 pt-2">
-                  <span className="text-slate-400">Phys. Adresse:</span>
+                  <span className="text-slate-400">{t('inspector.physicalAddress')}:</span>
                   <span className="font-mono text-emerald-400 font-bold bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/40">
                     {selectedChannelInfo.device.individual_address}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Hersteller:</span>
+                  <span className="text-slate-400">{t('inspector.manufacturer')}:</span>
                   <span className="text-slate-300">{selectedChannelInfo.device.manufacturer}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Modell:</span>
+                  <span className="text-slate-400">{t('inspector.orderNumber')}:</span>
                   <span className="text-slate-300 font-mono">{selectedChannelInfo.device.model}</span>
                 </div>
                 {onOpenDiagnostics && (
@@ -586,7 +586,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     className="w-full mt-2 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 text-[11px] font-medium transition-colors"
                   >
                     <Activity className="w-3 h-3 text-sky-400" />
-                    <span>In ETS-Diagnose prüfen</span>
+                    <span>{t('inspector.checkInDiagnosticsBtn')}</span>
                   </button>
                 )}
               </div>
@@ -595,7 +595,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {/* Linked Group Address */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Verknüpfte KNX Gruppenadresse
+                {t('inspector.groupAddresses')}
               </div>
               {channelGa ? (
                 <div className="p-3 rounded-xl border border-emerald-800/60 bg-emerald-950/20 space-y-1.5 text-xs">
@@ -611,7 +611,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 </div>
               ) : (
                 <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 text-xs text-slate-400 italic">
-                  Noch keine Gruppenadresse verdrahtet. Ziehe eine Verbindungslinie zwischen Klemme und Funktionsbaustein.
+                  {t('inspector.noGaWired')}
                 </div>
               )}
             </div>
@@ -622,38 +622,77 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {/* Device Basic Info Card */}
             <div className="space-y-2">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Geräte-Information
+                {t('inspector.deviceInfo')}
               </div>
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2 text-xs">
                 <div>
-                  <label className="text-slate-400 text-[11px] block mb-1">Gerätename</label>
+                  <label className="text-slate-400 text-[11px] block mb-1">{t('inspector.deviceName')}</label>
                   <div className="font-semibold text-slate-200">{selectedDevice.name}</div>
                 </div>
-                <div className="flex justify-between border-t border-slate-800/80 pt-2">
-                  <span className="text-slate-400">Phys. Adresse:</span>
-                  <span className="font-mono text-sky-400 font-bold bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/40">
-                    {selectedDevice.individual_address}
-                  </span>
+                <div className="flex justify-between border-t border-slate-800/80 pt-2 items-center">
+                  <span className="text-slate-400">{t('inspector.physicalAddress')}:</span>
+                  {(!selectedDevice.individual_address || selectedDevice.individual_address === '-.-.-' || selectedDevice.individual_address.trim() === '') ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-red-300 font-bold bg-red-950/80 px-1.5 py-0.5 rounded border border-red-700 animate-pulse text-[11px]">
+                        {t('inspector.missingAddressBadge')}
+                      </span>
+                      {onUpdateDevice && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Find lowest free number in project
+                            const occupied = new Set<number>()
+                            project?.devices.forEach((d) => {
+                              const p = d.individual_address.split('.')
+                              if (p.length === 3 && p[0] === '1' && p[1] === '1') {
+                                const n = parseInt(p[2], 10)
+                                if (!isNaN(n)) occupied.add(n)
+                              }
+                            })
+                            let freeNum = 1
+                            for (let i = 1; i <= 255; i++) {
+                              if (!occupied.has(i)) {
+                                freeNum = i
+                                break
+                              }
+                            }
+                            onUpdateDevice({
+                              ...selectedDevice,
+                              individual_address: `1.1.${freeNum}`,
+                            })
+                          }}
+                          className="text-[10px] bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded font-semibold transition-colors"
+                          title="Automatisch nächste freie Adresse in Linie 1.1 zuweisen"
+                        >
+                          {t('inspector.autoAddressBtn')}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="font-mono text-sky-400 font-bold bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/40">
+                      {selectedDevice.individual_address}
+                    </span>
+                  )}
                 </div>
                 {selectedDevice.security?.serial_number && (
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Seriennummer:</span>
+                    <span className="text-slate-400">{t('inspector.serialNumber')}</span>
                     <span className="font-mono text-emerald-400 font-semibold text-[10px] bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
                       {selectedDevice.security.serial_number}
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Hersteller:</span>
+                  <span className="text-slate-400">{t('inspector.manufacturer')}:</span>
                   <span className="text-slate-300">{selectedDevice.manufacturer}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Modell:</span>
+                  <span className="text-slate-400">{t('inspector.orderNumber')}:</span>
                   <span className="text-slate-300 font-mono">{selectedDevice.model}</span>
                 </div>
                 {selectedDevice.application_program && (
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Applikation:</span>
+                    <span className="text-slate-400">{t('inspector.applicationLabel')}</span>
                     <span className="text-slate-300 font-mono text-[10px] truncate max-w-[170px]" title={selectedDevice.application_program}>
                       {selectedDevice.application_program}
                     </span>
@@ -661,7 +700,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 )}
                 {selectedDevice.bus_current_ma && (
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Stromaufnahme:</span>
+                    <span className="text-slate-400">{t('inspector.currentDrawLabel')}</span>
                     <span className="text-slate-300 font-mono">{selectedDevice.bus_current_ma} mA</span>
                   </div>
                 )}
@@ -672,7 +711,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             <div className="p-3 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Bus-Synchronisation
+                  {t('inspector.busSyncTitle')}
                 </span>
                 {deviceDirty ? (
                   deviceDirty.is_dirty ? (
@@ -680,18 +719,18 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       type="button"
                       onClick={() => setShowDirtyReasons(!showDirtyReasons)}
                       className="text-[10px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
-                      title="Klicken, um die genauen Unterschiede zum Bus anzuzeigen"
+                      title={t('inspector.dirtyReasonBadge')}
                     >
-                      <span>Geändert (Flash nötig)</span>
+                      <span>{t('inspector.dirtyReasonBadge')}</span>
                       <Info className="w-3 h-3 text-amber-400" />
                     </button>
                   ) : (
                     <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Synchronisiert
+                      <CheckCircle2 className="w-3 h-3" /> {t('inspector.syncedStatusTitle')}
                     </span>
                   )
                 ) : (
-                  <span className="text-[10px] text-slate-500">Prüfe Status...</span>
+                  <span className="text-[10px] text-slate-500">{t('inspector.checkingStatus')}</span>
                 )}
               </div>
 
@@ -701,10 +740,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   <div className="flex items-center justify-between font-semibold text-amber-300">
                     <span className="flex items-center gap-1">
                       <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>Erkannte Änderungen zum Bus:</span>
+                      <span>{t('inspector.detectedBusDiffsTitle')}</span>
                     </span>
                     <span className="text-[10px] text-amber-400/80 font-mono">
-                      {deviceDirty.reasons?.length ?? 0} {deviceDirty.reasons?.length === 1 ? 'Eintrag' : 'Einträge'}
+                      {deviceDirty.reasons?.length ?? 0} {deviceDirty.reasons?.length === 1 ? t('inspector.diffEntrySingle') : t('inspector.diffEntryPlural')}
                     </span>
                   </div>
 
@@ -717,23 +756,23 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         </li>
                       ))
                     ) : (
-                      <li className="text-slate-400 italic">Keine näheren Details verfügbar.</li>
+                      <li className="text-slate-400 italic">{t('inspector.noDiffDetails')}</li>
                     )}
                   </ul>
 
                   <div className="pt-1.5 border-t border-amber-500/20 flex flex-col gap-1.5">
                     <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>Gerät bereits auf diesem Stand?</span>
+                      <span>{t('inspector.alreadyAtStateQuestion')}</span>
                     </div>
                     <button
                       type="button"
                       disabled={isMarkingSynced}
                       onClick={handleMarkSynced}
                       className="w-full py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-emerald-400 border border-emerald-500/30 text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors"
-                      title="Setzt den Snapshot auf den aktuellen Zustand, ohne Telegramme auf den Bus zu senden"
+                      title={t('inspector.markSyncedTooltip')}
                     >
                       <Check className="w-3.5 h-3.5" />
-                      <span>{isMarkingSynced ? 'Speichere...' : 'Als synchronisiert markieren'}</span>
+                      <span>{isMarkingSynced ? t('inspector.savingSynced') : t('inspector.markSyncedBtn')}</span>
                     </button>
                   </div>
                 </div>
@@ -746,10 +785,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   disabled={isReadingLive}
                   onClick={handleReadLiveState}
                   className="w-full py-1.5 px-2.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 active:bg-sky-500/30 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                  title="Fragt das physikalische Gerät live über den Bus ab (Device-Descriptor & Maske)"
+                  title={t('parameters.readLiveTooltip')}
                 >
                   <Activity className={`w-3.5 h-3.5 ${isReadingLive ? 'animate-spin' : ''}`} />
-                  <span>{isReadingLive ? 'Lese Gerät aus...' : 'Vom Gerät auslesen & vergleichen'}</span>
+                  <span>{isReadingLive ? t('inspector.readingLive') : t('inspector.readAndCompareLive')}</span>
                 </button>
               </div>
 
@@ -771,7 +810,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       ) : (
                         <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
                       )}
-                      <span>{liveResult.reachable ? 'Gerät online & erreichbar' : 'Gerät antwortet nicht'}</span>
+                      <span>{liveResult.reachable ? t('inspector.deviceOnlineReachable') : t('inspector.deviceNotResponding')}</span>
                     </span>
                     {liveResult.rtt_ms !== undefined && liveResult.rtt_ms !== null && (
                       <span className="font-mono text-[10px] text-slate-400">{liveResult.rtt_ms} ms</span>
@@ -780,7 +819,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                   {liveResult.mask_version && (
                     <div className="text-[10px] text-slate-300 flex justify-between bg-slate-900/60 px-1.5 py-0.5 rounded border border-slate-800">
-                      <span>Maskenversion:</span>
+                      <span>{t('inspector.maskVersionLabel')}</span>
                       <span className="font-mono font-semibold text-sky-400">{liveResult.mask_version}</span>
                     </div>
                   )}
@@ -792,7 +831,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   {liveResult.diff_details && liveResult.diff_details.length > 0 && (
                     <div className="pt-1.5 border-t border-amber-500/20 space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-semibold text-amber-300">
-                        <span>Abweichungen zum Projekt:</span>
+                        <span>{t('inspector.diffsToProjectLabel')}</span>
                         <span className="font-mono text-amber-400/80">{liveResult.diff_details.length}</span>
                       </div>
                       <ul className="space-y-1 max-h-32 overflow-y-auto pr-0.5 font-mono text-[10px] text-slate-300">
@@ -818,10 +857,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       onChange={(e) => handleToggleVerifyBeforeFlash(e.target.checked)}
                       className="rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer"
                     />
-                    <span className="text-[11px] font-medium">Vorher verifizieren (Dry-Run)</span>
+                    <span className="text-[11px] font-medium">{t('programming.verifyDryRun')}</span>
                   </label>
                   <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-1 py-0.2 rounded border border-slate-800">
-                    {verifyBeforeFlash ? '2-Stufig' : 'Direkt'}
+                    {verifyBeforeFlash ? t('programming.twoStageBadge') : t('programming.directBadge')}
                   </span>
                 </div>
 
@@ -849,10 +888,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       )}
                       <span>
                         {isStartingJob
-                          ? 'Starte...'
+                          ? t('programming.startingFlash')
                           : verifyBeforeFlash
-                          ? 'Prüfen & Flashen (2-Stufig)'
-                          : 'Partiell flashen (Smart)'}
+                          ? `${t('programming.verifyDryRun')} & Flash`
+                          : t('inspector.smartFlash')}
                       </span>
                     </button>
                     <button
@@ -877,7 +916,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     title="Führt einen gefahrlosen Soll-Ist-Speicherabgleich ohne Schreibbefehle durch (100% Lese-Modus)"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Trockenlauf / Prüfen (Dry-Run)</span>
+                    <span>{t('programming.verifyDryRun')}</span>
                   </button>
 
                   {/* Dropdown for other flash actions */}
@@ -890,9 +929,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       >
                         <ShieldCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                         <div>
-                          <div className="font-semibold text-slate-100">Trockenlauf / Prüfen (Dry-Run)</div>
+                          <div className="font-semibold text-slate-100">{t('programming.verifyDryRun')}</div>
                           <div className="text-[10px] text-slate-400">
-                            100% Schreibschutz: Speicher auslesen & Diff prüfen
+                            {t('programming.verifyDryRunDesc')}
                           </div>
                         </div>
                       </button>
@@ -903,9 +942,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       >
                         <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         <div>
-                          <div className="font-semibold text-slate-100">Partiell programmieren</div>
+                          <div className="font-semibold text-slate-100">{t('programming.partialProgramming')}</div>
                           <div className="text-[10px] text-slate-400">
-                            Nur geänderte GAs & Parameter schreiben
+                            {t('programming.partialProgrammingDesc')}
                           </div>
                         </div>
                       </button>
@@ -916,9 +955,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                         <div>
-                          <div className="font-semibold text-slate-100">Vollständig programmieren</div>
+                          <div className="font-semibold text-slate-100">{t('programming.fullProgramming')}</div>
                           <div className="text-[10px] text-slate-400">
-                            Alle Tabellen & Parameter überschreiben
+                            {t('programming.fullProgrammingDesc')}
                           </div>
                         </div>
                       </button>
@@ -930,10 +969,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         <Tag className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         <div>
                           <div className="font-semibold text-slate-100">
-                            Physikalische Adresse schreiben
+                            {t('programming.writePhysicalAddress')}
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            Schreibt {selectedDevice.individual_address} ins Gerät
+                            {t('programming.writePhysicalAddressDesc', { address: selectedDevice.individual_address })}
                           </div>
                         </div>
                       </button>
@@ -944,9 +983,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       >
                         <Play className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                         <div>
-                          <div className="font-semibold text-slate-100">Gerät neu starten</div>
+                          <div className="font-semibold text-slate-100">{t('inspector.restartDevice')}</div>
                           <div className="text-[10px] text-slate-400">
-                            Sendet A_Restart Telegramm
+                            {t('programming.restartDeviceDesc')}
                           </div>
                         </div>
                       </button>
@@ -974,7 +1013,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       <span>KNX Data Secure (TP)</span>
                     </div>
                     <span className="text-[10px] font-mono">
-                      {selectedDevice.security?.is_secure_enabled ? 'Aktiviert' : 'Inaktiv'}
+                      {selectedDevice.security?.is_secure_enabled ? t('inspector.secureActiveBadge') : t('inspector.secureInactiveBadge')}
                     </span>
                   </button>
                 )}
@@ -991,7 +1030,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
               >
                 <div className="flex items-center gap-2">
                   <Layers className="w-4 h-4 text-sky-400" />
-                  <span>KO- & Parametertabelle</span>
+                  <span>{t('inspector.koParamManagerBtn')}</span>
                 </div>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 bg-sky-950 rounded text-sky-300 border border-sky-800/60">
                   {(selectedDevice.communication_objects || []).length} KOs
@@ -1010,7 +1049,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Kanäle ({selectedDevice.channels.length})
+                {t('inspector.tabChannelsLabel')} ({selectedDevice.channels.length})
               </button>
               <button
                 type="button"
@@ -1021,7 +1060,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                KOs ({(selectedDevice.communication_objects || []).length})
+                {t('inspector.tabKosLabel')} ({(selectedDevice.communication_objects || []).length})
               </button>
               <button
                 type="button"
@@ -1032,7 +1071,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Param ({(selectedDevice.parameters || []).length})
+                {t('inspector.tabParamsLabel')} ({(selectedDevice.parameters || []).length})
               </button>
             </div>
 
@@ -1067,7 +1106,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                   <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
                   <input
                     type="text"
-                    placeholder="KOs filtern..."
+                    placeholder={t('inspector.filterKosPlaceholder')}
                     value={deviceKoSearch}
                     onChange={(e) => setDeviceKoSearch(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-sky-500"
@@ -1077,7 +1116,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1 text-xs">
                   {(!selectedDevice.communication_objects || selectedDevice.communication_objects.length === 0) ? (
                     <div className="p-3 text-center text-slate-500 text-xs italic">
-                      Keine Kommunikationsobjekte vorhanden.
+                      {t('inspector.noKosAvailable')}
                     </div>
                   ) : (
                     selectedDevice.communication_objects
@@ -1095,6 +1134,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       })
                       .map((ko) => {
                         const isLinking = linkingKoNum === ko.number
+                        const koObjText = (locale === 'en' && ko.object_text_en) ? ko.object_text_en : (ko.object_text || ko.name)
+                        const koFnText = (locale === 'en' && ko.function_text_en) ? ko.function_text_en : ko.function_text
+
                         return (
                           <div
                             key={ko.number}
@@ -1105,8 +1147,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 <span className="font-mono text-slate-400 font-bold">
                                   #{ko.number}
                                 </span>
-                                <span className="font-medium text-slate-200 truncate" title={ko.object_text || ko.name}>
-                                  {ko.object_text || ko.name}
+                                <span className="font-medium text-slate-200 truncate" title={koObjText}>
+                                  {koObjText}
                                 </span>
                               </div>
                               <span className="font-mono text-[10px] text-sky-400 bg-sky-950 px-1.5 py-0.5 rounded border border-sky-800/40 shrink-0">
@@ -1114,9 +1156,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                               </span>
                             </div>
 
-                            {ko.function_text && (
+                            {koFnText && (
                               <div className="text-[10px] text-slate-400 truncate">
-                                {ko.function_text}
+                                {koFnText}
                               </div>
                             )}
 
@@ -1156,7 +1198,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         }
                                       }}
                                       className="text-slate-500 hover:text-red-400"
-                                      title="Trennen"
+                                      title={t('inspector.unlinkTooltip')}
                                     >
                                       <X className="w-2.5 h-2.5" />
                                     </button>
@@ -1168,7 +1210,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     type="button"
                                     onClick={() => setLinkingKoNum(isLinking ? null : ko.number)}
                                     className="text-[9px] px-1 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5"
-                                    title="GA verknüpfen"
+                                    title={t('inspector.linkGaTooltip')}
                                   >
                                     <Plus className="w-2.5 h-2.5" />
                                     <span>GA</span>
@@ -1177,7 +1219,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                   {isLinking && (
                                     <div className="absolute right-0 bottom-full mb-1 w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-30 p-2 space-y-1">
                                       <div className="text-[10px] font-bold text-slate-300 px-1">
-                                        GA zuweisen:
+                                        {t('inspector.assignGaTitle')}
                                       </div>
                                       <div className="max-h-36 overflow-y-auto space-y-0.5">
                                         {(project?.group_addresses || []).map((ga) => (
@@ -1228,7 +1270,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
                     <input
                       type="text"
-                      placeholder="Parameter filtern..."
+                      placeholder={t('inspector.filterParamsPlaceholder')}
                       value={deviceParamSearch}
                       onChange={(e) => setDeviceParamSearch(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-2 py-1 text-[11px] text-slate-200 placeholder:text-slate-500 outline-none focus:border-emerald-500"
@@ -1251,17 +1293,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       }
                     }}
                     className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors shrink-0"
-                    title="Geänderte Parameter speichern"
+                    title={t('inspector.saveParamsBtn')}
                   >
                     <Save className="w-3 h-3" />
-                    <span>Speichern</span>
+                    <span>{isSavingParams ? t('inspector.savingParams') : t('inspector.saveParamsBtn')}</span>
                   </button>
                 </div>
 
                 <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1 text-xs">
                   {(!selectedDevice.parameters || selectedDevice.parameters.length === 0) ? (
                     <div className="p-3 text-center text-slate-500 text-xs italic">
-                      Keine Parameter vorhanden.
+                      {t('inspector.noParamsAvailable')}
                     </div>
                   ) : (
                     selectedDevice.parameters
@@ -1272,19 +1314,33 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                       .slice(0, 30)
                       .map((p) => {
                         const val = paramEdits[p.id] !== undefined ? paramEdits[p.id] : p.value
+                        const paramLabel = (locale === 'en' && p.text_en) ? p.text_en : (p.text || p.name)
+
                         return (
                           <div
                             key={p.id}
                             className="p-2 rounded-lg border border-slate-800 bg-slate-950/50 space-y-1 text-[11px]"
                           >
-                            <div className="flex items-center justify-between text-slate-300 font-medium truncate" title={p.text || p.name}>
-                              <span className="truncate">{p.text || p.name}</span>
+                            <div className="flex items-center justify-between text-slate-300 font-medium truncate" title={paramLabel}>
+                              <span className="truncate">{paramLabel}</span>
                               <span className="text-[10px] text-slate-500 font-mono shrink-0">
-                                Std: {p.default_value}
+                                {t('inspector.defaultValAbbr')}: {p.default_value}
                               </span>
                             </div>
 
-                            {p.options && p.options.length > 0 ? (
+                            {p.enum_options && p.enum_options.length > 0 ? (
+                              <select
+                                value={val}
+                                onChange={(e) => setParamEdits((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                                className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-slate-200 outline-none focus:border-emerald-500"
+                              >
+                                {p.enum_options.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {(locale === 'en' && opt.text_en) ? opt.text_en : opt.text}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : p.options && p.options.length > 0 ? (
                               <select
                                 value={val}
                                 onChange={(e) => setParamEdits((prev) => ({ ...prev, [p.id]: e.target.value }))}
@@ -1321,7 +1377,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 title="Öffnet die ETS-Diagnose und scannt/programmiert dieses Gerät"
               >
                 <Activity className="w-3.5 h-3.5 text-sky-400" />
-                <span>In ETS-Diagnose adressieren</span>
+                <span>{t('inspector.addressInDiagnosticsBtn')}</span>
               </button>
             )}
 
@@ -1341,7 +1397,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Gerät vollständig löschen</span>
+                <span>{t('inspector.fullDeleteDevice')}</span>
               </button>
             )}
           </div>

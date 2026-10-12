@@ -794,7 +794,9 @@ mod tests {
             number: 0,
             name: "Taste 1".to_string(),
             object_text: "Taste 1".to_string(),
+            object_text_en: None,
             function_text: "Schalten".to_string(),
+            function_text_en: None,
             dpt: "1.001".to_string(),
             object_size: "1 Bit".to_string(),
             flags: ComObjectFlags {

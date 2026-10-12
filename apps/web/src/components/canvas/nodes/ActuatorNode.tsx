@@ -13,7 +13,7 @@ interface ActuatorNodeProps {
   }
 }
 
-export const ActuatorNode: React.FC<ActuatorNodeProps> = ({ data }) => {
+export const ActuatorNodeComponent: React.FC<ActuatorNodeProps> = ({ data }) => {
   const { deviceAddress, channelCode, name, deviceName, channelType, gaAddress } = data
 
   return (
@@ -60,3 +60,5 @@ export const ActuatorNode: React.FC<ActuatorNodeProps> = ({ data }) => {
     </div>
   )
 }
+
+export const ActuatorNode = React.memo(ActuatorNodeComponent)

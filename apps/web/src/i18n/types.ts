@@ -38,6 +38,19 @@ export interface Translations {
     devices: string
     create: string
     groupAddresses: string
+    status: string
+    actions: string
+    active: string
+    inactive: string
+    type: string
+    name: string
+    value: string
+    room: string
+    channel: string
+    device: string
+    unknown: string
+    warning: string
+    info: string
   }
   header: {
     brandingSub: string
@@ -83,6 +96,18 @@ export interface Translations {
     gatewayDisconnected: string
     coreStatus: string
     language: string
+    switchOrNewDesc: string
+    storageConfigDesc: string
+    ets56CompatDesc: string
+    importProjectDesc: string
+    diffAndMerge: string
+    diffAndMergeDesc: string
+    etsParity: string
+    etsGaTableDesc: string
+    xmlStandardDesc: string
+    manageRoutingDesc: string
+    downloadBackupDesc: string
+    restoreBackupDesc: string
   }
   workspaces: {
     canvas: string
@@ -117,6 +142,8 @@ export interface Translations {
     devicesCount: string
     blocksCount: string
     buildingHierarchy: string
+    scrollLeftTooltip: string
+    scrollRightTooltip: string
   }
   sidebar: {
     tabRooms: string
@@ -139,6 +166,23 @@ export interface Translations {
     toolboxPortals: string
     toolboxScenes: string
     dragToCanvasHint: string
+    addDeviceButton: string
+    devicePoolTitle: string
+    devicePoolHint: string
+    devicesCount: string
+    toolboxLightingDesc: string
+    toolboxBlindsDesc: string
+    toolboxClimateDesc: string
+    toolboxLogicDesc: string
+    toolboxTimerDesc: string
+    toolboxThresholdDesc: string
+    toolboxPortalsDesc: string
+    toolboxScenesDesc: string
+    autoGaGas: string
+    deleteDeviceConfirm: string
+    clickToFocus: string
+    placedBadge: string
+    placeOnCanvasTooltip: string
   }
   inspector: {
     title: string
@@ -171,122 +215,186 @@ export interface Translations {
     deleteDevice: string
     removeFromCanvas: string
     blockParams: string
+    blockProperties: string
+    channelProperties: string
+    deviceProperties: string
+    deleteBlock: string
+    deleteChannel: string
+    deviceName: string
+    deviceInfo: string
+    missingAddressBadge: string
+    autoAddressBtn: string
+    noRoomAssigned: string
+    assignedRoom: string
+    channelCode: string
+    channelType: string
+    channelName: string
+    noDetails: string
+    restartDevice: string
+    fullDeleteDevice: string
+    flashReasonBadge: string
+    readAndCompareLive: string
+    readingLive: string
+    readLiveError: string
+    deviceOnlineReachable: string
+    deviceNotResponding: string
+    maskVersionLabel: string
+    diffsToProjectLabel: string
+    detectedBusDiffsTitle: string
+    diffEntrySingle: string
+    diffEntryPlural: string
+    noDiffDetails: string
+    alreadyAtStateQuestion: string
+    markSyncedBtn: string
+    savingSynced: string
+    markSyncedSuccess: string
+    secureActiveBadge: string
+    secureInactiveBadge: string
+    koParamManagerBtn: string
+    tabChannelsLabel: string
+    tabKosLabel: string
+    tabParamsLabel: string
+    filterKosPlaceholder: string
+    filterParamsPlaceholder: string
+    saveParamsBtn: string
+    savingParams: string
+    defaultValAbbr: string
+    addressInDiagnosticsBtn: string
+    checkInDiagnosticsBtn: string
+    noKosAvailable: string
+    noParamsAvailable: string
+    noChannelsAvailable: string
+    positionLabel: string
+    applicationLabel: string
+    currentDrawLabel: string
+    busSyncTitle: string
+    checkingStatus: string
+    gaFixed: string
+    gaAuto: string
+    editGaTooltip: string
+    resetGaAutoTooltip: string
+    serialNumber: string
+    noGaWired: string
+    assignGaTitle: string
+    unlinkTooltip: string
+    linkGaTooltip: string
   }
-  topology: {
-    title: string
-    areasAndLines: string
-    addArea: string
-    addLine: string
-    lineCoupler: string
-    filterTable: string
-    calculateFilter: string
-    exportFilterHex: string
-    programCoupler: string
-    modeFilter: string
-    modeRoute: string
-    modeBlock: string
-    couplerProperties: string
-    mainLine: string
-    subLine: string
-    devicesInLine: string
-    moveDevice: string
-  }
-  diagnostics: {
-    title: string
-    subtitle: string
-    lineScan: string
-    scanAll: string
-    scanLine: string
-    scanning: string
-    progModeScanner: string
-    progModeActiveDevices: string
-    flashAddress: string
-    newAddress: string
-    flashButton: string
-    readDeviceInfo: string
-    maskVersion: string
-    deviceDescriptor: string
-    matrixLegend: string
-    addressFree: string
-    addressOccupied: string
-    addressProgMode: string
-  }
-  catalog: {
-    title: string
-    searchPlaceholder: string
-    importKnxprod: string
-    importSuccess: string
-    filterManufacturer: string
-    allManufacturers: string
-    productsFound: string
-    addToRoom: string
-    selectTargetRoom: string
-    channelsCount: string
-    kosCount: string
-    paramsCount: string
-    previewKos: string
-    previewParams: string
-  }
-  parameters: {
-    title: string
-    tabsKos: string
-    tabsParams: string
-    flags: string
-    flagRead: string
-    flagWrite: string
-    flagTransmit: string
-    flagUpdate: string
-    flagComm: string
-    searchKos: string
-    searchParams: string
-    linkedGas: string
-    linkGa: string
-    unlinkGa: string
-    resetToDefault: string
-  }
-  storage: {
-    title: string
-    subtitle: string
-    openProjectTitle: string
-    openProjectSubtitle: string
-    newProject: string
-    newProjectPlaceholder: string
-    noProjectsFound: string
-    settingsTitle: string
-    settingsSubtitle: string
-    dataDirectory: string
-    dataDirectoryHint: string
-    migrateProjects: string
-    migrateProjectsDesc: string
-    tabFileSystem: string
-    tabMcp: string
-    dataDirLabel: string
-    defaultPathHint: string
-    migrateCheckbox: string
-    migrateHint: string
-    structureTitle: string
-    savePathButton: string
-    mcpBannerTitle: string
-    mcpBannerDesc: string
-    mcpToolsTitle: string
-    mcpConfigSnippetTitle: string
-    copyConfigButton: string
-  }
-  gateway: {
-    title: string
-    subtitle: string
-    statusConnected: string
-    statusDisconnected: string
-    ipLabel: string
-    portLabel: string
-    modeLabel: string
-    secureTunneling: string
-    plainTunneling: string
-    connect: string
-    disconnect: string
-    keyringFile: string
-    loadKeyring: string
-    selectTunnel: string
+  nodes: {
+    deviceBlock: {
+      missingAddress: string
+      missingAddressTooltip: string
+      compactMode: string
+      compactModeDesc: string
+      addPin: string
+      addPinTooltip: string
+      inputsTitle: string
+      outputsTitle: string
+      hidePin: string
+      quickFlashTooltip: string
+      openKoModalTooltip: string
+      allChannels: string
+      withGa: string
+      allActive: string
+      all: string
+      searchKoPlaceholder: string
+      channelLabel: string
+      addSelectedPins: string
+    }
+    actuator: {
+      channelTitle: string
+      loadInput: string
+      linkedGaTitle: string
+    }
+    channelTerminal: {
+      removeTooltip: string
+      buttonRocker: string
+      dimmerChannel: string
+      blindChannel: string
+      switchChannel: string
+      sensorChannel: string
+    }
+    light: {
+      blockTitle: string
+      brightness: string
+      on: string
+      off: string
+      toggleTooltip: string
+      deleteTooltip: string
+      presence: string
+    }
+    blind: {
+      blockTitle: string
+      opened: string
+      closed: string
+      shaded: string
+      upTooltip: string
+      downTooltip: string
+      stopTooltip: string
+      slat: string
+      inputs: string
+      outputs: string
+      moveUp: string
+      moveDown: string
+      stepStop: string
+      position: string
+      deleteTooltip: string
+    }
+    climate: {
+      blockTitle: string
+      currentTemp: string
+      targetTemp: string
+      valve: string
+      heating: string
+      cooling: string
+      mode: string
+      deleteTooltip: string
+    }
+    astro: {
+      blockTitle: string
+      windAlarm: string
+      shading: string
+      standby: string
+      sunPosition: string
+      azimuth: string
+      elevation: string
+      deleteTooltip: string
+      simulateStorm: string
+      stopSimulation: string
+      stormAlarmActive: string
+    }
+    logic: {
+      simulateInputs: string
+      truthTable: string
+      deleteTooltip: string
+    }
+    timer: {
+      blockTitle: string
+      weeklySchedule: string
+      timeWindows: string
+      deleteTooltip: string
+    }
+    threshold: {
+      blockTitle: string
+      threshold: string
+      hysteresis: string
+      deleteTooltip: string
+    }
+    staircase: {
+      blockTitle: string
+      duration: string
+      trigger: string
+      deleteTooltip: string
+    }
+    scene: {
+      blockTitle: string
+      activeScene: string
+      trigger: string
+      deleteTooltip: string
+    }
+    wire: {
+      deleteTooltip: string
+      gaLabelTooltip: string
+    }
   }
   monitor: {
     title: string
@@ -314,6 +422,270 @@ export interface Translations {
     dptCol: string
     testCol: string
     emptyLogMessage: string
+    busLoad: string
+    busLoadTooltip: string
+    telegramsPerSec: string
+    filterMatrixTitle: string
+    filterMatrixSourcePlaceholder: string
+    filterMatrixDestPlaceholder: string
+    allServices: string
+    writeService: string
+    readService: string
+    responseService: string
+    allDpts: string
+    resetFilter: string
+    hudTelegramsRate: string
+    hudServices: string
+    hudTopSenders: string
+    hudTopDestinations: string
+    noData: string
+    totalCount: string
+    copyGaToSender: string
+    recActiveTooltip: string
+    recInactiveTooltip: string
+  }
+  topology: {
+    title: string
+    areasAndLines: string
+    addArea: string
+    addLine: string
+    lineCoupler: string
+    filterTable: string
+    calculateFilter: string
+    exportFilterHex: string
+    programCoupler: string
+    modeFilter: string
+    modeRoute: string
+    modeBlock: string
+    couplerProperties: string
+    mainLine: string
+    subLine: string
+    devicesInLine: string
+    moveDevice: string
+    backToCanvas: string
+    areaLabel: string
+    lineLabel: string
+    topologyIssuesTitle: string
+    moreIssues: string
+    busLoadReduction: string
+    gasInProject: string
+    blockedBit: string
+    subLineAndExt: string
+    physAddressCol: string
+    deviceNameCol: string
+    reanalyzeBtn: string
+    areasCountLabel: string
+    linesCountLabel: string
+    couplersCountLabel: string
+    isolatedDevicesCountLabel: string
+  }
+  diagnostics: {
+    title: string
+    subtitle: string
+    lineScan: string
+    scanAll: string
+    scanLine: string
+    scanning: string
+    progModeScanner: string
+    progModeActiveDevices: string
+    flashAddress: string
+    newAddress: string
+    flashButton: string
+    readDeviceInfo: string
+    maskVersion: string
+    deviceDescriptor: string
+    matrixLegend: string
+    addressFree: string
+    addressOccupied: string
+    addressProgMode: string
+    lineLabel: string
+    areaLabel: string
+    stopScan: string
+    searchProgButtonTooltip: string
+    checkCollisionTooltip: string
+    programSelectedAddress: string
+    deviceInProject: string
+    unoccupied: string
+    noResponse: string
+    programToThisAddress: string
+    rereadDeviceInfo: string
+  }
+  catalog: {
+    title: string
+    searchPlaceholder: string
+    importKnxprod: string
+    importSuccess: string
+    filterManufacturer: string
+    allManufacturers: string
+    productsFound: string
+    addToRoom: string
+    selectTargetRoom: string
+    channelsCount: string
+    kosCount: string
+    paramsCount: string
+    previewKos: string
+    previewParams: string
+    tabKnxprodYaml: string
+    tabTemplates: string
+    tabCustom: string
+    localSaved: string
+    onlineCatalog: string
+    searchLocalPlaceholder: string
+    searchOnlinePlaceholder: string
+    loadDatabaseBtn: string
+    syncProjectBtn: string
+    syncProjectTooltip: string
+    noOnlineProductsFound: string
+    downloadAndSelect: string
+    noRoomCentral: string
+    addDeviceToProjectBtn: string
+    addTemplateToProjectBtn: string
+    addChannelBtn: string
+    newlyImportedBadge: string
+    unassignedLater: string
+    autoFillNextAddr: string
+    templateSearchPlaceholder: string
+    templateChannelsCount: string
+    templatePhysicalAddress: string
+    templateDeviceName: string
+    templateRoomSelect: string
+    templateAddBtn: string
+    customDeviceTitle: string
+    customDeviceName: string
+    customDeviceNamePlaceholder: string
+    customDeviceAddress: string
+    customDeviceManufacturer: string
+    customDeviceModel: string
+    customChannelsTitle: string
+    customAddChannelBtn: string
+    customCreateDeviceBtn: string
+  }
+  parameters: {
+    title: string
+    tabsKos: string
+    tabsParams: string
+    flags: string
+    flagRead: string
+    flagWrite: string
+    flagTransmit: string
+    flagUpdate: string
+    flagComm: string
+    searchKos: string
+    searchParams: string
+    linkedGas: string
+    linkGa: string
+    unlinkGa: string
+    resetToDefault: string
+    readLiveCompare: string
+    readingLive: string
+    readLiveTooltip: string
+    deviceSynced: string
+    deviceDiffFound: string
+    deviceUnreachable: string
+    channelsAndTerminals: string
+    noKosAvailable: string
+    channelAndParamPages: string
+    assignedRoomLabel: string
+    activeKosFilter: string
+    linkedKosFilter: string
+    allKosFilter: string
+    objectCol: string
+    functionCol: string
+    lengthDptCol: string
+    flagsCol: string
+    linkedGasCol: string
+    noKosMatchSearch: string
+    unsavedCount: string
+    allParamsFilter: string
+    onlyActiveParamsFilter: string
+    savedBtn: string
+    saveBtn: string
+    saveAndFlashBtn: string
+    flashingBtn: string
+    noActiveParamsTitle: string
+    noActiveParamsDesc: string
+    devModeTooltip: string
+    etsModeTooltip: string
+    saveAndFlashTooltip: string
+    connectedWith: string
+  }
+  storage: {
+    title: string
+    subtitle: string
+    openProjectTitle: string
+    openProjectSubtitle: string
+    reloadProject: string
+    newProject: string
+    newProjectPlaceholder: string
+    noProjectsFound: string
+    settingsTitle: string
+    settingsSubtitle: string
+    dataDirectory: string
+    dataDirectoryHint: string
+    migrateProjects: string
+    migrateProjectsDesc: string
+    tabFileSystem: string
+    tabMcp: string
+    dataDirLabel: string
+    defaultPathHint: string
+    migrateCheckbox: string
+    migrateHint: string
+    structureTitle: string
+    savePathButton: string
+    mcpBannerTitle: string
+    mcpBannerDesc: string
+    mcpToolsTitle: string
+    mcpConfigSnippetTitle: string
+    copyConfigButton: string
+    onlineDbUrlLabel: string
+    signingKeyLabel: string
+    removeSigningKey: string
+    hideKey: string
+    showKey: string
+  }
+  gateway: {
+    title: string
+    subtitle: string
+    statusConnected: string
+    statusDisconnected: string
+    ipLabel: string
+    portLabel: string
+    modeLabel: string
+    secureTunneling: string
+    plainTunneling: string
+    connect: string
+    disconnect: string
+    keyringFile: string
+    loadKeyring: string
+    selectTunnel: string
+    tunnelAddressCol: string
+    checkKeyring: string
+    tunnelAvailable: string
+    fromKeyring: string
+    deviceAuthOptional: string
+    liveBusSyncActive: string
+    connecting: string
+    checkingKeyring: string
+    scanningNetwork: string
+    scanNetwork: string
+    manualConnectTitle: string
+    manualConnectDesc: string
+    autoDiscoveryTitle: string
+    noGatewaysFound: string
+    protocolInfo: string
+    keyringInfoTitle: string
+    keyringInfoDesc: string
+    manualCredsTitle: string
+    manualCredsDesc: string
+    etsKeyringTab: string
+    manualCredsTab: string
+    channelIdCol: string
+    heartbeatCol: string
+    sentCount: string
+    receivedCount: string
+    tunnelUserId: string
+    tunnelPassword: string
+    deviceAuthKey: string
   }
   programming: {
     drawerTitle: string
@@ -327,6 +699,40 @@ export interface Translations {
     stepCompleted: string
     stepFailed: string
     logs: string
+    pressProgButtonAlert: string
+    fullyIdenticalSynced: string
+    transferNowBtn: string
+    projectTargetState: string
+    jobType: string
+    progressPercent: string
+    retryJob: string
+    cancelJob: string
+    verifying: string
+    verified: string
+    writing: string
+    success: string
+    failed: string
+    cancelled: string
+    queued: string
+    pressButtonHint: string
+    diffBytes: string
+    changedParams: string
+    showHexDiff: string
+    hideHexDiff: string
+    selectJobLeft: string
+    jobsLogged: string
+    verifyDryRun: string
+    verifyDryRunDesc: string
+    partialProgramming: string
+    partialProgrammingDesc: string
+    fullProgramming: string
+    fullProgrammingDesc: string
+    writePhysicalAddress: string
+    writePhysicalAddressDesc: string
+    restartDeviceDesc: string
+    twoStageBadge: string
+    directBadge: string
+    startingFlash: string
   }
   export: {
     title: string
@@ -344,5 +750,53 @@ export interface Translations {
     statsDevices: string
     statsGas: string
     statsRooms: string
+    unsignedWarning: string
+    hideKey: string
+    showKey: string
+  }
+  compare: {
+    title: string
+    subtitle: string
+    selectCompareProject: string
+    uploadProjectFile: string
+    noDifferencesGas: string
+    noDifferencesDevices: string
+    noDifferencesParams: string
+    noDifferencesKos: string
+    applySelectedDiffs: string
+    mergeAll: string
+    noProjectSelected: string
+    statusAdded: string
+    statusModified: string
+    statusDeleted: string
+    noGaLinked: string
+  }
+  ga: {
+    title: string
+    subtitle: string
+    tabScheme: string
+    tabList: string
+    allTrades: string
+    allStatus: string
+    onlyWithDevices: string
+    resetToAutoBtn: string
+  }
+  scenes: {
+    title: string
+    roomLabel: string
+    fadeTimeLabel: string
+    allChannelsFull: string
+    allChannelsOff: string
+    allOffBtn: string
+    connectionActiveNotice: string
+    saveAndTriggerBtn: string
+    subtitle: string
+    testBus: string
+    newScene: string
+    addSceneTooltip: string
+    deleteSceneTooltip: string
+    saveScene: string
+    adjustFadersHint: string
+    moodLabel: string
   }
 }

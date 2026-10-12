@@ -18,6 +18,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { FunctionBlock, SceneDefinition, LightCircuit } from '../../types/knx'
+import { useTranslation } from '../../i18n'
 
 interface SceneMixerModalProps {
   isOpen: boolean
@@ -81,6 +82,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
   onAction,
   roomName,
 }) => {
+  const { t } = useTranslation()
   const circuits: LightCircuit[] = block.parameters?.circuits || DEFAULT_CIRCUITS
   const [scenes, setScenes] = useState<SceneDefinition[]>(
     block.parameters?.scenes || DEFAULT_SCENES
@@ -220,14 +222,14 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-white tracking-wide">
-                  Lichtsteuerungs-Mischpult
+                  {t('scenes.title')}
                 </h2>
                 <span className="text-xs font-mono bg-purple-900/60 border border-purple-700/50 text-purple-300 px-2 py-0.5 rounded-full">
                   DPT 18.001
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Studio Stimmungs-Mixer für {roomName || 'den Raum'} • {block.name}
+                {t('scenes.subtitle')} {roomName || 'Raum'} • {block.name}
               </p>
             </div>
           </div>
@@ -252,7 +254,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
         <div className="px-6 py-3 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between gap-4 overflow-x-auto">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400 whitespace-nowrap">
-              Stimmung:
+              {t('scenes.moodLabel')}
             </span>
             <div className="flex items-center gap-1.5">
               {scenes.map((sc) => {
@@ -272,7 +274,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
                     {scenes.length > 2 && (
                       <span
                         onClick={(e) => handleDeleteScene(sc.no, e)}
-                        title="Stimmung entfernen"
+                        title={t('scenes.deleteSceneTooltip')}
                         className="opacity-0 group-hover:opacity-100 hover:text-red-300 transition-opacity ml-1"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -283,11 +285,11 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
               })}
               <button
                 onClick={handleAddScene}
-                title="Neue Stimmung anlegen"
+                title={t('scenes.addSceneTooltip')}
                 className="flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs bg-slate-800/50 hover:bg-purple-900/40 hover:text-purple-300 border border-dashed border-slate-700 hover:border-purple-600 text-slate-400 transition-all"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Neu</span>
+                <span>{t('scenes.newScene')}</span>
               </button>
             </div>
           </div>
@@ -300,7 +302,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-950 transition-all"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Bus Testen</span>
+              <span>{t('scenes.testBus')}</span>
             </button>
           </div>
         </div>
@@ -321,7 +323,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
                   </span>
                 </div>
                 <div className="text-xs text-slate-400">
-                  Passe die Schieberegler unten an und speichere die Stimmung ab.
+                  {t('scenes.adjustFadersHint')}
                 </div>
               </div>
             </div>
@@ -329,7 +331,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
                 <Clock className="w-4 h-4 text-purple-400" />
-                <span className="text-xs text-slate-300">Überblendzeit:</span>
+                <span className="text-xs text-slate-300">{t('scenes.fadeTimeLabel')}</span>
                 <span className="text-xs font-mono font-bold text-purple-300 w-10 text-right">
                   {fadeTime.toFixed(1)}s
                 </span>
@@ -347,18 +349,18 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
               <div className="flex gap-2">
                 <button
                   onClick={handleMasterAllFull}
-                  title="Alle Kanäle auf 100%"
+                  title={t('scenes.allChannelsFull')}
                   className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
                 >
-                  Alle 100%
+                  100%
                 </button>
                 <button
                   onClick={handleMasterAllOff}
-                  title="Alle Kanäle ausschalten (0%)"
+                  title={t('scenes.allChannelsOff')}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 transition-colors"
                 >
                   <VolumeX className="w-3.5 h-3.5" />
-                  <span>Alle Aus</span>
+                  <span>{t('scenes.allOffBtn')}</span>
                 </button>
               </div>
             </div>
@@ -485,7 +487,7 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
         <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/95 flex items-center justify-between">
           <div className="text-xs text-slate-400 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Verbindung aktiv: Änderungen werden in Baustein & ETS-Modell gespeichert</span>
+            <span>{t('scenes.connectionActiveNotice')}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -493,21 +495,21 @@ export const SceneMixerModal: React.FC<SceneMixerModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700 transition-colors"
             >
-              Schließen
+              {t('common.close')}
             </button>
             <button
               onClick={() => handleSaveCurrentScene(false)}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-purple-300 border border-purple-600/50 hover:border-purple-500 transition-all shadow-md"
             >
               <Save className="w-4 h-4" />
-              <span>Stimmung speichern</span>
+              <span>{t('scenes.saveScene')}</span>
             </button>
             <button
               onClick={() => handleSaveCurrentScene(true)}
               className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-950 transition-all"
             >
               <Play className="w-4 h-4 fill-current" />
-              <span>Speichern & Auslösen</span>
+              <span>{t('scenes.saveAndTriggerBtn')}</span>
             </button>
           </div>
         </div>

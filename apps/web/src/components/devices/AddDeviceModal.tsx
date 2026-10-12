@@ -18,6 +18,8 @@ import {
   Database,
   RefreshCw,
   DownloadCloud,
+  Globe,
+  Cloud,
 } from 'lucide-react'
 import {
   KnxDevice,
@@ -26,6 +28,7 @@ import {
   DeviceChannel,
   CatalogProduct,
   CatalogProductSummary,
+  OnlineCatalogDevice,
 } from '../../types/knx'
 import {
   HARDWARE_CATALOG,
@@ -37,10 +40,14 @@ import {
   fetchCatalogProducts,
   fetchCatalogProduct,
   importKnxprodFile,
+  importYamlFile,
+  searchOnlineCatalog,
+  importOnlineDevice,
   createDeviceFromProduct,
   downloadDefaultCatalog,
   syncProjectWithCatalog,
 } from '../../services/api'
+import { useTranslation } from '../../i18n'
 
 interface AddDeviceModalProps {
   isOpen: boolean
@@ -59,6 +66,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   currentRoomId,
   onAddDevice,
 }) => {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<'knxprod' | 'templates' | 'custom'>('knxprod')
 
   // .knxprod Catalog State
@@ -76,6 +84,73 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [isSyncingProject, setIsSyncingProject] = useState(false)
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Online Catalog State (konfix.sduni.de)
+  const [catalogMode, setCatalogMode] = useState<'local' | 'online'>('local')
+  const [onlineProducts, setOnlineProducts] = useState<OnlineCatalogDevice[]>([])
+  const [isLoadingOnline, setIsLoadingOnline] = useState<boolean>(false)
+  const [onlineError, setOnlineError] = useState<string | null>(null)
+  const [isImportingOnline, setIsImportingOnline] = useState<string | null>(null)
+
+  const handleSearchOnline = async (queryText: string = knxprodSearch) => {
+    setIsLoadingOnline(true)
+    setOnlineError(null)
+    try {
+      const res = await searchOnlineCatalog(queryText)
+      setOnlineProducts(res.devices || [])
+    } catch (err: any) {
+      console.warn('Online catalog search error:', err)
+      setOnlineError(err.message || 'Online-Katalog konnte nicht abgefragt werden.')
+    } finally {
+      setIsLoadingOnline(false)
+    }
+  }
+
+  const [lastImportedProductId, setLastImportedProductId] = useState<string | null>(null)
+
+  const handleImportOnlineDevice = async (device: OnlineCatalogDevice) => {
+    setIsImportingOnline(device.order_number)
+    setCatalogError(null)
+    try {
+      const importedProduct = await importOnlineDevice(device.order_number)
+      await loadKnxprodCatalog()
+      setLastImportedProductId(importedProduct.id)
+      setSelectedSummary({
+        id: importedProduct.id,
+        order_number: importedProduct.order_number,
+        manufacturer: importedProduct.manufacturer,
+        name: importedProduct.name,
+        hardware_name: importedProduct.hardware_name,
+        application_program: importedProduct.application_program,
+        mask_version: importedProduct.mask_version,
+        bus_current_ma: importedProduct.bus_current_ma,
+        channel_count: importedProduct.default_channels?.length || 0,
+        ko_count: importedProduct.communication_objects?.length || 0,
+        param_count: importedProduct.parameters?.length || 0,
+      })
+      setSelectedProduct(importedProduct)
+      setDeviceName(importedProduct.name)
+      // Bei neu importiertem Produkt Adresse zunächst leer lassen (Unadressiert)
+      setDeviceAddress('')
+      setCatalogMode('local')
+      setSyncStatusMessage(`Gerät '${importedProduct.name}' (${importedProduct.order_number}) erfolgreich heruntergeladen & im lokalen Katalog gespeichert!`)
+    } catch (err: any) {
+      console.error('Online import error:', err)
+      setCatalogError(err.message || 'Fehler beim Herunterladen des Geräts.')
+    } finally {
+      setIsImportingOnline(null)
+    }
+  }
+
+  // Effect to automatically search online catalog when switching to online mode or search changes
+  useEffect(() => {
+    if (tab === 'knxprod' && catalogMode === 'online') {
+      const timer = setTimeout(() => {
+        handleSearchOnline(knxprodSearch)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [tab, catalogMode, knxprodSearch])
 
   // Quick Templates Tab State
   const [templateSearch, setTemplateSearch] = useState('')
@@ -180,7 +255,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     setDeviceName(tpl.name)
   }
 
-  // Handle .knxprod file upload
+  // Handle .knxprod or .yaml file upload
   const handleFileUpload = async (file: File) => {
     const lowerName = file.name.toLowerCase()
     if (lowerName.endsWith('.vd4') || lowerName.endsWith('.vd_') || lowerName.endsWith('.vd3') || lowerName.endsWith('.vd2') || lowerName.endsWith('.vd1')) {
@@ -188,14 +263,36 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
       return
     }
 
-    if (!file.name.endsWith('.knxprod') && !file.name.endsWith('.zip')) {
-      alert('Bitte eine gültige .knxprod Datei auswählen.')
+    const isYaml = lowerName.endsWith('.yaml') || lowerName.endsWith('.yml')
+    const isKnxprod = lowerName.endsWith('.knxprod') || lowerName.endsWith('.zip')
+
+    if (!isYaml && !isKnxprod) {
+      alert('Bitte eine gültige .knxprod oder .yaml / .yml Datei auswählen.')
       return
     }
 
     setIsUploading(true)
     setCatalogError(null)
 
+    // Handle YAML device definition directly
+    if (isYaml) {
+      try {
+        const imported = await importYamlFile(file)
+        await loadKnxprodCatalog()
+        setLastImportedProductId(imported.id)
+        handleSelectProduct(imported)
+        setDeviceAddress('')
+        setSyncStatusMessage(`YAML-Gerät '${imported.name}' (${imported.order_number}) erfolgreich importiert!`)
+      } catch (err: any) {
+        console.error('YAML Import error:', err)
+        setCatalogError(err.message || 'Fehler beim Parsen der YAML-Gerätedefinition.')
+      } finally {
+        setIsUploading(false)
+      }
+      return
+    }
+
+    // Handle .knxprod binary archive
     try {
       const reader = new FileReader()
       reader.onload = async (e) => {
@@ -206,7 +303,10 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
           const imported = await importKnxprodFile(undefined, base64)
           await loadKnxprodCatalog()
           if (imported.length > 0) {
+            setLastImportedProductId(imported[0].id)
             handleSelectProduct(imported[0])
+            setDeviceAddress('')
+            setSyncStatusMessage(`${imported.length} Produkt(e) aus .knxprod erfolgreich importiert!`)
           }
         } catch (err: any) {
           console.error('Import error:', err)
@@ -280,10 +380,11 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     e.preventDefault()
     if (!selectedSummary) return
 
+    const targetAddr = deviceAddress.trim() || '-.-.-'
     try {
       const dev = await createDeviceFromProduct(
         selectedSummary.id,
-        deviceAddress.trim() || '1.1.20',
+        targetAddr,
         deviceName.trim() || selectedSummary.name,
         selectedRoomId || undefined
       )
@@ -306,7 +407,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
         const device: KnxDevice = {
           id: devId,
-          individual_address: deviceAddress.trim() || '1.1.20',
+          individual_address: targetAddr,
           manufacturer: selectedProduct.manufacturer,
           model: selectedProduct.order_number,
           name: deviceName.trim() || selectedProduct.name,
@@ -330,9 +431,10 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     e.preventDefault()
     if (!selectedTemplate) return
 
+    const targetAddr = deviceAddress.trim() || '-.-.-'
     const device = createDeviceFromTemplate(
       selectedTemplate,
-      deviceAddress.trim() || '1.1.20',
+      targetAddr,
       deviceName.trim() || selectedTemplate.name,
       selectedRoomId || null
     )
@@ -364,6 +466,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     e.preventDefault()
     if (!customName.trim()) return
 
+    const targetAddr = customAddress.trim() || '-.-.-'
     const deviceId = crypto.randomUUID()
     const channels: DeviceChannel[] = customChannels.map((c) => ({
       id: crypto.randomUUID(),
@@ -377,7 +480,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
     const device: KnxDevice = {
       id: deviceId,
-      individual_address: customAddress.trim() || '1.1.20',
+      individual_address: targetAddr,
       manufacturer: customManufacturer.trim() || 'Generisch',
       model: customModel.trim() || 'Standard-Gerät',
       name: customName.trim(),
@@ -404,9 +507,9 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                KNX-Gerät hinzufügen
+                {t('catalog.title')}
                 <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-sky-950 text-sky-300 border border-sky-800/60 font-mono">
-                  .knxprod Katalog
+                  .knxprod {t('catalog.title')}
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -434,7 +537,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             }`}
           >
             <Sparkles className="w-4 h-4 text-sky-400" />
-            <span>ETS Herstellerkatalog (.knxprod)</span>
+            <span>{t('catalog.tabKnxprodYaml')}</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-sky-950 text-sky-300 border border-sky-800">
               {knxprodProducts.length}
             </span>
@@ -449,7 +552,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             }`}
           >
             <Building className="w-4 h-4" />
-            <span>Schnell-Vorlagen</span>
+            <span>{t('catalog.tabTemplates')}</span>
           </button>
 
           <button
@@ -461,15 +564,50 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             }`}
           >
             <Sliders className="w-4 h-4" />
-            <span>Manuell / Eigener Aktor</span>
+            <span>{t('catalog.tabCustom')}</span>
           </button>
         </div>
 
-        {/* TAB 1: KNXPROD CATALOG */}
+        {/* TAB 1: KNXPROD & YAML CATALOG */}
         {tab === 'knxprod' && (
           <div className="flex-1 flex overflow-hidden">
             {/* Left: Device List, Search & Upload */}
             <div className="w-7/12 border-r border-slate-800 flex flex-col p-4 space-y-3 overflow-hidden">
+              {/* Mode Toggle: Local vs Online Cloud */}
+              <div className="flex items-center justify-between pb-1">
+                <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-xs shadow-inner">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogMode('local')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-medium ${
+                      catalogMode === 'local'
+                        ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>{t('catalog.localSaved')} ({knxprodProducts.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatalogMode('online')
+                      handleSearchOnline(knxprodSearch)
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-medium ${
+                      catalogMode === 'online'
+                        ? 'bg-sky-600 text-white shadow-sm font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <Globe className="w-3.5 h-3.5 text-sky-300" />
+                    <span>{t('catalog.onlineCatalog')}</span>
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                  .knxprod &amp; .yaml
+                </span>
+              </div>
               {/* Search & Drag-Drop Upload Area */}
               <div className="space-y-2">
                 <div className="flex gap-2">
@@ -477,7 +615,11 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                     <input
                       type="text"
-                      placeholder="Produkt, Bestellnummer oder Applikation suchen..."
+                      placeholder={
+                        catalogMode === 'online'
+                          ? t('catalog.searchOnlinePlaceholder')
+                          : t('catalog.searchLocalPlaceholder')
+                      }
                       value={knxprodSearch}
                       onChange={(e) => setKnxprodSearch(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-sky-500"
@@ -487,7 +629,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   <input
                     type="file"
                     ref={fileInputRef}
-                    accept=".knxprod,.zip"
+                    accept=".knxprod,.yaml,.yml,.zip"
                     onChange={(e) => {
                       if (e.target.files && e.target.files.length > 0) {
                         handleFileUpload(e.target.files[0])
@@ -496,49 +638,53 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     className="hidden"
                   />
 
-                  <button
-                    type="button"
-                    onClick={handleDownloadDefaultDatabase}
-                    disabled={isDownloadingDefault || isLoadingCatalog}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shrink-0 shadow-sm disabled:opacity-50"
-                    title="Standard-Produktdatenbank (MDT & ETS3) laden"
-                  >
-                    {isDownloadingDefault ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Database className="w-3.5 h-3.5" />
-                    )}
-                    <span>Datenbank laden</span>
-                  </button>
+                  {catalogMode === 'local' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleDownloadDefaultDatabase}
+                        disabled={isDownloadingDefault || isLoadingCatalog}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shrink-0 shadow-sm disabled:opacity-50"
+                        title={t('catalog.loadDatabaseBtn')}
+                      >
+                        {isDownloadingDefault ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Database className="w-3.5 h-3.5" />
+                        )}
+                        <span>{t('catalog.loadDatabaseBtn')}</span>
+                      </button>
 
-                  <button
-                    type="button"
-                    onClick={handleSyncProjectWithCatalog}
-                    disabled={isSyncingProject}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shrink-0 shadow-sm disabled:opacity-50"
-                    title="Bestehende Projektgeräte mit Datenbank abgleichen (Werte & GAs bleiben erhalten)"
-                  >
-                    {isSyncingProject ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    )}
-                    <span>Projekt abgleichen</span>
-                  </button>
+                      <button
+                        type="button"
+                        onClick={handleSyncProjectWithCatalog}
+                        disabled={isSyncingProject}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shrink-0 shadow-sm disabled:opacity-50"
+                        title={t('catalog.syncProjectTooltip')}
+                      >
+                        {isSyncingProject ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        )}
+                        <span>{t('catalog.syncProjectBtn')}</span>
+                      </button>
+                    </>
+                  )}
 
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors shrink-0 shadow-sm disabled:opacity-50"
-                    title=".knxprod Datei hochladen"
+                    title={t('catalog.importKnxprod')}
                   >
                     {isUploading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
                       <Upload className="w-3.5 h-3.5" />
                     )}
-                    <span>.knxprod Import</span>
+                    <span>{t('catalog.importKnxprod')}</span>
                   </button>
                 </div>
 
@@ -566,13 +712,13 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <p className="text-[11px] text-slate-400">
-                    <span className="font-semibold text-sky-400">Eigene .knxprod Datei hier ablegen</span> oder klicken zum Durchsuchen
+                    <span className="font-semibold text-sky-400">.knxprod oder .yaml / .yml hier ablegen</span> oder klicken zum Durchsuchen
                   </p>
                 </div>
               </div>
 
-              {/* Manufacturer Pills */}
-              {knxprodManufacturers.length > 0 && (
+              {/* Manufacturer Pills (only in local mode) */}
+              {catalogMode === 'local' && knxprodManufacturers.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 text-[11px]">
                   <button
                     onClick={() => setSelectedKnxprodManufacturer('all')}
@@ -602,65 +748,167 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
               {/* Product Card List */}
               <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                {isLoadingCatalog ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
-                    <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
-                    <span className="text-xs">Katalog wird geladen...</span>
-                  </div>
-                ) : filteredKnxprod.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 text-xs italic">
-                    Keine KNX-Geräte gefunden. Importiere eine .knxprod Datei per Drag & Drop!
-                  </div>
-                ) : (
-                  filteredKnxprod.map((prod) => {
-                    const isSelected = selectedSummary?.id === prod.id
+                {catalogMode === 'local' ? (
+                  isLoadingCatalog ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
+                      <span className="text-xs">Katalog wird geladen...</span>
+                    </div>
+                  ) : filteredKnxprod.length === 0 ? (
+                    <div className="text-center py-10 px-4 rounded-xl bg-slate-950/40 border border-slate-800/80 space-y-3">
+                      <div className="text-slate-400 text-xs">
+                        {knxprodSearch.trim()
+                          ? `Keine lokalen Treffer für "${knxprodSearch}".`
+                          : 'Keine lokalen KNX-Geräte vorhanden. Importiere eine .knxprod oder .yaml Datei!'}
+                      </div>
+                      {knxprodSearch.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCatalogMode('online')
+                            handleSearchOnline(knxprodSearch)
+                          }}
+                          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow transition-colors"
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>In Online-Datenbank nach "{knxprodSearch}" suchen</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    filteredKnxprod.map((prod) => {
+                      const isSelected = selectedSummary?.id === prod.id
+                      const isNewlyImported = lastImportedProductId === prod.id
 
-                    return (
+                      return (
+                        <div
+                          key={prod.id}
+                          onClick={() => handleSelectProduct(prod)}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
+                            isSelected
+                              ? 'bg-sky-950/40 border-sky-500 shadow-md'
+                              : isNewlyImported
+                              ? 'bg-emerald-950/30 border-emerald-500/60 shadow-md shadow-emerald-950/30'
+                              : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-slate-200">
+                                  {prod.name}
+                                </span>
+                                {isNewlyImported && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                                    Neu importiert
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[11px] font-mono text-sky-400 font-semibold">
+                                  {prod.order_number}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  • {prod.manufacturer}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Badges for KOs and Parameters from lightweight summary */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-sky-300 border border-slate-700">
+                                {prod.ko_count} KOs
+                              </span>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 border border-slate-700">
+                                {prod.param_count} Param
+                              </span>
+                            </div>
+                          </div>
+
+                          {prod.application_program && (
+                            <div className="text-[10px] text-slate-500 truncate font-mono">
+                              App: {prod.application_program}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )
+                ) : (
+                  /* Online Catalog View */
+                  isLoadingOnline ? (
+                    <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
+                      <span className="text-xs">Online-Katalog (konfix.sduni.de) wird durchsucht...</span>
+                    </div>
+                  ) : onlineError ? (
+                    <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-xs text-red-300 space-y-2">
+                      <div className="flex items-center gap-2 font-semibold">
+                        <AlertCircle className="w-4 h-4 text-red-400" />
+                        <span>Fehler bei der Online-Abfrage</span>
+                      </div>
+                      <p className="text-[11px] text-red-400">{onlineError}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleSearchOnline(knxprodSearch)}
+                        className="px-2.5 py-1 bg-red-900/60 hover:bg-red-800 rounded-lg text-white text-[11px] font-medium transition-colors"
+                      >
+                        Erneut versuchen
+                      </button>
+                    </div>
+                  ) : onlineProducts.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500 text-xs italic space-y-1">
+                      <div>Keine Geräte im Online-Katalog gefunden.</div>
+                      <div className="text-[11px]">Versuche einen anderen Suchbegriff wie z. B. "AKS", "AKU", "MDT" oder "Schaltaktor".</div>
+                    </div>
+                  ) : (
+                    onlineProducts.map((dev) => (
                       <div
-                        key={prod.id}
-                        onClick={() => handleSelectProduct(prod)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 ${
-                          isSelected
-                            ? 'bg-sky-950/40 border-sky-500 shadow-md'
-                            : 'bg-slate-950/40 border-slate-800/80 hover:border-slate-700 hover:bg-slate-950'
-                        }`}
+                        key={dev.id}
+                        className="p-3 rounded-xl border border-slate-800/80 bg-slate-950/40 hover:border-slate-700 hover:bg-slate-950 transition-all flex flex-col gap-2"
                       >
                         <div className="flex items-start justify-between">
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-slate-200">
-                                {prod.name}
-                              </span>
+                              <span className="text-xs font-bold text-slate-200">{dev.name}</span>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[11px] font-mono text-sky-400 font-semibold">
-                                {prod.order_number}
-                              </span>
-                              <span className="text-[10px] text-slate-400">
-                                • {prod.manufacturer}
-                              </span>
+                              <span className="text-[11px] font-mono text-sky-400 font-semibold">{dev.order_number}</span>
+                              <span className="text-[10px] text-slate-400">• {dev.manufacturer.name}</span>
                             </div>
                           </div>
-
-                          {/* Badges for KOs and Parameters from lightweight summary */}
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-sky-300 border border-slate-700">
-                              {prod.ko_count} KOs
+                              {dev.com_objects_count} KOs
                             </span>
                             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-emerald-300 border border-slate-700">
-                              {prod.param_count} Param
+                              {dev.parameters_count} Params
                             </span>
                           </div>
                         </div>
 
-                        {prod.application_program && (
-                          <div className="text-[10px] text-slate-500 truncate font-mono">
-                            App: {prod.application_program}
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                            <Globe className="w-3 h-3 text-sky-400" />
+                            konfix.sduni.de YAML
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isImportingOnline === dev.order_number}
+                            onClick={() => handleImportOnlineDevice(dev)}
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-[11px] font-semibold transition-colors shadow-sm"
+                          >
+                            {isImportingOnline === dev.order_number ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <DownloadCloud className="w-3 h-3" />
+                            )}
+                            <span>Herunterladen &amp; Auswählen</span>
+                          </button>
+                        </div>
                       </div>
-                    )
-                  })
+                    ))
+                  )
                 )}
               </div>
             </div>
@@ -695,17 +943,47 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     {/* Form Fields: Address, Name, Room */}
                     <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
                       <div>
-                        <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                          Physikalische KNX-Adresse:
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[11px] font-semibold text-slate-300">
+                            Physikalische KNX-Adresse:
+                          </label>
+                          <div className="flex items-center gap-1.5">
+                            {deviceAddress ? (
+                              <button
+                                type="button"
+                                onClick={() => setDeviceAddress('')}
+                                className="text-[10px] text-amber-400 hover:text-amber-300 underline"
+                              >
+                                Adresse freilassen (-.-.-)
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setDeviceAddress(getNextIndividualAddress(existingDevices))}
+                                className="text-[10px] text-sky-400 hover:text-sky-300 underline"
+                              >
+                                Nächste freie Adresse auto-füllen
+                              </button>
+                            )}
+                          </div>
+                        </div>
                         <input
                           type="text"
-                          required
-                          placeholder="z. B. 1.1.20"
+                          placeholder="-.-.- (Unadressiert / Später vergeben)"
                           value={deviceAddress}
                           onChange={(e) => setDeviceAddress(e.target.value)}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-mono text-sky-400 font-bold outline-none focus:border-sky-500"
+                          className={`w-full bg-slate-950 border rounded-lg px-3 py-1.5 text-xs font-mono font-bold outline-none transition-colors ${
+                            !deviceAddress.trim()
+                              ? 'border-red-500/60 text-red-400 placeholder:text-red-500/50 focus:border-red-400'
+                              : 'border-slate-700 text-sky-400 focus:border-sky-500'
+                          }`}
                         />
+                        {!deviceAddress.trim() && (
+                          <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1 font-sans">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block animate-pulse" />
+                            Gerät wird als unadressiert importiert und im Projekt rot hervorgehoben.
+                          </p>
+                        )}
                       </div>
 
                       <div>
@@ -860,7 +1138,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                 <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Gerät, Modellnummer oder Funktion suchen..."
+                  placeholder={t('catalog.templateSearchPlaceholder')}
                   value={templateSearch}
                   onChange={(e) => setTemplateSearch(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700/80 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 outline-none focus:border-sky-500"
@@ -893,7 +1171,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                           </div>
                         </div>
                         <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">
-                          {tpl.channels.length} Kanäle
+                          {tpl.channels.length} {t('catalog.templateChannelsCount')}
                         </span>
                       </div>
                     </div>
@@ -915,7 +1193,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     <div className="space-y-3 bg-slate-900/60 p-3.5 rounded-xl border border-slate-800">
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                          Physikalische KNX-Adresse:
+                          {t('catalog.templatePhysicalAddress')}
                         </label>
                         <input
                           type="text"
@@ -928,7 +1206,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                          Gerätename im Projekt:
+                          {t('catalog.templateDeviceName')}
                         </label>
                         <input
                           type="text"
@@ -941,14 +1219,14 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                          Raumzuweisung:
+                          {t('catalog.templateRoomSelect')}
                         </label>
                         <select
                           value={selectedRoomId}
                           onChange={(e) => setSelectedRoomId(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-sky-500"
                         >
-                          <option value="">Kein Raum (Zentral)</option>
+                          <option value="">{t('catalog.noRoomCentral')}</option>
                           {rooms.map((r) => (
                             <option key={r.id} value={r.id}>
                               {r.name}
@@ -964,7 +1242,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-sky-950"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Vorlage zum Projekt hinzufügen</span>
+                    <span>{t('catalog.templateAddBtn')}</span>
                   </button>
                 </form>
               ) : null}
@@ -978,21 +1256,21 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Gerätename:
+                  {t('catalog.customDeviceName')}
                 </label>
                 <input
                   type="text"
                   required
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="z. B. Dali Gateway EG"
+                  placeholder={t('catalog.customDeviceNamePlaceholder')}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 outline-none focus:border-sky-500"
                 />
               </div>
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Physikalische Adresse:
+                  {t('catalog.customDeviceAddress')}
                 </label>
                 <input
                   type="text"
@@ -1005,7 +1283,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Hersteller:
+                  {t('catalog.customDeviceManufacturer')}
                 </label>
                 <input
                   type="text"
@@ -1018,7 +1296,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
               <div>
                 <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Modell:
+                  {t('catalog.customDeviceModel')}
                 </label>
                 <input
                   type="text"
@@ -1034,7 +1312,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-200">
-                  Kanäle & Klemmen ({customChannels.length})
+                  {t('catalog.customChannelsTitle')} ({customChannels.length})
                 </span>
                 <button
                   type="button"
@@ -1042,7 +1320,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Kanal hinzufügen</span>
+                  <span>{t('catalog.customAddChannelBtn')}</span>
                 </button>
               </div>
 
@@ -1108,7 +1386,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                 type="submit"
                 className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-lg shadow-sky-950"
               >
-                Gerät manuell anlegen
+                {t('catalog.customCreateDeviceBtn')}
               </button>
             </div>
           </form>

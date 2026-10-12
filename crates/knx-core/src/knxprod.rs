@@ -479,7 +479,8 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
     let mut reader1 = Reader::from_str(xml);
     reader1.config_mut().trim_text(true);
 
-    let mut translations: HashMap<String, HashMap<String, (u8, String)>> = HashMap::new();
+    let mut de_translations: HashMap<String, HashMap<String, (u8, String)>> = HashMap::new();
+    let mut en_translations: HashMap<String, HashMap<String, (u8, String)>> = HashMap::new();
     let mut param_types: HashMap<String, Vec<(String, String, String)>> = HashMap::new();
     let mut param_type_sizes: HashMap<String, u32> = HashMap::new();
     let mut param_type_meta: HashMap<String, ParamTypeMeta> = HashMap::new();
@@ -491,6 +492,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
     let mut mask_version = None;
     let mut app_name = None;
 
+    let mut current_lang_id = String::new();
     let mut current_lang_prio: u8 = 0;
     let mut current_tr_ref = String::new();
     let mut current_pt_id = String::new();
@@ -514,8 +516,9 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                     "Language" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"Identifier" {
-                                let id = String::from_utf8_lossy(&attr.value);
+                                let id = String::from_utf8_lossy(&attr.value).to_string();
                                 current_lang_prio = get_lang_priority(&id);
+                                current_lang_id = id;
                             }
                         }
                     }
@@ -537,7 +540,9 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             }
                         }
                         if !attr_name.is_empty() && !text_val.is_empty() {
-                            let entry = translations.entry(current_tr_ref.clone()).or_default();
+                            let is_en = current_lang_id.to_lowercase().starts_with("en");
+                            let target_map = if is_en { &mut en_translations } else { &mut de_translations };
+                            let entry = target_map.entry(current_tr_ref.clone()).or_default();
                             let should_insert = match entry.get(&attr_name) {
                                 Some((prev_prio, _)) => current_lang_prio >= *prev_prio,
                                 None => true,
@@ -726,7 +731,15 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
         buf.clear();
     }
 
-    let de_translations: HashMap<String, HashMap<String, String>> = translations
+    let de_translations: HashMap<String, HashMap<String, String>> = de_translations
+        .into_iter()
+        .map(|(ref_id, attrs)| {
+            let mapped = attrs.into_iter().map(|(attr, (_, val))| (attr, val)).collect();
+            (ref_id, mapped)
+        })
+        .collect();
+
+    let en_translations: HashMap<String, HashMap<String, String>> = en_translations
         .into_iter()
         .map(|(ref_id, attrs)| {
             let mapped = attrs.into_iter().map(|(attr, (_, val))| (attr, val)).collect();
@@ -756,7 +769,9 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
             number: 0,
             name: String::new(),
             object_text: String::new(),
+            object_text_en: None,
             function_text: String::new(),
+            function_text_en: None,
             dpt: String::new(),
             object_size: String::new(),
             flags: ComObjectFlags::default(),
@@ -802,6 +817,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                                      coref_map: &HashMap<String, ParsedComObjectRef>,
                                      coref_to_co: &HashMap<String, String>,
                                      de_trans: &HashMap<String, HashMap<String, String>>,
+                                     en_trans: &HashMap<String, HashMap<String, String>>,
                                      choose_stack: &[(String, Option<String>)]| {
         let mut corref_id = String::new();
         for attr in e.attributes().flatten() {
@@ -846,6 +862,13 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                 }
             }
 
+            if let Some(txt_en) = en_trans.get(&corref_id).and_then(|m| m.get("Text")) {
+                let clean_en = clean_knx_template(txt_en);
+                if !clean_en.is_empty() && clean_en != co.object_text {
+                    co.object_text_en = Some(clean_en);
+                }
+            }
+
             if let Some(ftxt) = de_trans.get(&corref_id).and_then(|m| m.get("FunctionText")) {
                 let clean = clean_knx_template(ftxt);
                 if !clean.is_empty() {
@@ -857,6 +880,13 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                     if !clean.is_empty() {
                         co.function_text = clean;
                     }
+                }
+            }
+
+            if let Some(ftxt_en) = en_trans.get(&corref_id).and_then(|m| m.get("FunctionText")) {
+                let clean_en = clean_knx_template(ftxt_en);
+                if !clean_en.is_empty() && clean_en != co.function_text {
+                    co.function_text_en = Some(clean_en);
                 }
             }
 
@@ -895,6 +925,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
 
     let parse_param_from_event = |e: &quick_xml::events::BytesStart,
                                   de_trans: &HashMap<String, HashMap<String, String>>,
+                                  en_trans: &HashMap<String, HashMap<String, String>>,
                                   pt_map: &HashMap<String, Vec<(String, String, String)>>,
                                   pt_meta: &HashMap<String, ParamTypeMeta>|
      -> Option<(DeviceParameter, String, Option<u32>, Option<u8>)> {
@@ -962,6 +993,12 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
             });
         let clean_text = clean_knx_template(&trans_text);
 
+        let text_en_opt = en_trans
+            .get(&p_id)
+            .and_then(|m| m.get("Text"))
+            .map(|t| clean_knx_template(t))
+            .filter(|t| !t.is_empty() && t != &clean_text);
+
         let mut enum_opts = Vec::new();
         let mut legacy_opts = Vec::new();
         if let Some(opts) = pt_map.get(&pt_id) {
@@ -972,10 +1009,17 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                     .cloned()
                     .unwrap_or_else(|| en_raw.clone());
                 let clean_en = clean_knx_template(&en_tr);
+                let opt_en_text = en_trans
+                    .get(en_id)
+                    .and_then(|m| m.get("Text"))
+                    .map(|t| clean_knx_template(t))
+                    .filter(|t| !t.is_empty() && t != &clean_en);
+
                 legacy_opts.push(clean_en.clone());
                 enum_opts.push(ParameterOption {
                     value: en_val.clone(),
                     text: clean_en,
+                    text_en: opt_en_text,
                 });
             }
         }
@@ -1058,6 +1102,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                 id: p_id,
                 name: p_name,
                 text: clean_text,
+                text_en: text_en_opt,
                 param_type,
                 value: p_val.clone(),
                 default_value: p_val,
@@ -1299,11 +1344,23 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             if let Some(ftxt) = de_translations.get(&co.id).and_then(|m| m.get("FunctionText")) {
                                 co.function_text = ftxt.clone();
                             }
+                            if let Some(txt_en) = en_translations.get(&co.id).and_then(|m| m.get("Text")) {
+                                let clean_en = clean_knx_template(txt_en);
+                                if !clean_en.is_empty() && clean_en != co.object_text {
+                                    co.object_text_en = Some(clean_en);
+                                }
+                            }
+                            if let Some(ftxt_en) = en_translations.get(&co.id).and_then(|m| m.get("FunctionText")) {
+                                let clean_en = clean_knx_template(ftxt_en);
+                                if !clean_en.is_empty() && clean_en != co.function_text {
+                                    co.function_text_en = Some(clean_en);
+                                }
+                            }
                             cos.push(co);
                         }
                     }
                     "Parameter" => {
-                        if let Some((mut p, pt_id, attr_offset, attr_bit_offset)) = parse_param_from_event(&e, &de_translations, &param_types, &param_type_meta) {
+                        if let Some((mut p, pt_id, attr_offset, attr_bit_offset)) = parse_param_from_event(&e, &de_translations, &en_translations, &param_types, &param_type_meta) {
                             let final_offset = match (current_union.as_ref().and_then(|u| u.offset), attr_offset) {
                                 (Some(u_off), Some(p_off)) => Some(u_off + p_off),
                                 (Some(u_off), None) => Some(u_off),
@@ -1331,7 +1388,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                         }
                     }
                     "ComObjectRefRef" if in_dynamic => {
-                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &choose_stack);
+                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &en_translations, &choose_stack);
                     }
                     _ => {}
                 }
@@ -1456,11 +1513,23 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                             if let Some(ftxt) = de_translations.get(&co.id).and_then(|m| m.get("FunctionText")) {
                                 co.function_text = ftxt.clone();
                             }
+                            if let Some(txt_en) = en_translations.get(&co.id).and_then(|m| m.get("Text")) {
+                                let clean_en = clean_knx_template(txt_en);
+                                if !clean_en.is_empty() && clean_en != co.object_text {
+                                    co.object_text_en = Some(clean_en);
+                                }
+                            }
+                            if let Some(ftxt_en) = en_translations.get(&co.id).and_then(|m| m.get("FunctionText")) {
+                                let clean_en = clean_knx_template(ftxt_en);
+                                if !clean_en.is_empty() && clean_en != co.function_text {
+                                    co.function_text_en = Some(clean_en);
+                                }
+                            }
                             cos.push(co);
                         }
                     }
                     "ComObjectRefRef" if in_dynamic => {
-                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &choose_stack);
+                        handle_com_object_ref_ref(&e, &mut cos, &coref_map, &coref_to_co, &de_translations, &en_translations, &choose_stack);
                     }
                     "Memory" => {
                         let mut m_offset = None;
@@ -1496,7 +1565,7 @@ pub fn parse_app_program_xml(xml: &str) -> ParsedAppProgram {
                         }
                     }
                     "Parameter" => {
-                        if let Some((mut p, pt_id, attr_offset, attr_bit_offset)) = parse_param_from_event(&e, &de_translations, &param_types, &param_type_meta) {
+                        if let Some((mut p, pt_id, attr_offset, attr_bit_offset)) = parse_param_from_event(&e, &de_translations, &en_translations, &param_types, &param_type_meta) {
                             let final_offset = match (current_union.as_ref().and_then(|u| u.offset), attr_offset) {
                                 (Some(u_off), Some(p_off)) => Some(u_off + p_off),
                                 (Some(u_off), None) => Some(u_off),
@@ -1957,7 +2026,9 @@ impl CatalogManager {
                     number: 0,
                     name: "ChA_Switch".to_string(),
                     object_text: "Kanal A".to_string(),
+                    object_text_en: Some("Channel A".to_string()),
                     function_text: "Schalten Ein/Aus".to_string(),
+                    function_text_en: Some("Switch On/Off".to_string()),
                     dpt: "1.001".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags::default(),
@@ -1970,7 +2041,9 @@ impl CatalogManager {
                     number: 1,
                     name: "ChA_DimRel".to_string(),
                     object_text: "Kanal A".to_string(),
+                    object_text_en: Some("Channel A".to_string()),
                     function_text: "Dimmen relativ".to_string(),
+                    function_text_en: Some("Dimming relative".to_string()),
                     dpt: "3.007".to_string(),
                     object_size: "4 Bit".to_string(),
                     flags: ComObjectFlags::default(),
@@ -1983,7 +2056,9 @@ impl CatalogManager {
                     number: 2,
                     name: "ChA_DimAbs".to_string(),
                     object_text: "Kanal A".to_string(),
+                    object_text_en: Some("Channel A".to_string()),
                     function_text: "Dimmwert absolut".to_string(),
+                    function_text_en: Some("Dimming value absolute".to_string()),
                     dpt: "5.001".to_string(),
                     object_size: "1 Byte".to_string(),
                     flags: ComObjectFlags::default(),
@@ -1996,7 +2071,9 @@ impl CatalogManager {
                     number: 3,
                     name: "ChA_StateSwitch".to_string(),
                     object_text: "Kanal A".to_string(),
+                    object_text_en: Some("Channel A".to_string()),
                     function_text: "Status Schalten".to_string(),
+                    function_text_en: Some("Status Switch".to_string()),
                     dpt: "1.001".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags {
@@ -2016,6 +2093,7 @@ impl CatalogManager {
                     id: "AKD_P1".to_string(),
                     name: "fade_time_sec".to_string(),
                     text: "Dimmgeschwindigkeit (Überblendzeit)".to_string(),
+                    text_en: Some("Dimming speed (fade time)".to_string()),
                     param_type: "number".to_string(),
                     value: "1.5".to_string(),
                     default_value: "2.0".to_string(),
@@ -2039,6 +2117,7 @@ impl CatalogManager {
                     id: "AKD_P2".to_string(),
                     name: "default_brightness".to_string(),
                     text: "Einschalt-Helligkeit (%)".to_string(),
+                    text_en: Some("Switch-on brightness (%)".to_string()),
                     param_type: "number".to_string(),
                     value: "80".to_string(),
                     default_value: "100".to_string(),
@@ -2089,7 +2168,9 @@ impl CatalogManager {
                     number: 0,
                     name: "T1_Switch".to_string(),
                     object_text: "Taste 1".to_string(),
+                    object_text_en: Some("Button 1".to_string()),
                     function_text: "Schalten Ein/Aus".to_string(),
+                    function_text_en: Some("Switch On/Off".to_string()),
                     dpt: "1.001".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags {
@@ -2108,7 +2189,9 @@ impl CatalogManager {
                     number: 1,
                     name: "T2_Move".to_string(),
                     object_text: "Taste 2".to_string(),
+                    object_text_en: Some("Button 2".to_string()),
                     function_text: "Jalousie Auf/Ab".to_string(),
+                    function_text_en: Some("Blind Up/Down".to_string()),
                     dpt: "1.008".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags {
@@ -2128,6 +2211,7 @@ impl CatalogManager {
                     id: "GT_P1".to_string(),
                     name: "display_brightness".to_string(),
                     text: "Display-Helligkeit aktiv".to_string(),
+                    text_en: Some("Display brightness active".to_string()),
                     param_type: "number".to_string(),
                     value: "80".to_string(),
                     default_value: "70".to_string(),
@@ -2190,11 +2274,13 @@ impl CatalogManager {
         rows.filter_map(|r| r.ok()).collect()
     }
 
-    /// Recursively scans database folders and imports all knxprod products into catalog.db (ignoring legacy .vd4)
+    /// Recursively scans database folders and imports all knxprod and yaml products into catalog.db (ignoring legacy .vd4)
     pub async fn scan_database_folder(&self) -> usize {
         let candidates = [
             "database/mdt",
             "database",
+            "catalog_files",
+            "../KoNfiX-Catalog/catalog_files",
         ];
 
         let mut loaded_count = 0;
@@ -2214,6 +2300,13 @@ impl CatalogManager {
                                         all_new_products.extend(parsed);
                                     }
                                 }
+                            } else if ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml") {
+                                if let Ok(content) = std::fs::read_to_string(&ep) {
+                                    if let Ok(parsed) = crate::catalog_yaml::parse_konfix_device_yaml(&content) {
+                                        loaded_count += 1;
+                                        all_new_products.push(parsed);
+                                    }
+                                }
                             }
                         }
                     }
@@ -2225,6 +2318,13 @@ impl CatalogManager {
                             if let Ok(parsed) = parse_knxprod(&bytes) {
                                 loaded_count += parsed.len();
                                 all_new_products.extend(parsed);
+                            }
+                        }
+                    } else if ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml") {
+                        if let Ok(content) = std::fs::read_to_string(p) {
+                            if let Ok(parsed) = crate::catalog_yaml::parse_konfix_device_yaml(&content) {
+                                loaded_count += 1;
+                                all_new_products.push(parsed);
                             }
                         }
                     }
@@ -2496,6 +2596,35 @@ impl CatalogManager {
         Ok(summaries)
     }
 
+    /// Imports a single product from KoNfiX-YAML bytes directly into SQLite
+    pub async fn import_yaml_bytes(&self, bytes: &[u8]) -> Result<CatalogProductSummary, String> {
+        let yaml_str = std::str::from_utf8(bytes)
+            .map_err(|e| format!("Ungültige UTF-8 Kodierung in YAML-Datei: {}", e))?;
+        let prod = crate::catalog_yaml::parse_konfix_device_yaml(yaml_str)?;
+
+        let summary = CatalogProductSummary {
+            id: prod.id.clone(),
+            order_number: prod.order_number.clone(),
+            manufacturer: prod.manufacturer.clone(),
+            name: prod.name.clone(),
+            hardware_name: prod.hardware_name.clone(),
+            application_program: prod.application_program.clone(),
+            mask_version: prod.mask_version.clone(),
+            bus_current_ma: prod.bus_current_ma,
+            channel_count: prod.default_channels.len(),
+            ko_count: prod.communication_objects.len(),
+            param_count: prod.parameters.len(),
+        };
+
+        {
+            let conn = self.conn.lock().unwrap();
+            Self::upsert_product_conn(&conn, &prod)?;
+        }
+
+        info!("Imported YAML device '{}' ({}) into SQLite catalog.db", prod.name, prod.order_number);
+        Ok(summary)
+    }
+
     /// Creates a full KnxDevice instance with all KOs and parameters ready to be added to Project
     pub async fn create_device_from_product(
         &self,
@@ -2646,7 +2775,9 @@ mod tests {
                     number: 0,
                     name: "Switch_A".to_string(),
                     object_text: "Kanal A".to_string(),
+                    object_text_en: None,
                     function_text: "Schalten Ein/Aus".to_string(),
+                    function_text_en: None,
                     dpt: "1.001".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags::default(),
@@ -2660,6 +2791,7 @@ mod tests {
                     id: "P_TIME".to_string(),
                     name: "staircase_time".to_string(),
                     text: "Treppenlicht-Zeit".to_string(),
+                    text_en: None,
                     param_type: "number".to_string(),
                     value: "60".to_string(), // Catalog default
                     default_value: "60".to_string(),
@@ -2704,7 +2836,9 @@ mod tests {
                     number: 0,
                     name: "KO_0".to_string(),
                     object_text: String::new(),
+                    object_text_en: None,
                     function_text: "".to_string(),
+                    function_text_en: None,
                     dpt: "1.001".to_string(),
                     object_size: "1 Bit".to_string(),
                     flags: ComObjectFlags::default(),
@@ -2718,6 +2852,7 @@ mod tests {
                     id: "P_TIME".to_string(),
                     name: "staircase_time".to_string(),
                     text: "Treppenlicht".to_string(),
+                    text_en: None,
                     param_type: "number".to_string(),
                     value: "180".to_string(), // USER CONFIGURED VALUE! Must NOT be overwritten
                     default_value: "60".to_string(),

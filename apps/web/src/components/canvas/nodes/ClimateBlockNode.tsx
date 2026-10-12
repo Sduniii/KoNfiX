@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Thermometer, Flame, Plus, Minus, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface ClimateBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface ClimateBlockNodeProps {
 }
 
 export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
   const targetTemp = block.state?.target_temp ?? 21.0
   const actTemp = block.state?.act_temp ?? 20.8
@@ -41,12 +43,12 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-100">{block.name}</div>
-            <div className="text-[10px] text-slate-400 font-mono">Einzelraumregelung</div>
+            <div className="text-[10px] text-slate-400 font-mono">{t('nodes.climate.blockTitle')}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="text-xs font-mono font-bold text-orange-400 bg-orange-950/60 px-2 py-0.5 rounded border border-orange-800/50">
-            Komfort
+            {t('nodes.climate.heating')}
           </div>
           {onDelete && (
             <button
@@ -54,7 +56,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.climate.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -67,7 +69,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
       <div className="p-4 space-y-3 bg-slate-950/40">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-[10px] text-slate-500 uppercase font-bold">Ist-Temperatur</div>
+            <div className="text-[10px] text-slate-500 uppercase font-bold">{t('nodes.climate.currentTemp')}</div>
             <div className="text-xl font-mono font-bold text-slate-200 flex items-center gap-1">
               <Thermometer className="w-4 h-4 text-sky-400" />
               {actTemp.toFixed(1)} °C
@@ -82,7 +84,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
               <Minus className="w-3.5 h-3.5" />
             </button>
             <div className="text-center">
-              <div className="text-[9px] text-slate-400 font-mono">Soll</div>
+              <div className="text-[9px] text-slate-400 font-mono">{t('nodes.climate.targetTemp')}</div>
               <div className="text-base font-mono font-bold text-orange-400">{targetTemp.toFixed(1)}°</div>
             </div>
             <button
@@ -95,7 +97,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
         </div>
 
         <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px] text-slate-400 font-mono">
-          <span>Ventilöffnung (PWM):</span>
+          <span>{t('nodes.climate.valve')}:</span>
           <span className="text-orange-400 font-semibold">{valvePwm} %</span>
         </div>
       </div>
@@ -104,7 +106,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
       <div className="grid grid-cols-2 p-3 gap-2 border-t border-slate-800 bg-slate-900/80 rounded-b-lg text-xs">
         {/* Left: Inputs */}
         <div className="space-y-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Eingänge</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{t('nodes.blind.inputs')}</div>
           <div className="relative flex items-center justify-between text-slate-300 py-0.5 pr-1">
             <div className="flex items-center gap-1.5">
               <Handle
@@ -114,7 +116,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">T_IST</span>
-              <span className="text-[11px]">Sensor Ist</span>
+              <span className="text-[11px]">{t('nodes.climate.currentTemp')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -128,7 +130,7 @@ export const ClimateBlockNodeComponent: React.FC<ClimateBlockNodeProps> = ({ dat
         {/* Right: Outputs */}
         <div className="space-y-2 text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            KNX Ausgänge (Auto-GA)
+            {t('nodes.blind.outputs')}
           </div>
 
           <div className="relative flex items-center justify-end gap-1.5 text-slate-300 py-0.5">

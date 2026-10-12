@@ -20,7 +20,7 @@ interface SwitchNodeProps {
   }
 }
 
-export const SwitchNode: React.FC<SwitchNodeProps> = ({ data }) => {
+export const SwitchNodeComponent: React.FC<SwitchNodeProps> = ({ data }) => {
   const { deviceAddress, deviceName, manufacturer, channels, onTriggerChannel } = data
 
   return (
@@ -99,3 +99,5 @@ export const SwitchNode: React.FC<SwitchNodeProps> = ({ data }) => {
     </div>
   )
 }
+
+export const SwitchNode = React.memo(SwitchNodeComponent)

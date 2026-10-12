@@ -254,7 +254,7 @@ export const OpenProjectModal: React.FC<OpenProjectModalProps> = ({
                       </>
                     ) : (
                       <>
-                        <span>{isActive ? 'Reload' : t('header.openProject').split(' ')[0]}</span>
+                        <span>{isActive ? t('storage.reloadProject') : t('header.openProject').split(' ')[0]}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </>
                     )}

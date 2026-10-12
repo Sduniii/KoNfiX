@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { ArrowUp, ArrowDown, Square, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface BlindBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface BlindBlockNodeProps {
 }
 
 export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
   const position = block.state?.position ?? 0
 
@@ -74,7 +76,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-100">{block.name}</div>
-            <div className="text-[10px] text-slate-400 font-mono">Automatikjalousie</div>
+            <div className="text-[10px] text-slate-400 font-mono">{t('nodes.blind.blockTitle')}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -87,7 +89,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.blind.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -106,7 +108,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
               style={{ height: `${position}%` }}
             />
             <div className="z-10 text-[9px] text-center text-slate-400 font-mono">
-              {position === 0 ? 'Geöffnet' : position === 100 ? 'Geschlossen' : `${position}% Beschattet`}
+              {position === 0 ? t('nodes.blind.opened') : position === 100 ? t('nodes.blind.closed') : `${position}% ${t('nodes.blind.shaded')}`}
             </div>
           </div>
 
@@ -114,21 +116,21 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
           <div className="flex gap-1.5">
             <button
               onClick={handleUp}
-              title="Auf (0%)"
+              title={t('nodes.blind.upTooltip')}
               className="p-2 rounded bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-300 transition-colors"
             >
               <ArrowUp className="w-4 h-4" />
             </button>
             <button
               onClick={handleStop}
-              title="Stop"
+              title={t('nodes.blind.stopTooltip')}
               className="p-2 rounded bg-slate-800 hover:bg-amber-600 hover:text-white text-slate-300 transition-colors"
             >
               <Square className="w-4 h-4" />
             </button>
             <button
               onClick={handleDown}
-              title="Ab (100%)"
+              title={t('nodes.blind.downTooltip')}
               className="p-2 rounded bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-300 transition-colors"
             >
               <ArrowDown className="w-4 h-4" />
@@ -138,7 +140,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
 
         <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px] text-slate-400 font-mono">
           <span>DPT 1.008 / 1.010 / 5.001</span>
-          <span className="text-teal-400">Lamelle: 45°</span>
+          <span className="text-teal-400">{t('nodes.blind.slat')}: 45°</span>
         </div>
       </div>
 
@@ -146,7 +148,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
       <div className="grid grid-cols-2 p-3 gap-2 border-t border-slate-800 bg-slate-900/80 rounded-b-lg text-xs">
         {/* Left: Inputs */}
         <div className="space-y-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Eingänge</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{t('nodes.blind.inputs')}</div>
           <div className="relative flex items-center justify-between text-slate-300 py-0.5 pr-1">
             <div className="flex items-center gap-1.5">
               <Handle
@@ -156,7 +158,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">AUF</span>
-              <span className="text-[11px]">Aufwärts</span>
+              <span className="text-[11px]">{t('nodes.blind.moveUp')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -175,7 +177,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">AB</span>
-              <span className="text-[11px]">Abwärts</span>
+              <span className="text-[11px]">{t('nodes.blind.moveDown')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -194,7 +196,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-teal-400 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-teal-400 font-semibold text-[11px]">POS</span>
-              <span className="text-[11px]">Soll-Pos</span>
+              <span className="text-[11px]">{t('nodes.blind.position')}</span>
             </div>
             <span className="text-[10px] text-slate-500 font-mono">0-100%</span>
           </div>
@@ -208,7 +210,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-rose-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-rose-400 font-semibold text-[11px]">ALARM</span>
-              <span className="text-[11px]">Windalarm</span>
+              <span className="text-[11px]">{t('nodes.astro.windAlarm')}</span>
             </div>
             <span className="text-[10px] text-rose-400/80 font-mono">DPT 1.005</span>
           </div>
@@ -217,7 +219,7 @@ export const BlindBlockNodeComponent: React.FC<BlindBlockNodeProps> = ({ data })
         {/* Right: Outputs */}
         <div className="space-y-2 text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            KNX Ausgänge (Auto-GA)
+            {t('nodes.blind.outputs')}
           </div>
 
           <div className="relative flex items-center justify-end gap-1.5 text-slate-300 py-0.5">

@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Cpu, ToggleLeft, Trash2, Power, ArrowUpDown } from 'lucide-react'
 import { ChannelType } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 export interface ChannelTerminalData {
   channelId: string
@@ -28,6 +29,7 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
   data,
   selected,
 }) => {
+  const { t } = useTranslation()
   const {
     channelCode,
     channelName,
@@ -45,7 +47,7 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
 
   return (
     <div
-      className={`w-64 rounded-xl border-2 bg-slate-900 shadow-md shadow-black/40 transition-all select-none ${
+      className={`w-64 rounded-xl border-2 bg-slate-900 shadow-md shadow-black/40 transition-[border-color,box-shadow,background-color] duration-150 select-none ${
         selected
           ? 'border-sky-400 ring-2 ring-sky-400/40 shadow-sky-500/20'
           : isInputSensor
@@ -92,7 +94,7 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
                 e.stopPropagation()
                 onDelete(id)
               }}
-              title="Klemme von Seite entfernen"
+              title={t('nodes.channelTerminal.removeTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3 h-3" />
@@ -109,12 +111,12 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
           </span>
           <span className="text-[10px] text-slate-400 font-mono truncate">
             {channelType === 'PushButtonInput'
-              ? 'Taster-Wippe'
+              ? t('nodes.channelTerminal.buttonRocker')
               : channelType === 'DimmerOutput'
-              ? 'Dimm-Kanal'
+              ? t('nodes.channelTerminal.dimmerChannel')
               : channelType === 'BlindOutput'
-              ? 'Jalousie-Kanal'
-              : 'Schalt-Kanal'}
+              ? t('nodes.channelTerminal.blindChannel')
+              : t('nodes.channelTerminal.switchChannel')}
           </span>
         </div>
 
@@ -125,17 +127,17 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
         {/* Action Button for Switch or Group Address info */}
         {isInputSensor && (
           <div className="pt-1 flex items-center justify-between border-t border-slate-800/80">
-            <span className="text-[10px] text-slate-400">Signal senden:</span>
+            <span className="text-[10px] text-slate-400">{t('nodes.actuator.channelTitle')}:</span>
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 onTrigger?.()
               }}
-              title="Klicken zum Auslösen (Telegramm senden)"
+              title="Click to trigger"
               className="px-2 py-0.5 rounded bg-sky-600/30 hover:bg-sky-500 hover:text-slate-950 text-sky-300 border border-sky-500/40 text-[10px] font-bold font-mono transition-all active:scale-95 flex items-center gap-1"
             >
               <Power className="w-2.5 h-2.5" />
-              Drücken
+              {t('nodes.staircase.trigger')}
             </button>
           </div>
         )}
@@ -145,12 +147,12 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
       <div className="px-3 py-1.5 border-t border-slate-800 bg-slate-900/80 rounded-b-lg flex items-center justify-between text-[10px] font-mono">
         {isInputSensor ? (
           <>
-            <span className="text-slate-400">KNX Bus (Ausgang)</span>
+            <span className="text-slate-400">KNX Bus ({t('nodes.deviceBlock.outputsTitle')})</span>
             <div className="relative flex items-center gap-1.5">
               {gaAddress && (
                 <span
                   className="text-sky-400 font-bold bg-sky-950/80 px-1.5 py-0.2 rounded border border-sky-800/40"
-                  title={`Verknüpfte KNX Gruppenadresse: ${gaAddress}`}
+                  title={`KNX GA: ${gaAddress}`}
                 >
                   {gaAddress}
                 </span>
@@ -174,7 +176,7 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
                   isBlind ? '!bg-teal-400' : '!bg-emerald-400'
                 }`}
               />
-              <span className="text-slate-400">KNX Last (Eingang)</span>
+              <span className="text-slate-400">KNX {t('nodes.actuator.loadInput')}</span>
             </div>
             {gaAddress && (
               <span
@@ -183,7 +185,7 @@ export const ChannelTerminalNodeComponent: React.FC<ChannelTerminalNodeProps> = 
                     ? 'text-teal-400 bg-teal-950/80 border-teal-800/40'
                     : 'text-emerald-400 bg-emerald-950/80 border-emerald-800/40'
                 }`}
-                title={`Verknüpfte KNX Gruppenadresse: ${gaAddress}`}
+                title={`KNX GA: ${gaAddress}`}
               >
                 {gaAddress}
               </span>

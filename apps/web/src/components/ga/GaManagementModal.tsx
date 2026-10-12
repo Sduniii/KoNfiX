@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Project, GroupAddress, GaScheme } from '../../types/knx'
 import { downloadEtsCsv, downloadEtsXml } from '../../services/api'
+import { useTranslation } from '../../i18n'
 
 interface GaManagementModalProps {
   isOpen: boolean
@@ -34,6 +35,7 @@ export const GaManagementModal: React.FC<GaManagementModalProps> = ({
   onSetScheme,
   onUpdateGroupAddress,
 }) => {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<'scheme' | 'list'>('scheme')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTrade, setSelectedTrade] = useState<string>('all')
@@ -176,13 +178,13 @@ export const GaManagementModal: React.FC<GaManagementModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <span>KNX Gruppenadressen & Adressier-Muster</span>
+                <span>{t('ga.title')}</span>
                 <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  {project?.group_addresses.length ?? 0} Adressen
+                  {project?.group_addresses.length ?? 0} {t('sidebar.autoGaGas')}
                 </span>
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Konfiguriere automatische Adressierungs-Profile oder passe Gruppenadressen manuell an.
+                {t('ga.subtitle')}
               </p>
             </div>
           </div>
@@ -205,7 +207,7 @@ export const GaManagementModal: React.FC<GaManagementModalProps> = ({
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Adressier-Muster (Schema)</span>
+            <span>{t('ga.tabScheme')}</span>
           </button>
           <button
             onClick={() => setTab('list')}
@@ -216,7 +218,7 @@ export const GaManagementModal: React.FC<GaManagementModalProps> = ({
             }`}
           >
             <Network className="w-4 h-4" />
-            <span>Gruppenadress-Tabelle ({filteredGas.length})</span>
+            <span>{t('ga.tabList')} ({filteredGas.length})</span>
           </button>
         </div>
 

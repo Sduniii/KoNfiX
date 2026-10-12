@@ -67,7 +67,9 @@ export interface CommunicationObject {
   number: number
   name: string
   object_text: string
+  object_text_en?: string | null
   function_text: string
+  function_text_en?: string | null
   dpt: string
   object_size: string
   flags: ComObjectFlags
@@ -79,6 +81,7 @@ export interface CommunicationObject {
 export interface ParameterOption {
   value: string
   text: string
+  text_en?: string | null
 }
 
 export interface ParameterCondition {
@@ -103,6 +106,7 @@ export interface DeviceParameter {
   id: string
   name: string
   text: string
+  text_en?: string | null
   param_type: string
   value: string
   default_value: string
@@ -150,6 +154,34 @@ export interface CatalogProductSummary {
   channel_count: number
   ko_count: number
   param_count: number
+}
+
+export interface OnlineCatalogManufacturer {
+  id: number
+  code: string
+  knx_id: string
+  name: string
+}
+
+export interface OnlineCatalogDevice {
+  id: number
+  order_number: string
+  name: string
+  description?: string | null
+  hardware_name?: string | null
+  hardware_version?: string | null
+  bus_current_ma?: number | null
+  manufacturer: OnlineCatalogManufacturer
+  com_objects_count: number
+  parameters_count: number
+  yaml_url?: string
+}
+
+export interface OnlineCatalogSearchResponse {
+  total: number
+  page: number
+  page_size: number
+  devices: OnlineCatalogDevice[]
 }
 
 import type { KnxDataSecureConfig, DeviceFlashedSnapshot } from './programming'

@@ -207,31 +207,43 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                             {/* Devices in Room */}
                             {isRoomExpanded && devicesInRoom.length > 0 && (
                               <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-slate-800/70 ml-3.5">
-                                {devicesInRoom.map((dev) => (
-                                  <div
-                                    key={dev.id}
-                                    draggable={true}
-                                    onDragStart={(e) => {
-                                      e.dataTransfer.setData(
-                                        'application/knx-device',
-                                        JSON.stringify({ deviceId: dev.id })
-                                      )
-                                      e.dataTransfer.setData('text/plain', `knx-device:${dev.id}`)
-                                      e.dataTransfer.effectAllowed = 'copy'
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (onSelectDevice) onSelectDevice(dev.id)
-                                    }}
-                                    className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-slate-400 hover:text-sky-300 hover:bg-slate-800/70 cursor-grab active:cursor-grabbing transition-colors group select-none"
-                                    title={`${dev.individual_address} - ${dev.name} (Auf Canvas ziehen oder per '+ Canvas' platzieren)`}
-                                  >
-                                    <span className="font-mono text-[10px] text-sky-400 bg-sky-950/70 border border-sky-800/30 px-1 py-0.2 rounded shrink-0">
-                                      {dev.individual_address}
-                                    </span>
-                                    <span className="truncate text-[11px] group-hover:text-slate-200">
-                                      {dev.name}
-                                    </span>
+                                {devicesInRoom.map((dev) => {
+                                  const isUnassigned = !dev.individual_address || dev.individual_address === '-.-.-' || dev.individual_address.trim() === ''
+                                  return (
+                                    <div
+                                      key={dev.id}
+                                      draggable={true}
+                                      onDragStart={(e) => {
+                                        e.dataTransfer.setData(
+                                          'application/knx-device',
+                                          JSON.stringify({ deviceId: dev.id })
+                                        )
+                                        e.dataTransfer.setData('text/plain', `knx-device:${dev.id}`)
+                                        e.dataTransfer.effectAllowed = 'copy'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (onSelectDevice) onSelectDevice(dev.id)
+                                      }}
+                                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-grab active:cursor-grabbing transition-colors group select-none ${
+                                        isUnassigned
+                                          ? 'bg-red-950/40 text-red-300 border border-red-500/40 hover:bg-red-900/50'
+                                          : 'text-slate-400 hover:text-sky-300 hover:bg-slate-800/70'
+                                      }`}
+                                      title={`${isUnassigned ? 'Unadressiert' : dev.individual_address} - ${dev.name} (Auf Canvas ziehen oder per '+ Canvas' platzieren)`}
+                                    >
+                                      <span
+                                        className={`font-mono text-[10px] px-1 py-0.2 rounded shrink-0 ${
+                                          isUnassigned
+                                            ? 'text-red-300 bg-red-950 border border-red-700 font-bold animate-pulse'
+                                            : 'text-sky-400 bg-sky-950/70 border border-sky-800/30'
+                                        }`}
+                                      >
+                                        {isUnassigned ? '-.-.-' : dev.individual_address}
+                                      </span>
+                                      <span className="truncate text-[11px] group-hover:text-slate-200">
+                                        {dev.name}
+                                      </span>
                                     {dev.position ? (
                                       <button
                                         type="button"
@@ -260,7 +272,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                       )
                                     )}
                                   </div>
-                                ))}
+                                )
+                              })}
                               </div>
                             )}
                           </div>
@@ -281,37 +294,49 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <div className="pt-2 border-t border-slate-800/60 space-y-1">
                   <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-slate-400 font-semibold">
                     <Cpu className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Ohne Raumzuordnung</span>
+                    <span>{t('sidebar.unassignedDevices')}</span>
                     <span className="text-[10px] bg-amber-950/60 text-amber-400 border border-amber-800/40 px-1.5 py-0.2 rounded font-mono ml-auto">
                       {unassigned.length}
                     </span>
                   </div>
                   <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l border-slate-800/70 ml-3.5">
-                    {unassigned.map((dev) => (
-                      <div
-                        key={dev.id}
-                        draggable={true}
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData(
-                            'application/knx-device',
-                            JSON.stringify({ deviceId: dev.id })
-                          )
-                          e.dataTransfer.setData('text/plain', `knx-device:${dev.id}`)
-                          e.dataTransfer.effectAllowed = 'copy'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (onSelectDevice) onSelectDevice(dev.id)
-                        }}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs text-slate-400 hover:text-amber-300 hover:bg-slate-800/70 cursor-grab active:cursor-grabbing transition-colors group select-none"
-                        title={`${dev.individual_address} - ${dev.name} (Auf Canvas ziehen oder per '+ Canvas' platzieren)`}
-                      >
-                        <span className="font-mono text-[10px] text-amber-400 bg-amber-950/70 border border-amber-800/30 px-1 py-0.2 rounded shrink-0">
-                          {dev.individual_address}
-                        </span>
-                        <span className="truncate text-[11px] group-hover:text-slate-200">
-                          {dev.name}
-                        </span>
+                    {unassigned.map((dev) => {
+                      const isUnassigned = !dev.individual_address || dev.individual_address === '-.-.-' || dev.individual_address.trim() === ''
+                      return (
+                        <div
+                          key={dev.id}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData(
+                              'application/knx-device',
+                              JSON.stringify({ deviceId: dev.id })
+                            )
+                            e.dataTransfer.setData('text/plain', `knx-device:${dev.id}`)
+                            e.dataTransfer.effectAllowed = 'copy'
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onSelectDevice) onSelectDevice(dev.id)
+                          }}
+                          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-grab active:cursor-grabbing transition-colors group select-none ${
+                            isUnassigned
+                              ? 'bg-red-950/40 text-red-300 border border-red-500/40 hover:bg-red-900/50'
+                              : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/70'
+                          }`}
+                          title={`${isUnassigned ? 'Unadressiert' : dev.individual_address} - ${dev.name} (Auf Canvas ziehen oder per '+ Canvas' platzieren)`}
+                        >
+                          <span
+                            className={`font-mono text-[10px] px-1 py-0.2 rounded shrink-0 ${
+                              isUnassigned
+                                ? 'text-red-300 bg-red-950 border border-red-700 font-bold animate-pulse'
+                                : 'text-amber-400 bg-amber-950/70 border border-amber-800/30'
+                            }`}
+                          >
+                            {isUnassigned ? '-.-.-' : dev.individual_address}
+                          </span>
+                          <span className="truncate text-[11px] group-hover:text-slate-200">
+                            {dev.name}
+                          </span>
                         {dev.position ? (
                           <button
                             type="button"
@@ -340,7 +365,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                           )
                         )}
                       </div>
-                    ))}
+                    )
+                  })}
                   </div>
                 </div>
               )
@@ -352,10 +378,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         {activeTab === 'blocks' && (
           <div className="space-y-3">
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">
-              Funktionsbausteine
+              {t('sidebar.blocks')}
             </div>
             <div className="text-xs text-slate-400 px-1">
-              Klicke auf einen Baustein, um ihn im Canvas zu platzieren. Auto-GAs werden sofort generiert.
+              {t('sidebar.dragToCanvasHint')}
             </div>
 
             <div className="space-y-2 pt-1">
@@ -368,20 +394,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('LightController')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-amber-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
                   <Lightbulb className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-amber-400">
-                    Lichtsteuerung
+                    {t('sidebar.toolboxLighting')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Schalten, Dimmen, Helligkeitswert & Status
+                    {t('sidebar.toolboxLightingDesc')}
                   </div>
                   <div className="text-[10px] text-amber-500/80 font-mono mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Auto-GA: 5 Adressen
+                    <Sparkles className="w-3 h-3" /> {t('sidebar.autoGaGas', { count: 5 })}
                   </div>
                 </div>
               </button>
@@ -395,20 +421,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('BlindController')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-teal-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-teal-500/20 text-teal-400 group-hover:scale-110 transition-transform">
                   <Sun className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-teal-400">
-                    Automatikjalousie
+                    {t('sidebar.toolboxBlinds')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Auf/Ab, Lamelle, Position 0-100%
+                    {t('sidebar.toolboxBlindsDesc')}
                   </div>
                   <div className="text-[10px] text-teal-500/80 font-mono mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Auto-GA: 5 Adressen
+                    <Sparkles className="w-3 h-3" /> {t('sidebar.autoGaGas', { count: 5 })}
                   </div>
                 </div>
               </button>
@@ -422,20 +448,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('ClimateController')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-orange-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-orange-500/20 text-orange-400 group-hover:scale-110 transition-transform">
                   <Flame className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-orange-400">
-                    Einzelraumregelung
+                    {t('sidebar.toolboxClimate')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Ist-/Solltemperatur, PWM-Ventil & HVAC
+                    {t('sidebar.toolboxClimateDesc')}
                   </div>
                   <div className="text-[10px] text-orange-500/80 font-mono mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Auto-GA: 4 Adressen
+                    <Sparkles className="w-3 h-3" /> {t('sidebar.autoGaGas', { count: 4 })}
                   </div>
                 </div>
               </button>
@@ -449,17 +475,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('SceneController')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-purple-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 group-hover:scale-110 transition-transform">
                   <Palette className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-purple-400">
-                    Lichtszenen & Mischpult
+                    {t('sidebar.toolboxScenes')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Lichtstimmungen, Studio-Fader & KNX DPT 18.001
+                    {t('sidebar.toolboxScenesDesc')}
                   </div>
                   <div className="text-[10px] text-purple-500/80 font-mono mt-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Auto-GA: DPT 18.001 / 1.001
@@ -476,20 +502,20 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('StaircaseTimer')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-yellow-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-yellow-500/20 text-yellow-400 group-hover:scale-110 transition-transform">
                   <Timer className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-yellow-400">
-                    Treppenlichtzeitschalter
+                    {t('nodes.staircase.blockTitle')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Einstellbare Nachlaufzeit & Vorwarnung
+                    {t('nodes.staircase.duration')} &amp; {t('nodes.staircase.trigger')}
                   </div>
                   <div className="text-[10px] text-yellow-500/80 font-mono mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Auto-GA: 2 Adressen
+                    <Sparkles className="w-3 h-3" /> {t('sidebar.autoGaGas', { count: 2 })}
                   </div>
                 </div>
               </button>
@@ -503,25 +529,25 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('LogicGate')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-pink-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-pink-500/20 text-pink-400 group-hover:scale-110 transition-transform">
                   <Binary className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-pink-400">
-                    Logikgatter
+                    {t('sidebar.toolboxLogic')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    UND / ODER / XOR / NICHT Verknüpfung
+                    {t('sidebar.toolboxLogicDesc')}
                   </div>
                   <div className="text-[10px] text-pink-500/80 font-mono mt-1 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Auto-GA: 1 Adresse
+                    <Sparkles className="w-3 h-3" /> {t('sidebar.autoGaGas', { count: 1 })}
                   </div>
                 </div>
               </button>
 
-              {/* Astro & Sonnenschutz (Bresser Wetterstation) */}
+              {/* Astro & Sonnenschutz */}
               <button
                 draggable={true}
                 onDragStart={(e) => {
@@ -530,17 +556,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('AstroSunProtection')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-amber-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-amber-500/20 text-amber-400 group-hover:scale-110 transition-transform">
                   <Compass className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-amber-400">
-                    Astro & Sonnenschutz
+                    {t('nodes.astro.blockTitle')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Sonnenstand, Windalarm & Wetterstation
+                    {t('nodes.astro.sunPosition')}, {t('nodes.astro.windAlarm')} &amp; Bresser
                   </div>
                   <div className="text-[10px] text-amber-500/80 font-mono mt-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Bresser Wetter-Integration
@@ -557,17 +583,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('TimerScheduler')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-teal-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-teal-500/20 text-teal-400 group-hover:scale-110 transition-transform">
                   <Clock className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-teal-400">
-                    Zeitschaltuhr (Wochenplan)
+                    {t('sidebar.toolboxTimer')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Schaltfenster, Wochentage (Mo-So)
+                    {t('sidebar.toolboxTimerDesc')}
                   </div>
                   <div className="text-[10px] text-teal-500/80 font-mono mt-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Auto-GA: DPT 1.001
@@ -584,17 +610,17 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 }}
                 onClick={() => onAddBlock('ThresholdSwitch')}
                 className="w-full flex items-start gap-3 p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 hover:bg-slate-800/60 hover:border-orange-500/50 text-left transition-all group cursor-grab active:cursor-grabbing"
-                title="Klicken oder auf den Canvas ziehen"
+                title={t('sidebar.dragToCanvasHint')}
               >
                 <div className="p-2 rounded-lg bg-orange-500/20 text-orange-400 group-hover:scale-110 transition-transform">
                   <Sliders className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-200 group-hover:text-orange-400">
-                    Schwellwertschalter
+                    {t('sidebar.toolboxThreshold')}
                   </div>
                   <div className="text-[11px] text-slate-400 leading-tight mt-0.5">
-                    Hysterese für Temp, Wind, Helligkeit
+                    {t('sidebar.toolboxThresholdDesc')}
                   </div>
                   <div className="text-[10px] text-orange-500/80 font-mono mt-1 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> Auto-GA: DPT 1.001
@@ -614,100 +640,115 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-lg text-xs font-medium transition-all shadow-sm group"
             >
               <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
-              <span>+ Neues KNX-Gerät hinzufügen</span>
+              <span>{t('sidebar.addDeviceButton')}</span>
             </button>
 
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1 pt-1">
-              <span>KNX Geräte-Pool</span>
+              <span>{t('sidebar.devicePoolTitle')}</span>
               <span className="font-mono text-[10px] text-sky-400">
-                {project?.devices.length ?? 0} Geräte
+                {t('sidebar.devicesCount', { count: project?.devices.length ?? 0 })}
               </span>
             </div>
             <div className="text-xs text-slate-400 px-1">
-              Gerät oder Kanal auf den Canvas ziehen zum visuellen Verdrahten.
+              {t('sidebar.devicePoolHint')}
             </div>
 
             <div className="space-y-3">
-              {project?.devices.map((device) => (
-                <div
-                  key={device.id}
-                  draggable={true}
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(
-                      'application/knx-device',
-                      JSON.stringify({ deviceId: device.id })
-                    )
-                    e.dataTransfer.setData('text/plain', `knx-device:${device.id}`)
-                    e.dataTransfer.effectAllowed = 'copy'
-                  }}
-                  className="rounded-xl border border-slate-800 bg-slate-950/40 hover:border-sky-500/40 p-2.5 space-y-2 transition-all cursor-grab active:cursor-grabbing group/card select-none"
-                  title="Gerät auf den Canvas ziehen oder per '+ Canvas' platzieren"
-                >
+              {project?.devices.map((device) => {
+                const isUnassigned = !device.individual_address || device.individual_address === '-.-.-' || device.individual_address.trim() === ''
+                return (
                   <div
-                    className="flex items-center justify-between cursor-pointer group/dev"
-                    onClick={() => onSelectDevice?.(device.id)}
-                    title="Klicken, um Geräteeigenschaften anzuzeigen"
+                    key={device.id}
+                    draggable={true}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData(
+                        'application/knx-device',
+                        JSON.stringify({ deviceId: device.id })
+                      )
+                      e.dataTransfer.setData('text/plain', `knx-device:${device.id}`)
+                      e.dataTransfer.effectAllowed = 'copy'
+                    }}
+                    className={`rounded-xl border p-2.5 space-y-2 transition-all cursor-grab active:cursor-grabbing group/card select-none ${
+                      isUnassigned
+                        ? 'border-red-500/60 bg-red-950/25 hover:border-red-400 shadow-sm shadow-red-950/40'
+                        : 'border-slate-800 bg-slate-950/40 hover:border-sky-500/40'
+                    }`}
+                    title="Gerät auf den Canvas ziehen oder per '+ Canvas' platzieren"
                   >
-                    <div>
-                      <div className="text-xs font-semibold text-slate-200 group-hover/dev:text-sky-400 transition-colors">
-                        {device.name}
+                    <div
+                      className="flex items-center justify-between cursor-pointer group/dev"
+                      onClick={() => onSelectDevice?.(device.id)}
+                      title="Klicken, um Geräteeigenschaften anzuzeigen"
+                    >
+                      <div>
+                        <div className="text-xs font-semibold text-slate-200 group-hover/dev:text-sky-400 transition-colors">
+                          {device.name}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {device.model} ({device.manufacturer})
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {device.model} ({device.manufacturer})
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {device.position ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onPlaceDevice?.(device.id)
-                          }}
-                          className="text-[9px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 hover:bg-emerald-800/80 px-2 py-0.5 rounded transition-colors"
-                          title="Auf aktuellem Canvas platzieren / fokussieren"
-                        >
-                          ✓ Canvas
-                        </button>
-                      ) : (
-                        onPlaceDevice && (
+                      <div className="flex items-center gap-1.5">
+                        {device.position ? (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation()
-                              onPlaceDevice(device.id)
+                              onPlaceDevice?.(device.id)
                             }}
-                            className="text-[9px] font-mono bg-sky-950/80 text-sky-400 border border-sky-800/50 hover:bg-sky-800/80 px-2 py-0.5 rounded transition-colors font-semibold flex items-center gap-1 shadow-sm"
-                            title="Als Block auf aktuellem Canvas platzieren"
+                            className="text-[9px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 hover:bg-emerald-800/80 px-2 py-0.5 rounded transition-colors"
+                            title="Auf aktuellem Canvas platzieren / fokussieren"
                           >
-                            <Plus className="w-2.5 h-2.5" /> Canvas
+                            ✓ Canvas
                           </button>
-                        )
-                      )}
-                      <span className="text-[10px] font-mono bg-slate-800 text-sky-400 px-1.5 py-0.5 rounded border border-slate-700">
-                        {device.individual_address}
-                      </span>
-                      {onDeleteDevice && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (
-                              window.confirm(
-                                `Gerät "${device.name}" (${device.individual_address}) und alle zugehörigen Klemmen/Verbindungen wirklich löschen?`
-                              )
-                            ) {
-                              onDeleteDevice(device.id)
-                            }
-                          }}
-                          className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Gerät löschen"
+                        ) : (
+                          onPlaceDevice && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onPlaceDevice(device.id)
+                              }}
+                              className="text-[9px] font-mono bg-sky-950/80 text-sky-400 border border-sky-800/50 hover:bg-sky-800/80 px-2 py-0.5 rounded transition-colors font-semibold flex items-center gap-1 shadow-sm"
+                              title="Als Block auf aktuellem Canvas platzieren"
+                            >
+                              <Plus className="w-2.5 h-2.5" /> Canvas
+                            </button>
+                          )
+                        )}
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                            isUnassigned
+                              ? 'bg-red-950 text-red-300 border-red-700 font-bold animate-pulse'
+                              : 'bg-slate-800 text-sky-400 border-slate-700'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                          {isUnassigned ? '-.-.-' : device.individual_address}
+                        </span>
+                        {onDeleteDevice && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (
+                                window.confirm(
+                                  t('sidebar.deleteDeviceConfirm', {
+                                    name: device.name,
+                                    address: isUnassigned ? '-.-.-' : device.individual_address,
+                                  })
+                                )
+                              ) {
+                                onDeleteDevice(device.id)
+                              }
+                            }}
+                            className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                            title={t('common.delete')}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
                   <div className="space-y-1 pt-1 border-t border-slate-800/80">
                     {device.channels.map((ch) => {
@@ -768,8 +809,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     })}
                   </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
+          </div>
           </div>
         )}
       </div>

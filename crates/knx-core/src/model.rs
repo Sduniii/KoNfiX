@@ -149,7 +149,11 @@ pub struct CommunicationObject {
     pub number: u32,                 // e.g. 0
     pub name: String,                // internal identifier e.g. "Global_mud"
     pub object_text: String,         // group/channel e.g. "Kanal A" or "Zentral"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_text_en: Option<String>,
     pub function_text: String,       // function e.g. "Auf/Ab", "Schalten", "Status"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function_text_en: Option<String>,
     pub dpt: String,                 // e.g. "1.008", "1.001", "5.001"
     pub object_size: String,         // e.g. "1 Bit", "1 Byte"
     pub flags: ComObjectFlags,
@@ -165,6 +169,8 @@ pub struct CommunicationObject {
 pub struct ParameterOption {
     pub value: String,
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_en: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -197,6 +203,8 @@ pub struct DeviceParameter {
     pub id: String,                  // e.g. "P-10000"
     pub name: String,                // parameter key
     pub text: String,                // user-facing label e.g. "Fahrzeit"
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_en: Option<String>,     // English label
     pub param_type: String,          // "number", "enum", "text", "boolean"
     pub value: String,               // current value
     pub default_value: String,       // factory default

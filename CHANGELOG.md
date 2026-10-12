@@ -5,6 +5,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.3] - 2026-10-12 (Full Multilingual Parity: Dynamic Parameters & KOs, Complete UI Localization, Catalog YAML & Performance)
+
+### Full UI & Parameter Internationalization (`i18n`, `knxprod.rs`, `RightSidebar.tsx`, `DeviceKoParamModal.tsx`)
+- **Multilingual KNX Parameter & Object Model (`model.rs`, `types/knx.ts`):** Added `text_en` to `DeviceParameter` and `ParameterOption`, as well as `object_text_en` and `function_text_en` to `CommunicationObject` across backend Rust and frontend TypeScript models.
+- **Two-Pass XML Catalog Parser (`knxprod.rs`):** Upgraded `.knxprod` parser to extract English (`en-US`) and German (`de-DE` / fallback) translation tables simultaneously from manufacturer XML files (`M-xxxx_A-xxxx.xml`). Parameter labels, enum dropdown options, and communication object texts are now populated with localized strings.
+- **Dynamic Parameter & KO Display:** Components (`RightSidebar.tsx`, `DeviceKoParamModal.tsx`, `KnxDeviceBlockNode.tsx`) dynamically resolve labels based on the active UI language (`locale === 'en' ? item.text_en : item.text`), providing full English parity for device parameter configurations and canvas KO pins.
+- **Comprehensive UI Localization:** Eliminated all hardcoded strings across Header, Sidebars, Bus Monitor, Canvas Nodes, Diagnostics, and Modals with 100% type-safe i18n dictionaries (`de.ts`, `en.ts`).
+
+### Bus Monitor & Device Workflow Enhancements (`BusMonitor.tsx`, `LeftSidebar.tsx`, `RightSidebar.tsx`)
+- **Refined REC Recording Controls (`BusMonitor.tsx`):** Clarified recording state indicator (REC badge with pulsing status) avoiding confusion with separate stop buttons, with explicit tooltips explaining ring-buffer logging versus live-only monitoring.
+- **Unassigned Device Highlighting:** Devices without an individual address are highlighted with warning badges (`missingAddressBadge`, `-.-.-`) and animated alerts, offering a 1-click auto-addressing button assigning the next free address in line 1.1.
+
+### Catalog YAML & Online Catalog Integration (`catalog_yaml.rs`, `AddDeviceModal.tsx`)
+- **Native YAML Catalog Support:** Integrated high-performance parser for KoNfiX `.yaml` catalog definitions and SQLite database manager (`~/.konfix/catalog.db`).
+- **Online Catalog Browser:** Instant search and 1-click import from remote catalog repository (`konfix.sduni.de`).
+
+### Canvas Performance & Interaction
+- **Smooth Drag & Pan Performance (`FlowCanvas.tsx`):** Eliminated lag and handle dragging drag-behind on canvas nodes through optimized render batching and throttling.
+
 ## [2026.10.2] - 2026-10-06 (ETS 6.2 Full Parity: Telegram Recorder, Project Diff/Merge, Hardware Wizard & Topology Integrity)
 
 ### Professional Bus Monitor & Telegram Recorder (`recorder.rs`, `BusMonitor.tsx`)

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { KnxDevice, GroupAddress, CommunicationObject } from '../../../types/knx'
 import { createProgrammingJob } from '../../../services/api'
+import { useTranslation } from '../../../i18n/I18nContext'
 
 
 export interface KnxDeviceBlockNodeProps {
@@ -36,6 +37,7 @@ export interface KnxDeviceBlockNodeProps {
 }
 
 export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({ id, data }) => {
+  const { t, locale } = useTranslation()
   const { device, onAction, onOpenSettings, onRemove, onUpdateVisibleKos } = data
   const nodeId = id || device.id
   const updateNodeInternals = useUpdateNodeInternals()
@@ -273,10 +275,14 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
 
   const unaddedCount = kos.length - visibleKos.length
 
+  const isUnassigned = !device.individual_address || device.individual_address === '-.-.-' || device.individual_address.trim() === ''
+
   return (
     <div
-      className={`rounded-2xl border-2 bg-slate-900 shadow-xl transition-all select-none relative ${
-        isSensor
+      className={`rounded-2xl border-2 bg-slate-900 shadow-xl transition-[border-color,box-shadow,background-color] duration-150 select-none relative ${
+        isUnassigned
+          ? 'border-red-500 shadow-red-950/40 ring-2 ring-red-500/50'
+          : isSensor
           ? 'border-amber-500/70 shadow-amber-950/30 ring-1 ring-amber-500/20'
           : 'border-sky-500/70 shadow-sky-950/30 ring-1 ring-sky-500/20'
       } ${isCollapsed ? 'w-80' : 'w-[420px]'}`}
@@ -285,7 +291,9 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
       {/* Blueprint Header */}
       <div
         className={`flex items-center justify-between border-b border-slate-800 px-4 py-3 rounded-t-2xl bg-gradient-to-r ${
-          isSensor
+          isUnassigned
+            ? 'from-slate-950 via-red-950/30 to-slate-950'
+            : isSensor
             ? 'from-slate-950 via-amber-950/25 to-slate-950'
             : 'from-slate-950 via-sky-950/25 to-slate-950'
         }`}
@@ -293,7 +301,9 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <div
             className={`p-2 rounded-xl border shrink-0 shadow-inner ${
-              isSensor
+              isUnassigned
+                ? 'bg-red-500/20 text-red-400 border-red-500/40 shadow-red-500/20'
+                : isSensor
                 ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-amber-500/20'
                 : 'bg-sky-500/20 text-sky-400 border-sky-500/40 shadow-sky-500/20'
             }`}
@@ -305,12 +315,15 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
             <div className="flex items-center gap-2">
               <span
                 className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded-md border shrink-0 shadow-sm ${
-                  isSensor
+                  isUnassigned
+                    ? 'bg-red-950 text-red-300 border-red-700 font-bold animate-pulse'
+                    : isSensor
                     ? 'bg-amber-950 text-amber-300 border-amber-700/60'
                     : 'bg-sky-950 text-sky-300 border-sky-700/60'
                 }`}
+                title={isUnassigned ? t('nodes.deviceBlock.missingAddressTooltip') : undefined}
               >
-                {device.individual_address}
+                {isUnassigned ? t('nodes.deviceBlock.missingAddress') : device.individual_address}
               </span>
               {device.security?.is_secure_enabled && (
                 <span title="KNX Data Secure auf TP aktiv">
@@ -334,7 +347,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
             type="button"
             onClick={handleQuickFlash}
             disabled={isFlashing}
-            title="Gerät partiell flashen (GAs & Parameter übertragen)"
+            title={t('nodes.deviceBlock.quickFlashTooltip')}
             className={`p-1.5 rounded-lg transition-all disabled:opacity-50 ${
               isFlashing
                 ? 'text-amber-400 bg-amber-500/20 border border-amber-500/50 shadow-[0_0_10px_rgba(251,191,36,0.3)] animate-pulse'
@@ -356,7 +369,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                 ? 'bg-sky-400 text-slate-950 border-sky-300 shadow-md shadow-sky-500/40'
                 : 'bg-slate-800/90 text-sky-300 border-slate-700 hover:bg-sky-500/20 hover:border-sky-500/50'
             }`}
-            title="Kommunikationsobjekt (KO) als sichtbaren Pin hinzufügen"
+            title={t('nodes.deviceBlock.addPinTooltip')}
           >
             <Plus className="w-3 h-3" />
             <span>Pin</span>
@@ -375,7 +388,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                 e.stopPropagation()
                 onOpenSettings(device)
               }}
-              title="KO- & Parametertabelle öffnen"
+              title={t('nodes.deviceBlock.openKoModalTooltip')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 transition-colors"
             >
               <Sliders className="w-3.5 h-3.5" />
@@ -389,7 +402,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
               e.stopPropagation()
               setIsCollapsed(!isCollapsed)
             }}
-            title={isCollapsed ? 'Aufklappen' : 'Zuklappen'}
+            title={isCollapsed ? t('common.details') : t('common.close')}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
           >
             {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
@@ -403,7 +416,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                 e.stopPropagation()
                 onRemove(device.id)
               }}
-              title="Vom Canvas entfernen"
+              title={t('inspector.removeFromCanvas')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -420,10 +433,10 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
             <div className="py-6 px-4 text-center rounded-xl border border-dashed border-slate-800 bg-slate-900/40 space-y-2">
               <div className="text-slate-300 text-xs font-semibold flex items-center justify-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-sky-400" />
-                <span>Kompakt-Modus (Keine Pins)</span>
+                <span>{t('nodes.deviceBlock.compactMode')}</span>
               </div>
               <div className="text-[11px] text-slate-400 max-w-[280px] mx-auto leading-relaxed">
-                Klicke auf <span className="text-sky-300 font-semibold">+ Pin</span>, um Kommunikationsobjekte dieses Geräts für Leitungen einzublenden.
+                {t('nodes.deviceBlock.compactModeDesc')}
               </div>
               <div className="pt-1.5">
                 <button
@@ -435,7 +448,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                   className="px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 rounded-lg text-xs font-semibold transition-all inline-flex items-center gap-1.5 shadow-sm shadow-sky-950"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ Pin hinzufügen</span>
+                  <span>{t('nodes.deviceBlock.addPin')}</span>
                 </button>
               </div>
             </div>
@@ -447,7 +460,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                   <div className="flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-wider text-sky-400 border-b border-sky-900/40 pb-1">
                     <span className="flex items-center gap-1">
                       <ArrowDownLeft className="w-3 h-3" />
-                      <span>Eingänge (Empfangen / Write)</span>
+                      <span>{t('nodes.deviceBlock.inputsTitle')}</span>
                     </span>
                     <span className="font-mono text-[9px] bg-sky-950 px-1.5 py-0.2 rounded border border-sky-800/60">
                       {inputKos.length}
@@ -487,16 +500,22 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                             </span>
 
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold text-slate-100 truncate" title={ko.function_text || ko.name}>
-                                  {ko.function_text || ko.name}
-                                </span>
-                                {ko.object_text && (
-                                  <span className="text-[10px] text-slate-400 truncate font-mono">
-                                    ({ko.object_text})
-                                  </span>
-                                )}
-                              </div>
+                              {(() => {
+                                const koFnText = (locale === 'en' && ko.function_text_en) ? ko.function_text_en : (ko.function_text || ko.name)
+                                const koObjText = (locale === 'en' && ko.object_text_en) ? ko.object_text_en : ko.object_text
+                                return (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-semibold text-slate-100 truncate" title={koFnText}>
+                                      {koFnText}
+                                    </span>
+                                    {koObjText && (
+                                      <span className="text-[10px] text-slate-400 truncate font-mono">
+                                        ({koObjText})
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })()}
 
                               <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                                 {ko.dpt && (
@@ -539,7 +558,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                   <div className="flex items-center justify-between px-1 text-[10px] font-bold uppercase tracking-wider text-amber-400 border-b border-amber-900/40 pb-1">
                     <span className="flex items-center gap-1">
                       <ArrowUpRight className="w-3 h-3" />
-                      <span>Ausgänge (Senden / Transmit)</span>
+                      <span>{t('nodes.deviceBlock.outputsTitle')}</span>
                     </span>
                     <span className="font-mono text-[9px] bg-amber-950 px-1.5 py-0.2 rounded border border-amber-800/60">
                       {outputKos.length}
@@ -567,7 +586,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                             <button
                               type="button"
                               onClick={(e) => handleRemoveKo(ko.number, e)}
-                              title="Pin ausblenden"
+                              title={t('nodes.deviceBlock.hidePin')}
                               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 opacity-40 group-hover:opacity-100 transition-all shrink-0"
                             >
                               <X className="w-3 h-3" />
@@ -592,16 +611,22 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                           {/* Right label & KO info */}
                           <div className="flex items-center justify-end gap-2 min-w-0 flex-1 text-right pr-1">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-end gap-1.5">
-                                {ko.object_text && (
-                                  <span className="text-[10px] text-slate-400 truncate font-mono">
-                                    ({ko.object_text})
-                                  </span>
-                                )}
-                                <span className="text-xs font-semibold text-slate-100 truncate" title={ko.function_text || ko.name}>
-                                  {ko.function_text || ko.name}
-                                </span>
-                              </div>
+                              {(() => {
+                                const koFnText = (locale === 'en' && ko.function_text_en) ? ko.function_text_en : (ko.function_text || ko.name)
+                                const koObjText = (locale === 'en' && ko.object_text_en) ? ko.object_text_en : ko.object_text
+                                return (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {koObjText && (
+                                      <span className="text-[10px] text-slate-400 truncate font-mono">
+                                        ({koObjText})
+                                      </span>
+                                    )}
+                                    <span className="text-xs font-semibold text-slate-100 truncate" title={koFnText}>
+                                      {koFnText}
+                                    </span>
+                                  </div>
+                                )
+                              })()}
 
                               <div className="flex items-center justify-end gap-1 mt-0.5 flex-wrap">
                                 {ko.group_addresses?.map((ga) => (
@@ -706,7 +731,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Eingänge
+                {t('nodes.deviceBlock.inputsTitle')}
               </button>
               <button
                 type="button"
@@ -717,7 +742,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Ausgänge
+                {t('nodes.deviceBlock.outputsTitle')}
               </button>
               <button
                 type="button"
@@ -728,7 +753,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                Mit GA
+                {t('nodes.deviceBlock.withGa')}
               </button>
             </div>
 
@@ -739,7 +764,7 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                 onChange={(e) => setSelectedChannel(e.target.value)}
                 className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[10px] text-slate-300 outline-none max-w-[120px] truncate"
               >
-                <option value="all">Alle Kanäle</option>
+                <option value="all">{t('nodes.deviceBlock.allChannels')}</option>
                 {distinctChannels.map((ch) => (
                   <option key={ch} value={ch}>
                     {ch}
@@ -756,14 +781,14 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
               onClick={handleAddAllLinked}
               className="text-[9px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 hover:bg-sky-500/20 font-medium transition-colors"
             >
-              + Alle aktiven (mit GA)
+              {t('nodes.deviceBlock.allActive')}
             </button>
             <button
               type="button"
               onClick={handleAddAll}
               className="text-[9px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 font-medium transition-colors"
             >
-              + Alle KOs
+              {t('nodes.deviceBlock.all')}
             </button>
             <button
               type="button"

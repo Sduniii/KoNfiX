@@ -153,6 +153,12 @@ pub fn create_router(state: AppState) -> Router {
             "/api/catalog/import-knxprod",
             post(handle_catalog_import_knxprod).layer(axum::extract::DefaultBodyLimit::max(128 * 1024 * 1024)),
         )
+        .route(
+            "/api/catalog/import-yaml",
+            post(handle_catalog_import_yaml).layer(axum::extract::DefaultBodyLimit::max(16 * 1024 * 1024)),
+        )
+        .route("/api/catalog/online/search", get(handle_catalog_online_search))
+        .route("/api/catalog/online/import", post(handle_catalog_online_import))
         .route("/api/catalog/create-device", post(handle_catalog_create_device))
         .route("/api/catalog/download-default", post(handle_catalog_download_default))
         .route("/api/catalog/sync-project", post(handle_catalog_sync_project))
@@ -430,6 +436,7 @@ struct UpdateStorageSettingsReq {
     migrate: Option<bool>,
     #[serde(default)]
     signing_key: Option<Option<String>>,
+    online_catalog_url: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -467,6 +474,7 @@ async fn handle_storage_update_settings(
             req.data_dir.as_deref(),
             req.migrate.unwrap_or(true),
             req.signing_key,
+            req.online_catalog_url,
         )
         .await
         .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
@@ -1204,6 +1212,25 @@ pub struct ImportKnxprodRequest {
 }
 
 #[derive(Debug, serde::Deserialize)]
+pub struct ImportYamlRequest {
+    pub file_path: Option<String>,
+    pub data_base64: Option<String>,
+    pub yaml_text: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct OnlineSearchQuery {
+    pub q: Option<String>,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct OnlineImportRequest {
+    pub order_number: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
 pub struct CreateDeviceRequest {
     pub product_id: String,
     pub individual_address: String,
@@ -1278,6 +1305,170 @@ async fn handle_catalog_import_knxprod(
             Json(serde_json::json!({ "error": err })),
         )),
     }
+}
+
+async fn handle_catalog_import_yaml(
+    State(state): State<AppState>,
+    Json(req): Json<ImportYamlRequest>,
+) -> Result<Json<CatalogProductSummary>, (StatusCode, Json<serde_json::Value>)> {
+    let bytes = if let Some(text) = req.yaml_text {
+        text.into_bytes()
+    } else if let Some(path_str) = req.file_path {
+        fs::read(&path_str).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": format!("Datei konnte nicht gelesen werden: {}", e) })),
+            )
+        })?
+    } else if let Some(b64) = req.data_base64 {
+        BASE64_STANDARD.decode(&b64).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": format!("Ungültiges Base64: {}", e) })),
+            )
+        })?
+    } else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Weder yaml_text, file_path noch data_base64 angegeben" })),
+        ));
+    };
+
+    match state.catalog.import_yaml_bytes(&bytes).await {
+        Ok(summary) => Ok(Json(summary)),
+        Err(err) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err })),
+        )),
+    }
+}
+
+async fn handle_catalog_online_search(
+    State(state): State<AppState>,
+    Query(query): Query<OnlineSearchQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let settings = state.storage.get_settings().await;
+    let base_url = settings.online_catalog_url.trim_end_matches('/');
+    let page = query.page.unwrap_or(1);
+    let page_size = query.page_size.unwrap_or(30);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("HTTP Client Fehler: {}", e) })),
+            )
+        })?;
+
+    let mut req_builder = client
+        .get(&format!("{}/api/v1/devices", base_url))
+        .query(&[("page", page.to_string()), ("page_size", page_size.to_string())]);
+
+    if let Some(ref q) = query.q {
+        let trimmed = q.trim();
+        if !trimmed.is_empty() {
+            req_builder = req_builder.query(&[("q", trimmed)]);
+        }
+    }
+
+    let resp = req_builder.send().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Online-Katalog '{}' nicht erreichbar: {}", base_url, e)
+            })),
+        )
+    })?;
+
+    if !resp.status().is_success() {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Online-Katalog antwortete mit HTTP-Status: {}", resp.status())
+            })),
+        ));
+    }
+
+    let json_val: serde_json::Value = resp.json().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Antwort des Online-Katalogs konnte nicht gelesen werden: {}", e)
+            })),
+        )
+    })?;
+
+    Ok(Json(json_val))
+}
+
+async fn handle_catalog_online_import(
+    State(state): State<AppState>,
+    Json(req): Json<OnlineImportRequest>,
+) -> Result<Json<CatalogProduct>, (StatusCode, Json<serde_json::Value>)> {
+    let order_number = req.order_number.trim();
+    if order_number.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Bestellnummer darf nicht leer sein" })),
+        ));
+    }
+
+    let settings = state.storage.get_settings().await;
+    let base_url = settings.online_catalog_url.trim_end_matches('/');
+    let url = format!("{}/api/v1/devices/{}/yaml", base_url, order_number);
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": format!("HTTP Client Fehler: {}", e) })),
+            )
+        })?;
+
+    let resp = client.get(&url).send().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Online-Katalog '{}' nicht erreichbar: {}", base_url, e)
+            })),
+        )
+    })?;
+
+    if !resp.status().is_success() {
+        return Err((
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({
+                "error": format!("Gerät '{}' nicht im Online-Katalog gefunden (HTTP {})", order_number, resp.status())
+            })),
+        ));
+    }
+
+    let bytes = resp.bytes().await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(serde_json::json!({ "error": format!("Download-Fehler: {}", e) })),
+        )
+    })?;
+
+    let summary = state.catalog.import_yaml_bytes(&bytes).await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": format!("Fehler beim Importieren des Geräts: {}", e) })),
+        )
+    })?;
+
+    let product = state.catalog.get_product(&summary.id).await.ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "Importiertes Produkt konnte nicht aus der Datenbank geladen werden" })),
+        )
+    })?;
+
+    Ok(Json(product))
 }
 
 async fn handle_catalog_create_device(
@@ -2198,7 +2389,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.10.2");
+        assert_eq!(res.0.version, "2026.10.3");
         assert_eq!(res.0.name, "knx-core");
     }
 
@@ -2284,5 +2475,45 @@ mod tests {
 
         let res_malicious = app.oneshot(req_malicious).await.unwrap();
         assert!(res_malicious.headers().get("access-control-allow-origin").is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_catalog_import_yaml_endpoint() {
+        use tower::util::ServiceExt;
+        let state = create_test_app_state();
+        let app = create_router(state);
+
+        let yaml_sample = r#"
+$schema: https://konfix.sduni.de/schemas/konfix-device-v1.json
+konfix_version: '1.0'
+manufacturer:
+  code: abb
+  name: ABB
+device:
+  order_number: SA/S8.16.6.2
+  name: Schaltaktor 8-fach C-Last
+application:
+  name: Schalten 8f
+  mask_version: MV-07B0
+communication_objects:
+- number: 1
+  name: Kanal A Schalten
+  function: Schalten Ein/Aus
+  dpt: '1.001'
+"#;
+
+        let body = serde_json::to_string(&serde_json::json!({
+            "yaml_text": yaml_sample
+        })).unwrap();
+
+        let req = axum::http::Request::builder()
+            .uri("/api/catalog/import-yaml")
+            .method("POST")
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(body))
+            .unwrap();
+
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
     }
 }

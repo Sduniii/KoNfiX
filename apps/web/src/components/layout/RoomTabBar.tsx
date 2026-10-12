@@ -121,7 +121,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
           type="button"
           onClick={() => scrollTabs(-200)}
           className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 shadow-sm shrink-0 transition-colors z-20"
-          title="Räume nach links scrollen"
+          title={t('rooms.scrollLeftTooltip')}
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -212,7 +212,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
           type="button"
           onClick={() => scrollTabs(200)}
           className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 shadow-sm shrink-0 transition-colors z-20"
-          title="Räume nach rechts scrollen"
+          title={t('rooms.scrollRightTooltip')}
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>

@@ -14,10 +14,16 @@ pub struct StorageSettings {
     pub auto_save: bool,
     #[serde(default)]
     pub signing_key: Option<String>,
+    #[serde(default = "default_online_catalog_url")]
+    pub online_catalog_url: String,
 }
 
 fn default_true() -> bool {
     true
+}
+
+fn default_online_catalog_url() -> String {
+    "https://konfix.sduni.de".to_string()
 }
 
 impl Default for StorageSettings {
@@ -27,6 +33,7 @@ impl Default for StorageSettings {
             active_project_name: None,
             auto_save: true,
             signing_key: None,
+            online_catalog_url: default_online_catalog_url(),
         }
     }
 }
@@ -321,12 +328,27 @@ impl StorageManager {
         Ok(self.get_settings().await)
     }
 
-    /// Updates both data directory and signing key if provided
+    /// Updates the online catalog base URL (e.g. "https://konfix.sduni.de")
+    pub async fn update_online_catalog_url(&self, url: &str) -> Result<StorageSettings, String> {
+        let trimmed = url.trim();
+        if trimmed.is_empty() {
+            return Err("Online-Katalog URL darf nicht leer sein".to_string());
+        }
+        {
+            let mut s = self.settings.write().unwrap();
+            s.online_catalog_url = trimmed.to_string();
+        }
+        self.persist_settings().await?;
+        Ok(self.get_settings().await)
+    }
+
+    /// Updates data directory, signing key, and/or online catalog URL if provided
     pub async fn update_storage_settings(
         &self,
         new_dir: Option<&str>,
         migrate: bool,
         signing_key: Option<Option<String>>,
+        online_catalog_url: Option<String>,
     ) -> Result<StorageSettings, String> {
         if let Some(dir) = new_dir {
             if !dir.trim().is_empty() {
@@ -335,6 +357,9 @@ impl StorageManager {
         }
         if let Some(key_opt) = signing_key {
             self.update_signing_key(key_opt).await?;
+        }
+        if let Some(url) = online_catalog_url {
+            self.update_online_catalog_url(&url).await?;
         }
         Ok(self.get_settings().await)
     }

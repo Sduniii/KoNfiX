@@ -38,6 +38,7 @@ import {
   decryptKeyring,
   connectKeyring,
 } from '../../services/api'
+import { useTranslation } from '../../i18n'
 
 interface GatewayModalProps {
   isOpen: boolean
@@ -52,6 +53,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
   connectionStatus,
   onStatusChange,
 }) => {
+  const { t } = useTranslation()
   const [discoveredList, setDiscoveredList] = useState<DiscoveredGateway[]>([])
   const [isScanning, setIsScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
@@ -234,7 +236,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-100">
-                  KNXnet/IP Gateway Verbindung
+                  {t('gateway.title')}
                 </h2>
                 <span
                   className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded-full border ${
@@ -243,11 +245,11 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                       : 'bg-slate-800 border-slate-700 text-slate-400'
                   }`}
                 >
-                  {isConnected ? 'Verbunden' : 'Getrennt'}
+                  {isConnected ? t('gateway.statusConnected') : t('gateway.statusDisconnected')}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Verbindet den Rust Core direkt per KNXnet/IP Tunneling mit der realen Bus-Hardware
+                {t('gateway.subtitle')}
               </p>
             </div>
           </div>
@@ -276,7 +278,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                 <div className="flex items-center gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                   <span className="font-semibold text-sm text-emerald-300">
-                    Aktive KNXnet/IP Tunneling-Verbindung
+                    {t('gateway.statusConnected')}
                   </span>
                 </div>
                 <button
@@ -285,31 +287,31 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 transition-colors disabled:opacity-50"
                 >
                   <Unplug className="w-3.5 h-3.5" />
-                  <span>Trennen</span>
+                  <span>{t('gateway.disconnect')}</span>
                 </button>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
                 <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <div className="text-[10px] text-slate-500 font-sans uppercase">Gateway IP</div>
+                  <div className="text-[10px] text-slate-500 font-sans uppercase">{t('gateway.ipLabel')}</div>
                   <div className="font-semibold text-slate-200 truncate">
                     {connectionStatus.gateway_ip}:{connectionStatus.gateway_port}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <div className="text-[10px] text-slate-500 font-sans uppercase">Tunnel Adresse</div>
+                  <div className="text-[10px] text-slate-500 font-sans uppercase">{t('gateway.tunnelAddressCol')}</div>
                   <div className="font-semibold text-emerald-400">
                     {connectionStatus.individual_address || '1.1.250'}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <div className="text-[10px] text-slate-500 font-sans uppercase">Channel ID</div>
+                  <div className="text-[10px] text-slate-500 font-sans uppercase">{t('gateway.channelIdCol')}</div>
                   <div className="font-semibold text-sky-400">
                     #{connectionStatus.channel_id ?? 1}
                   </div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <div className="text-[10px] text-slate-500 font-sans uppercase">Heartbeat</div>
+                  <div className="text-[10px] text-slate-500 font-sans uppercase">{t('gateway.heartbeatCol')}</div>
                   <div className="font-semibold text-slate-300">
                     {connectionStatus.last_heartbeat
                       ? new Date(connectionStatus.last_heartbeat).toLocaleTimeString()
@@ -322,21 +324,21 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
               <div className="flex items-center gap-4 pt-1 text-xs text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Gesendet:</span>
+                  <span>{t('gateway.sentCount')}</span>
                   <span className="font-mono font-bold text-slate-200">
                     {connectionStatus.telegrams_sent}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <ArrowDownLeft className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Empfangen:</span>
+                  <span>{t('gateway.receivedCount')}</span>
                   <span className="font-mono font-bold text-slate-200">
                     {connectionStatus.telegrams_received}
                   </span>
                 </div>
                 <div className="ml-auto text-[11px] text-emerald-400 flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Live Bus Sync aktiv</span>
+                  <span>{t('gateway.liveBusSyncActive')}</span>
                 </div>
               </div>
             </div>
@@ -388,7 +390,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                     }`}
                   >
                     <FolderKey className="w-3.5 h-3.5" />
-                    <span>ETS-Schlüsselbund (.knxkeys)</span>
+                    <span>{t('gateway.etsKeyringTab')}</span>
                   </button>
                   <button
                     type="button"
@@ -400,7 +402,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                     }`}
                   >
                     <Key className="w-3.5 h-3.5" />
-                    <span>Manuelle Zugangsdaten</span>
+                    <span>{t('gateway.manualCredsTab')}</span>
                   </button>
                 </div>
 
@@ -409,9 +411,9 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                     <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300 flex items-start gap-2.5">
                       <Info className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
                       <div className="space-y-0.5">
-                        <p className="font-semibold">Automatische Entschlüsselung aller Tunnel & Schlüssel:</p>
+                        <p className="font-semibold">{t('gateway.keyringInfoTitle')}</p>
                         <p className="text-[11px] text-emerald-300/80 leading-relaxed">
-                          Wähle die exportierte <code>.knxkeys</code>-Datei und gib dein Export-Passwort ein. Alle Tunnel (inkl. freiem Tunnel 2 / User 3) werden automatisch erkannt!
+                          {t('gateway.keyringInfoDesc')}
                         </p>
                       </div>
                     </div>
@@ -576,9 +578,9 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                     <div className="p-3 rounded-lg bg-sky-500/10 border border-sky-500/20 text-xs text-sky-300 flex items-start gap-2.5">
                       <Info className="w-4 h-4 shrink-0 text-sky-400 mt-0.5" />
                       <div className="space-y-1">
-                        <p className="font-semibold">ETS Tunneling Anmeldedaten:</p>
+                        <p className="font-semibold">{t('gateway.manualCredsTitle')}</p>
                         <p className="text-[11px] text-sky-300/80 leading-relaxed">
-                          Trage hier die Tunnel-Zugangsdaten aus ETS manuell ein (z. B. User-ID 3 und das zugehörige Passwort).
+                          {t('gateway.manualCredsDesc')}
                         </p>
                       </div>
                     </div>
@@ -586,7 +588,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="sm:col-span-1">
                         <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
-                          Tunnel User-ID
+                          {t('gateway.tunnelUserId')}
                         </label>
                         <input
                           type="number"
@@ -602,14 +604,14 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
 
                       <div className="sm:col-span-2">
                         <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
-                          Tunnel-Passwort (User-Passwort)
+                          {t('gateway.tunnelPassword')}
                         </label>
                         <div className="relative">
                           <input
                             type={showPassword ? 'text' : 'password'}
                             value={securePassword}
                             onChange={(e) => setSecurePassword(e.target.value)}
-                            placeholder="Passwort für diese User-ID aus ETS..."
+                            placeholder={t('gateway.fromKeyring')}
                             className="w-full pl-3 pr-10 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono focus:outline-none focus:border-emerald-500"
                           />
                           <button
@@ -620,19 +622,19 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                         </div>
-                        <span className="text-[10px] text-slate-500 block mt-1">Aus ETS Schlüsselbund für diesen Tunnel</span>
+                        <span className="text-[10px] text-slate-500 block mt-1">{t('gateway.fromKeyring')}</span>
                       </div>
                     </div>
 
                     <div>
                       <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
-                        Geräte-Authentifizierungsschlüssel (Optional)
+                        {t('gateway.deviceAuthKey')}
                       </label>
                       <input
                         type="password"
                         value={secureDeviceAuth}
                         onChange={(e) => setSecureDeviceAuth(e.target.value)}
-                        placeholder="Optional (nur wenn Geräteauthentifizierung in ETS aktiv ist)"
+                        placeholder={t('gateway.deviceAuthOptional')}
                         className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -648,7 +650,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
               <div className="flex items-center gap-2">
                 <Wifi className="w-4 h-4 text-sky-400" />
                 <h3 className="text-sm font-semibold text-slate-200">
-                  Automatische Gateway-Erkennung (UDP Multicast)
+                  {t('gateway.autoDiscoveryTitle')}
                 </h3>
               </div>
               <button
@@ -657,7 +659,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
-                <span>{isScanning ? 'Suche läuft...' : 'Netzwerk scannen'}</span>
+                <span>{isScanning ? t('gateway.scanningNetwork') : t('gateway.scanNetwork')}</span>
               </button>
             </div>
 
@@ -703,7 +705,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                         {isThisGwConnected ? (
                           <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>Verbunden</span>
+                            <span>{t('gateway.statusConnected')}</span>
                           </div>
                         ) : (
                           <button
@@ -712,7 +714,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-700/20 transition-all disabled:opacity-50"
                           >
                             <Zap className="w-3.5 h-3.5" />
-                            <span>Verbinden</span>
+                            <span>{t('gateway.connect')}</span>
                           </button>
                         )}
                       </div>
@@ -722,7 +724,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
               </div>
             ) : !isScanning ? (
               <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400">
-                Keine KNX-Gateways im Suchlauf gefunden. Nutze unten die manuelle IP-Verbindung.
+                {t('gateway.noGatewaysFound')}
               </div>
             ) : null}
           </div>
@@ -732,17 +734,17 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-amber-400" />
               <h3 className="text-sm font-semibold text-slate-200">
-                Manuelle Verbindung (IP / Host)
+                {t('gateway.manualConnectTitle')}
               </h3>
             </div>
             <p className="text-xs text-slate-400">
-              Direkt verbinden per IP-Adresse (z.B. IP Router, USB-IP Gateway, Docker-Container oder Weinzierl/MDT Schnittstelle).
+              {t('gateway.manualConnectDesc')}
             </p>
 
             <div className="flex items-center gap-3">
               <div className="flex-1">
                 <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
-                  Gateway IP-Adresse
+                  {t('gateway.ipLabel')}
                 </label>
                 <input
                   type="text"
@@ -754,7 +756,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
               </div>
               <div className="w-24">
                 <label className="block text-[10px] uppercase font-mono text-slate-400 mb-1">
-                  Port
+                  {t('gateway.portLabel')}
                 </label>
                 <input
                   type="text"
@@ -771,7 +773,7 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-700/20 transition-all disabled:opacity-50"
                 >
                   <Zap className="w-3.5 h-3.5" />
-                  <span>{isConnecting ? 'Verbinde...' : 'Verbinden'}</span>
+                  <span>{isConnecting ? t('gateway.connecting') : t('gateway.connect')}</span>
                 </button>
               </div>
             </div>
@@ -782,13 +784,13 @@ export const GatewayModal: React.FC<GatewayModalProps> = ({
         <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between text-xs text-slate-400">
           <div>
             Protokoll:{' '}
-            <span className="font-mono text-slate-300">KNXnet/IP v1.0 (Core & Tunneling)</span>
+            <span className="font-mono text-slate-300">{t('gateway.protocolInfo')}</span>
           </div>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg font-medium text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
-            Schließen
+            {t('common.close')}
           </button>
         </div>
       </div>

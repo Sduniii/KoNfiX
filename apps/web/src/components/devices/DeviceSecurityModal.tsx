@@ -18,6 +18,7 @@ import { KnxDevice } from '../../types/knx'
 import { updateDeviceSecurity } from '../../services/api'
 import { KnxQrScanner } from './KnxQrScanner'
 import { KnxCertificateQrResult } from '../../utils/knxQrParser'
+import { useTranslation } from '../../i18n'
 
 interface DeviceSecurityModalProps {
   isOpen: boolean
@@ -32,6 +33,7 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
   device,
   onSecuritySaved,
 }) => {
+  const { t } = useTranslation()
   const [isEnabled, setIsEnabled] = useState(false)
   const [serialNumber, setSerialNumber] = useState('')
   const [fdsk, setFdsk] = useState('')
@@ -174,7 +176,7 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
               className="py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm shadow-emerald-600/30 transition-colors"
             >
               <Camera className="w-3.5 h-3.5" />
-              <span>Scannen</span>
+              <span>{t('diagnostics.scanLine')}</span>
             </button>
           </div>
 
@@ -313,7 +315,7 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
             onClick={onClose}
             className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
           >
-            Abbrechen
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -323,10 +325,10 @@ export const DeviceSecurityModal: React.FC<DeviceSecurityModalProps> = ({
             {isSaving ? (
               <>
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Speichern...
+                {t('common.loading')}
               </>
             ) : (
-              'Sicherheitseinstellungen speichern'
+              t('common.save')
             )}
           </button>
         </div>

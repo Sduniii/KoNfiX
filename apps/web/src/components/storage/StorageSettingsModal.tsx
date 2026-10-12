@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
+  Globe,
 } from 'lucide-react'
 import { StorageSettings } from '../../types/storage'
 import { fetchStorageSettings, updateStorageSettings } from '../../services/api'
@@ -41,6 +42,7 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
   const [migrate, setMigrate] = useState(true)
   const [signingKey, setSigningKey] = useState('')
   const [showSigningKey, setShowSigningKey] = useState(false)
+  const [onlineCatalogUrl, setOnlineCatalogUrl] = useState('https://konfix.sduni.de')
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,6 +57,7 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
       setSettings(s)
       setDataDir(s.data_dir)
       setSigningKey(s.signing_key || '')
+      setOnlineCatalogUrl(s.online_catalog_url || 'https://konfix.sduni.de')
     } catch (err: any) {
       setError(err?.message || 'Fehler beim Laden der Speicher-Einstellungen')
     } finally {
@@ -84,10 +87,16 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
 
     try {
       const keyToSend = signingKey === 'configured' ? undefined : (signingKey.trim() || null)
-      const updated = await updateStorageSettings(trimmed, migrate, keyToSend)
+      const updated = await updateStorageSettings(
+        trimmed,
+        migrate,
+        keyToSend,
+        onlineCatalogUrl.trim() || 'https://konfix.sduni.de'
+      )
       setSettings(updated)
       setDataDir(updated.data_dir)
       setSigningKey(updated.signing_key || '')
+      setOnlineCatalogUrl(updated.online_catalog_url || 'https://konfix.sduni.de')
       setSuccessMsg('Einstellungen erfolgreich aktualisiert!')
       if (onSettingsUpdated) {
         onSettingsUpdated(updated)
@@ -282,6 +291,37 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
                     Wird beim <strong>.knxproj-Export</strong> verwendet, um die Projektdatei digital zu signieren (Integritäts- und Quellsignatur). Ermöglicht den reibungslosen Import in ETS 5 &amp; 6 ohne Signaturwarnung. Unterstützt RSA PEM (PKCS#1 / PKCS#8) sowie Base64-DER.
+                  </p>
+                </div>
+
+                {/* Online Catalog URL Section */}
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-sky-400" />
+                      <span>Online-Gerätedatenbank (Katalog-URL)</span>
+                    </label>
+                    {onlineCatalogUrl !== 'https://konfix.sduni.de' && (
+                      <button
+                        type="button"
+                        onClick={() => setOnlineCatalogUrl('https://konfix.sduni.de')}
+                        className="text-[10px] text-sky-400 hover:text-sky-300 transition-colors"
+                      >
+                        Auf Standard zurücksetzen
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={onlineCatalogUrl}
+                      onChange={(e) => setOnlineCatalogUrl(e.target.value)}
+                      placeholder="https://konfix.sduni.de"
+                      className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    REST-API Server für Online-Gerätesuche und YAML-Downloads im Gerätekatalog (Standard: <code>https://konfix.sduni.de</code>).
                   </p>
                 </div>
 

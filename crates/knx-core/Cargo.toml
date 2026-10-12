@@ -1,6 +1,6 @@
 [package]
 name = "knx-core"
-version = "2026.10.2"
+version = "2026.10.3"
 edition = "2021"
 default-run = "konfix"
 license = "AGPL-3.0-or-later"
@@ -46,8 +46,8 @@ flate2 = "1.0"
 rsa = { version = "0.9", features = ["pem"] }
 pkcs8 = { version = "0.10", features = ["pem"] }
 subtle = "2.5"
-
+serde_yaml = "0.9"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
 

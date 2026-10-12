@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Palette, Check, Trash2, Sliders, Play, VolumeX, Lightbulb } from 'lucide-react'
 import { FunctionBlock, GroupAddress, SceneDefinition, LightCircuit } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface SceneBlockNodeProps {
   data: {
@@ -30,6 +31,7 @@ const DEFAULT_SCENES: SceneDefinition[] = [
 ]
 
 export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete, onOpenMixer } = data
   const activeSceneNo = block.state?.active_scene ?? 1
   const circuits: LightCircuit[] = block.parameters?.circuits || DEFAULT_CIRCUITS
@@ -69,14 +71,14 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
           <div>
             <div className="text-sm font-semibold text-slate-100">{block.name}</div>
             <div className="text-[10px] text-purple-400 font-mono">
-              Lichtsteuerung & Szenen (DPT 18.001)
+              {t('nodes.scene.blockTitle')} (DPT 18.001)
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] font-mono bg-purple-950/80 text-purple-300 border border-purple-700/50 px-2 py-0.5 rounded-full flex items-center gap-1">
             <span>{activeScene?.icon || '✨'}</span>
-            <span>Szene {activeSceneNo}</span>
+            <span>{t('nodes.scene.activeScene')} {activeSceneNo}</span>
           </span>
           {onDelete && (
             <button
@@ -84,7 +86,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.scene.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -97,7 +99,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
       <div className="p-3 space-y-2 bg-slate-950/60">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-            Stimmungen / Szenen
+            {t('scenes.title')}
           </span>
           <button
             onClick={(e) => {
@@ -107,7 +109,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
             className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-purple-200 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-700/60 px-2 py-0.5 rounded-lg transition-colors"
           >
             <Sliders className="w-3 h-3" />
-            <span>Mischpult</span>
+            <span>{t('scenes.mixer')}</span>
           </button>
         </div>
 
@@ -152,10 +154,10 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
       <div className="p-3 bg-slate-900/80 border-t border-slate-800/80">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            Lichtkreise Pegel ({activeScene?.name})
+            {t('scenes.channels')} ({activeScene?.name})
           </span>
           <span className="text-[10px] font-mono text-purple-400">
-            {circuits.length} Kanäle
+            {circuits.length} {t('scenes.channels')}
           </span>
         </div>
 
@@ -205,7 +207,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
         {/* Left: Inputs */}
         <div className="space-y-1.5">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            Eingänge
+            {t('nodes.blind.inputs')}
           </div>
 
           <div className="relative flex items-center justify-between text-slate-300 py-0.5 pr-1">
@@ -217,7 +219,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">TRIG</span>
-              <span className="text-[11px]">Weiter</span>
+              <span className="text-[11px]">{t('nodes.scene.trigger')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -236,7 +238,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-purple-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-purple-400 font-semibold text-[11px]">SCN</span>
-              <span className="text-[11px]">Direkt</span>
+              <span className="text-[11px]">{t('scenes.title')}</span>
             </div>
             <span className="text-[10px] text-purple-400/80 font-mono">18.001</span>
           </div>
@@ -250,7 +252,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-rose-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-rose-400 font-semibold text-[11px]">AUS</span>
-              <span className="text-[11px]">Zentral</span>
+              <span className="text-[11px]">{t('nodes.light.off')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-rose-400 font-mono"
@@ -264,7 +266,7 @@ export const SceneBlockNodeComponent: React.FC<SceneBlockNodeProps> = ({ data })
         {/* Right: Outputs */}
         <div className="space-y-1.5 text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            KNX Ausgänge / Wires
+            {t('nodes.blind.outputs')}
           </div>
 
           <div className="relative flex items-center justify-end gap-1.5 text-slate-300 py-0.5">

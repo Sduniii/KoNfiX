@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Timer, Play, Clock, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface StaircaseBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface StaircaseBlockNodeProps {
 }
 
 export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
   const isOn = block.state?.is_on ?? false
   const durationSec = block.parameters?.duration_sec ?? 120
@@ -40,7 +42,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
   }
 
   return (
-    <div className={`w-80 rounded-xl border-2 shadow-lg transition-all ${
+    <div className={`w-80 rounded-xl border-2 shadow-lg transition-[border-color,box-shadow,background-color] duration-150 ${
       isOn
         ? 'border-yellow-400 bg-slate-900 shadow-yellow-500/10'
         : 'border-slate-700 bg-slate-900 shadow-black/40'
@@ -53,7 +55,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
           </div>
           <div>
             <div className="text-sm font-semibold text-slate-100">{block.name}</div>
-            <div className="text-[10px] text-slate-400 font-mono">Treppenlichtzeitschalter</div>
+            <div className="text-[10px] text-slate-400 font-mono">{t('nodes.staircase.blockTitle')}</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -66,7 +68,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
             }`}
           >
             <Play className="w-3 h-3 fill-current" />
-            {isOn ? 'Nachstarten' : 'Trigger'}
+            {t('nodes.staircase.trigger')}
           </button>
           {onDelete && (
             <button
@@ -74,7 +76,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.staircase.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -87,10 +89,10 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
       <div className="p-4 space-y-3 bg-slate-950/50">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400 flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-yellow-400" /> Restzeit
+            <Clock className="w-3.5 h-3.5 text-yellow-400" /> {t('nodes.staircase.duration')}
           </span>
           <span className="font-mono font-bold text-slate-200">
-            {isOn ? `${remainingSec} s aktiv` : `Bereit (${durationSec} s)`}
+            {isOn ? `${remainingSec} s` : `${durationSec} s`}
           </span>
         </div>
 
@@ -102,15 +104,15 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
         </div>
 
         <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[11px] text-slate-400 font-mono">
-          <span>Ausschaltvorwarnung:</span>
-          <span className="text-yellow-400 font-semibold">Aktiv (30s Blinken)</span>
+          <span>{t('nodes.staircase.duration')}:</span>
+          <span className="text-yellow-400 font-semibold">{durationSec} s</span>
         </div>
       </div>
 
       {/* Handles */}
       <div className="grid grid-cols-2 p-3 gap-2 border-t border-slate-800 bg-slate-900/80 rounded-b-lg text-xs">
         <div className="space-y-1">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Eingänge</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{t('nodes.blind.inputs')}</div>
           <div className="relative flex items-center justify-between text-slate-300 py-0.5 pr-1">
             <div className="flex items-center gap-1.5">
               <Handle
@@ -120,7 +122,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">TRIG</span>
-              <span className="text-[11px]">Taster</span>
+              <span className="text-[11px]">{t('nodes.staircase.trigger')}</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -133,7 +135,7 @@ export const StaircaseBlockNodeComponent: React.FC<StaircaseBlockNodeProps> = ({
 
         <div className="space-y-1 text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            KNX Ausgänge
+            {t('nodes.blind.outputs')}
           </div>
           <div className="relative flex items-center justify-end gap-1.5 text-slate-300 py-0.5">
             <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-yellow-400 font-mono">

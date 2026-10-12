@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Clock, Calendar, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface TimerBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface TimerBlockNodeProps {
 }
 
 export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
 
   const state = block.state || {}
@@ -42,7 +44,7 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
 
   return (
     <div
-      className={`w-80 rounded-2xl border-2 shadow-lg transition-all ${
+      className={`w-80 rounded-2xl border-2 shadow-lg transition-[border-color,box-shadow,background-color] duration-150 ${
         isActive
           ? 'border-emerald-400 bg-slate-900 shadow-emerald-500/10'
           : 'border-slate-700 bg-slate-900 shadow-black/40'
@@ -56,7 +58,7 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
           </div>
           <div>
             <div className="text-sm font-bold text-slate-100">{block.name}</div>
-            <div className="text-[11px] text-slate-400 font-mono">Zeitschaltuhr (Wochenplan)</div>
+            <div className="text-[11px] text-slate-400 font-mono">{t('nodes.timer.blockTitle')}</div>
           </div>
         </div>
 
@@ -77,7 +79,7 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen"
+              title={t('nodes.timer.deleteTooltip')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -91,13 +93,13 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
         {/* Time Window Display */}
         <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-800 text-xs">
           <div>
-            <span className="text-slate-400">Schaltfenster:</span>
+            <span className="text-slate-400">{t('nodes.timer.timeWindows')}:</span>
             <div className="font-mono font-bold text-slate-100 mt-0.5">
-              {onTime} - {offTime} Uhr
+              {onTime} - {offTime}
             </div>
           </div>
           <div className="text-right">
-            <span className="text-slate-400">Aktuelle Zeit:</span>
+            <span className="text-slate-400">Time:</span>
             <div className="font-mono font-bold text-sky-400 mt-0.5">{currentTime}</div>
           </div>
         </div>
@@ -105,7 +107,7 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
         {/* Days of Week Pills */}
         <div>
           <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1.5">
-            Aktive Wochentage
+            {t('nodes.timer.weeklySchedule')}
           </div>
           <div className="flex gap-1 justify-between">
             {daysLabels.map((d) => {
@@ -141,12 +143,12 @@ export const TimerBlockNodeComponent: React.FC<TimerBlockNodeProps> = ({ data })
           {enabled ? (
             <>
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Automatik freigegeben (Klick: Deaktivieren)</span>
+              <span>Enable (Click: Disable)</span>
             </>
           ) : (
             <>
               <XCircle className="w-3.5 h-3.5 text-red-400" />
-              <span>Automatik gesperrt (Klick: Freigeben)</span>
+              <span>Disable (Click: Enable)</span>
             </>
           )}
         </button>

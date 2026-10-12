@@ -30,6 +30,23 @@ html, body, #root {
   background-color: #0b1120 !important;
 }
 
+/* GPU-Beschleunigung & absolut verzögerungsfreies Dragging (kein Nachziehen!) */
+.react-flow__node {
+  transition: none !important;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.react-flow__node.dragging,
+.react-flow__node:active {
+  transition: none !important;
+  cursor: grabbing !important;
+}
+
+.react-flow__edge-path {
+  will-change: d;
+}
+
 .react-flow__controls {
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   border: 1px solid #334155 !important;

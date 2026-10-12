@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { SunMedium, Compass, Wind, CloudRain, Sun, AlertTriangle, ShieldAlert, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface AstroBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface AstroBlockNodeProps {
 }
 
 export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
 
   const state = block.state || {}
@@ -36,7 +38,7 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
 
   return (
     <div
-      className={`w-96 rounded-2xl border-2 shadow-xl transition-all ${
+      className={`w-96 rounded-2xl border-2 shadow-xl transition-[border-color,box-shadow,background-color] duration-150 ${
         isWindAlarm
           ? 'border-red-500 bg-slate-900 shadow-red-500/20'
           : isSunProtecting
@@ -69,7 +71,7 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
           <div>
             <div className="text-sm font-bold text-slate-100">{block.name}</div>
             <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
-              <span>Astro-Sonnenschutz & Wetter</span>
+              <span>{t('nodes.astro.blockTitle')}</span>
             </div>
           </div>
         </div>
@@ -78,16 +80,16 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
           {isWindAlarm ? (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-900/80 text-red-200 border border-red-700 animate-pulse">
               <ShieldAlert className="w-3.5 h-3.5" />
-              <span>WINDALARM</span>
+              <span>{t('nodes.astro.windAlarm').toUpperCase()}</span>
             </div>
           ) : isSunProtecting ? (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-950/80 text-amber-300 border border-amber-700">
               <SunMedium className="w-3.5 h-3.5 text-amber-400" />
-              <span>BESCHATTUNG</span>
+              <span>{t('nodes.astro.shading').toUpperCase()}</span>
             </div>
           ) : (
             <div className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
-              Standby
+              {t('nodes.astro.standby')}
             </div>
           )}
 
@@ -97,7 +99,7 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen"
+              title={t('nodes.astro.deleteTooltip')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -111,12 +113,12 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
         {/* Sun Coordinates */}
         <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 text-center">
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Azimut</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">{t('nodes.astro.azimuth')}</div>
             <div className="text-sm font-bold text-amber-400 font-mono mt-0.5">{azimuth}°</div>
             <div className="text-[9px] text-slate-500">{solarDir}</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Elevation</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">{t('nodes.astro.elevation')}</div>
             <div className="text-sm font-bold text-sky-400 font-mono mt-0.5">{elevation}°</div>
             <div className="text-[9px] text-slate-500">über Horizont</div>
           </div>
@@ -190,7 +192,7 @@ export const AstroBlockNodeComponent: React.FC<AstroBlockNodeProps> = ({ data })
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
-            <span>{isWindAlarm ? 'Wind normalisieren' : 'Sturm-Test (16 m/s)'}</span>
+            <span>{isWindAlarm ? t('nodes.astro.stopSimulation') : t('nodes.astro.simulateStorm')}</span>
           </button>
 
           <button

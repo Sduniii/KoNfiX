@@ -46,6 +46,7 @@ import {
 } from '../../services/api'
 import { lookupDpt } from '../../utils/dptRegistry'
 import { ParameterInputField } from './ParameterInputField'
+import { useTranslation } from '../../i18n'
 
 interface DeviceKoParamModalProps {
   isOpen: boolean
@@ -67,6 +68,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
   project,
   onUpdateDevice,
 }) => {
+  const { t, locale } = useTranslation()
   const [activeTab, setActiveTab] = useState<'kos' | 'parameters' | 'channels'>('kos')
   const [searchQuery, setSearchQuery] = useState('')
   const [koFilter, setKoFilter] = useState<'active' | 'all' | 'linked' | 'unlinked'>('active')
@@ -682,9 +684,15 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-100">{device.name}</h2>
-                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-sky-950 border border-sky-800 text-sky-300">
-                  {device.individual_address}
-                </span>
+                {(!device.individual_address || device.individual_address === '-.-.-' || device.individual_address.trim() === '') ? (
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-red-950 border border-red-700 text-red-300 animate-pulse">
+                    -.-.- (Adresse fehlt!)
+                  </span>
+                ) : (
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-sky-950 border border-sky-800 text-sky-300">
+                    {device.individual_address}
+                  </span>
+                )}
                 {device.mask_version && (
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
                     Mask: {device.mask_version}
@@ -798,7 +806,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Kommunikationsobjekte (KOs)</span>
+              <span>{t('parameters.tabsKos')}</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                 {activeKosCount < kos.length ? `${activeKosCount}/${kos.length}` : kos.length}
               </span>
@@ -813,7 +821,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>Geräte-Parameter</span>
+              <span>{t('parameters.tabsParams')}</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                 {totalVisibleParamsCount < params.length ? `${totalVisibleParamsCount}/${params.length}` : params.length}
               </span>
@@ -828,7 +836,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
               }`}
             >
               <Cpu className="w-3.5 h-3.5" />
-              <span>Kanäle & Klemmen</span>
+              <span>{t('inspector.channelProperties')}</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">
                 {channels.length}
               </span>
@@ -839,7 +847,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
           <div className="flex items-center gap-3 text-xs text-slate-400">
             {device.bus_current_ma && (
               <span className="bg-slate-800/80 px-2 py-1 rounded text-[11px] font-mono text-slate-300">
-                Stromaufnahme: {device.bus_current_ma} mA
+                {t('inspector.currentDrawLabel')} {device.bus_current_ma} mA
               </span>
             )}
           </div>
@@ -857,7 +865,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="KOs durchsuchen (Name, Funktion, #Nr, DPT, GA)..."
+                    placeholder={t('parameters.searchKos')}
                     className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500"
                   />
                   {searchQuery && (
@@ -879,7 +887,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Aktive KOs ({activeKosCount})
+                    {t('parameters.activeKosFilter')} ({activeKosCount})
                   </button>
                   <button
                     onClick={() => setKoFilter('linked')}
@@ -889,7 +897,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Verknüpft ({kos.filter((k) => (k.group_addresses ?? []).length > 0).length})
+                    {t('parameters.linkedKosFilter')} ({kos.filter((k) => (k.group_addresses ?? []).length > 0).length})
                   </button>
                   <button
                     onClick={() => setKoFilter('all')}
@@ -899,7 +907,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    Alle ({kos.length})
+                    {t('parameters.allKosFilter')} ({kos.length})
                   </button>
                 </div>
               </div>
@@ -911,7 +919,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                     <Layers className="w-7 h-7 text-slate-500 opacity-60" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-300">Keine Kommunikationsobjekte</p>
+                    <p className="text-sm font-semibold text-slate-300">{t('parameters.noKosAvailable')}</p>
                     <p className="text-xs text-slate-500 mt-1 max-w-sm">
                       Für dieses Gerät wurden noch keine KO-Daten importiert.
                       Laden Sie die passende <span className="font-mono text-sky-400">.knxprod</span>-Datei über den Katalog-Browser.
@@ -924,11 +932,11 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                   <thead>
                     <tr className="bg-slate-950/60 border-b border-slate-800 text-slate-400 font-medium">
                       <th className="py-2.5 px-3 w-12 text-center">#</th>
-                      <th className="py-2.5 px-3 w-44">Name / Objekt</th>
-                      <th className="py-2.5 px-3 w-48">Funktion</th>
-                      <th className="py-2.5 px-3 w-28">Länge / DPT</th>
-                      <th className="py-2.5 px-3 w-24 text-center">Flags</th>
-                      <th className="py-2.5 px-3">Verknüpfte Gruppenadressen</th>
+                      <th className="py-2.5 px-3 w-44">{t('parameters.objectCol')}</th>
+                      <th className="py-2.5 px-3 w-48">{t('parameters.functionCol')}</th>
+                      <th className="py-2.5 px-3 w-28">{t('parameters.lengthDptCol')}</th>
+                      <th className="py-2.5 px-3 w-24 text-center">{t('parameters.flagsCol')}</th>
+                      <th className="py-2.5 px-3">{t('parameters.linkedGasCol')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
@@ -938,7 +946,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                           colSpan={6}
                           className="py-8 text-center text-slate-500 italic"
                         >
-                          Keine Kommunikationsobjekte entsprechen den Suchkriterien.
+                          {t('parameters.noKosMatchSearch')}
                         </td>
                       </tr>
                     ) : (
@@ -957,7 +965,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                             {/* Name */}
                             <td className="py-2 px-3">
                               <div className="font-semibold text-slate-200 truncate">
-                                {ko.object_text || ko.name}
+                                {(locale === 'en' && ko.object_text_en) ? ko.object_text_en : (ko.object_text || ko.name)}
                               </div>
                               {ko.name && ko.object_text && ko.name !== ko.object_text && (
                                 <div className="text-[10px] text-slate-400 font-mono truncate">
@@ -968,7 +976,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
 
                             {/* Function */}
                             <td className="py-2 px-3 text-slate-300 truncate">
-                              {ko.function_text || '—'}
+                              {((locale === 'en' && ko.function_text_en) ? ko.function_text_en : ko.function_text) || '—'}
                             </td>
 
                             {/* DPT & Size */}
@@ -1069,7 +1077,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                       className="inline-flex items-center gap-1.5 font-mono text-[11px] bg-slate-900 border border-sky-800/40 text-sky-300 px-2 py-0.5 rounded-md group/chip"
                                       title={
                                         gaObj
-                                          ? `${gaObj.name}${partnerDevs.length > 0 ? `\nVerbunden mit: ${partnerDevs.map(d => `${d.individual_address} ${d.name}`).join(', ')}` : ''}`
+                                          ? `${gaObj.name}${partnerDevs.length > 0 ? `\n${t('parameters.connectedWith')} ${partnerDevs.map(d => `${d.individual_address} ${d.name}`).join(', ')}` : ''}`
                                           : gaAddr
                                       }
                                     >
@@ -1082,7 +1090,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                       {partnerDevs.length > 0 && (
                                         <span
                                           className="text-[9px] font-sans px-1 py-0.2 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/40 flex items-center gap-0.5"
-                                          title={`Verknüpft mit: ${partnerDevs.map(d => `${d.individual_address} ${d.name}`).join(', ')}`}
+                                          title={`${t('parameters.connectedWith')} ${partnerDevs.map(d => `${d.individual_address} ${d.name}`).join(', ')}`}
                                         >
                                           <span>↔</span>
                                           <span>{partnerDevs.map(d => d.individual_address).join(', ')}</span>
@@ -1092,7 +1100,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                         type="button"
                                         onClick={() => handleUnlinkGa(ko, gaAddr)}
                                         className="text-slate-500 hover:text-red-400 transition-colors ml-0.5"
-                                        title="Verknüpfung trennen"
+                                        title={t('parameters.unlinkGa')}
                                       >
                                         <X className="w-3 h-3" />
                                       </button>
@@ -1112,6 +1120,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                         ? 'bg-sky-500 text-slate-950 border-sky-400'
                                         : 'bg-slate-800/60 hover:bg-slate-800 text-slate-300 border-slate-700'
                                     }`}
+                                    title={t('parameters.linkGa')}
                                   >
                                     <Plus className="w-3 h-3" />
                                     <span>GA</span>
@@ -1121,7 +1130,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                   {isLinking && (
                                     <div className="absolute left-0 mt-1 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-30 p-2 space-y-1.5">
                                       <div className="text-[11px] font-bold text-slate-300 px-1">
-                                        Gruppenadresse auswählen:
+                                        {t('parameters.linkGa')}:
                                       </div>
                                       <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
                                         {allGas.length === 0 ? (
@@ -1192,7 +1201,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                       )}
                       {unsavedCount > 0 && (
                         <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 font-medium border border-sky-500/30">
-                          {unsavedCount} ungespeichert
+                          {unsavedCount} {t('parameters.unsavedCount')}
                         </span>
                       )}
                     </div>
@@ -1206,7 +1215,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                       type="text"
                       value={paramSearch}
                       onChange={(e) => setParamSearch(e.target.value)}
-                      placeholder="Parameter suchen (über alle Seiten)..."
+                      placeholder={t('parameters.searchParams')}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg pl-8 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
                     />
                     {paramSearch && (
@@ -1227,10 +1236,10 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                         ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
                         : 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-slate-100'
                     }`}
-                    title={showAllParams ? 'Entwickler-Modus: Alle internen und inaktiven Parameter anzeigen' : 'ETS-Modus: Nur aktive Parameter anzeigen'}
+                    title={showAllParams ? t('parameters.devModeTooltip') : t('parameters.etsModeTooltip')}
                   >
                     {showAllParams ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
-                    <span>{showAllParams ? 'Alle Parameter' : 'Nur aktive (ETS)'}</span>
+                    <span>{showAllParams ? t('parameters.allParamsFilter') : t('parameters.onlyActiveParamsFilter')}</span>
                   </button>
 
                   <button
@@ -1246,12 +1255,12 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                     {saveSuccess ? (
                       <>
                         <Check className="w-3.5 h-3.5" />
-                        <span>Gespeichert</span>
+                        <span>{t('parameters.savedBtn')}</span>
                       </>
                     ) : (
                       <>
                         <Save className="w-3.5 h-3.5" />
-                        <span>Speichern</span>
+                        <span>{t('parameters.saveBtn')}</span>
                       </>
                     )}
                   </button>
@@ -1261,10 +1270,10 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                     onClick={handleSaveAndFlash}
                     disabled={isSavingParams || isFlashing}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition-all shrink-0 bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white disabled:opacity-50"
-                    title="Speichert alle Parameter und startet direkt die partielle KNX-Programmierung"
+                    title={t('parameters.saveAndFlashTooltip')}
                   >
                     <Zap className={`w-3.5 h-3.5 ${isFlashing ? 'animate-bounce text-amber-300' : 'text-sky-200'}`} />
-                    <span>{isFlashing ? 'Wird geflasht...' : 'Speichern & Flashen'}</span>
+                    <span>{isFlashing ? t('parameters.flashingBtn') : t('parameters.saveAndFlashBtn')}</span>
                   </button>
                 </div>
               </div>
@@ -1276,7 +1285,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                   <div className="w-full md:w-64 shrink-0 bg-slate-950/40 border border-slate-800/80 rounded-xl p-2.5 overflow-y-auto max-h-[580px] space-y-1">
                     <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800/60 mb-1.5">
                       <Layers className="w-3 h-3 text-emerald-400" />
-                      <span>Kanal & Parameterseiten</span>
+                      <span>{t('parameters.channelAndParamPages')}</span>
                     </div>
 
                     {pageTree.map((root) => {
@@ -1383,10 +1392,10 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                       </div>
                       <div className="space-y-1">
                         <p className="text-xs font-semibold text-slate-300">
-                          Keine aktiven Parameter in dieser Ansicht
+                          {t('parameters.noActiveParamsTitle')}
                         </p>
                         <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                          Die zugehörige Funktion (z.B. Automatik, Sperre oder Alarm) ist für diesen Kanal aktuell nicht aktiviert. Aktivieren Sie die entsprechende Option in den Einstellungen, um die Parameter einzublenden.
+                          {t('parameters.noActiveParamsDesc')}
                         </p>
                       </div>
                     </div>
@@ -1413,6 +1422,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                             const currentVal =
                               paramEdits[p.id] !== undefined ? paramEdits[p.id] : p.value
                             const isChanged = currentVal !== p.default_value
+                            const paramLabel = (locale === 'en' && p.text_en) ? p.text_en : (p.text || p.name)
 
                             return (
                               <div
@@ -1435,9 +1445,9 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                         className={`text-xs font-medium block truncate ${
                                           !isActive ? 'text-slate-400' : 'text-slate-200'
                                         }`}
-                                        title={p.text || p.name}
+                                        title={paramLabel}
                                       >
-                                        {p.text || p.name}
+                                        {paramLabel}
                                       </label>
                                       {!isActive && (
                                         <span title="Gesperrt">
@@ -1472,6 +1482,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                       <div className={`inline-flex rounded-lg p-0.5 bg-slate-950/90 border border-slate-800 shrink-0 ${!isActive ? 'opacity-50 pointer-events-none' : ''}`}>
                                         {p.enum_options.map((opt) => {
                                           const isSelected = currentVal === opt.value
+                                          const optText = (locale === 'en' && opt.text_en) ? opt.text_en : opt.text
                                           return (
                                             <button
                                               key={opt.value}
@@ -1484,7 +1495,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
                                               } disabled:cursor-not-allowed`}
                                             >
-                                              {opt.text}
+                                              {optText}
                                             </button>
                                           )
                                         })}
@@ -1499,7 +1510,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                       >
                                         {p.enum_options.map((opt) => (
                                           <option key={opt.value} value={opt.value}>
-                                            {opt.text}
+                                            {(locale === 'en' && opt.text_en) ? opt.text_en : opt.text}
                                           </option>
                                         ))}
                                       </select>
@@ -1542,7 +1553,7 @@ export const DeviceKoParamModal: React.FC<DeviceKoParamModalProps> = ({
                                         type="button"
                                         onClick={() => handleResetParam(p)}
                                         className="text-slate-400 hover:text-emerald-400 p-1.5 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
-                                        title={`Auf Standard zurücksetzen (${p.default_value}${p.suffix || ''})`}
+                                        title={t('parameters.resetToDefault')}
                                       >
                                         <RotateCcw className="w-3.5 h-3.5" />
                                       </button>

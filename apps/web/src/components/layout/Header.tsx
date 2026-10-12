@@ -207,7 +207,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <FolderOpen className="w-4 h-4 text-sky-400 shrink-0" />
                     <div>
                       <div className="font-semibold text-slate-100">{t('header.openProject')}</div>
-                      <div className="text-[10px] text-slate-400">Projekte wechseln oder anlegen</div>
+                      <div className="text-[10px] text-slate-400">{t('header.switchOrNewDesc')}</div>
                     </div>
                   </button>
                 )}
@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <FolderCog className="w-4 h-4 text-amber-400 shrink-0" />
                     <div>
                       <div className="font-semibold text-slate-100">{t('header.storageSettings')}</div>
-                      <div className="text-[10px] text-slate-400">Standardverzeichnis konfigurieren</div>
+                      <div className="text-[10px] text-slate-400">{t('header.storageConfigDesc')}</div>
                     </div>
                   </button>
                 )}
@@ -255,7 +255,7 @@ export const Header: React.FC<HeaderProps> = ({
                         .knxproj
                       </span>
                     </div>
-                    <div className="text-[10px] text-slate-400">100% kompatibel mit ETS 5 & 6</div>
+                    <div className="text-[10px] text-slate-400">{t('header.ets56CompatDesc')}</div>
                   </div>
                 </button>
 
@@ -270,7 +270,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <Upload className="w-4 h-4 text-sky-400 shrink-0" />
                     <div>
                       <div className="font-semibold text-slate-100">{t('header.importEtsProject')}</div>
-                      <div className="text-[10px] text-slate-400">.knxproj oder GA-CSV einlesen</div>
+                      <div className="text-[10px] text-slate-400">{t('header.importProjectDesc')}</div>
                     </div>
                   </button>
                 )}
@@ -286,12 +286,12 @@ export const Header: React.FC<HeaderProps> = ({
                     <GitCompare className="w-4 h-4 text-purple-400 shrink-0" />
                     <div>
                       <div className="font-semibold text-slate-100 flex items-center gap-1.5">
-                        <span>Projekt-Diff & Merge</span>
+                        <span>{t('header.diffAndMerge')}</span>
                         <span className="text-[9px] bg-purple-500/20 text-purple-400 px-1 py-0.2 rounded font-bold font-mono">
-                          ETS Parität
+                          {t('header.etsParity')}
                         </span>
                       </div>
-                      <div className="text-[10px] text-slate-400">Zwei Stände vergleichen & selektiv mergen</div>
+                      <div className="text-[10px] text-slate-400">{t('header.diffAndMergeDesc')}</div>
                     </div>
                   </button>
                 )}
@@ -306,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
                   <div>
                     <div className="font-semibold text-slate-100">{t('header.groupAddressesCsv')}</div>
-                    <div className="text-[10px] text-slate-400">ETS 3-Ebenen GA-Tabelle</div>
+                    <div className="text-[10px] text-slate-400">{t('header.etsGaTableDesc')}</div>
                   </div>
                 </button>
 
@@ -320,7 +320,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <FileCode className="w-4 h-4 text-sky-400 shrink-0" />
                   <div>
                     <div className="font-semibold text-slate-100">{t('header.etsXmlData')}</div>
-                    <div className="text-[10px] text-slate-400">0.xml Standard-Format</div>
+                    <div className="text-[10px] text-slate-400">{t('header.xmlStandardDesc')}</div>
                   </div>
                 </button>
 
@@ -350,7 +350,7 @@ export const Header: React.FC<HeaderProps> = ({
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-400">
-                          Routing-Hierarchie verwalten
+                          {t('header.manageRoutingDesc')}
                         </div>
                       </div>
                     </button>
@@ -375,7 +375,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <div>
                           <div className="font-semibold text-slate-100">{t('header.saveAsJson')}</div>
                           <div className="text-[10px] text-slate-400">
-                            Vollständiges Backup herunterladen
+                            {t('header.downloadBackupDesc')}
                           </div>
                         </div>
                       </button>
@@ -387,7 +387,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <div className="font-semibold text-slate-100">
                             {t('header.restoreFromJson')}
                           </div>
-                          <div className="text-[10px] text-slate-400">Backup-Datei öffnen</div>
+                          <div className="text-[10px] text-slate-400">{t('header.restoreBackupDesc')}</div>
                         </div>
                         <input
                           type="file"

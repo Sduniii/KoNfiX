@@ -46,7 +46,7 @@ export const RoomPortalNodeComponent: React.FC<RoomPortalNodeProps> = ({ id, dat
 
   return (
     <div
-      className={`group relative min-w-[210px] max-w-[280px] rounded-xl border-2 bg-slate-900 shadow-md shadow-black/50 transition-all select-none ${
+      className={`group relative min-w-[210px] max-w-[280px] rounded-xl border-2 bg-slate-900 shadow-md shadow-black/50 transition-[border-color,box-shadow,background-color] duration-150 select-none ${
         selected
           ? 'border-indigo-400 ring-2 ring-indigo-400/50 shadow-indigo-500/20'
           : isIncoming

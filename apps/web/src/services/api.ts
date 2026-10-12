@@ -25,6 +25,8 @@ import {
   SelectiveMergeRequest,
   MergeSummary,
   TopologyHealthReport,
+  OnlineCatalogDevice,
+  OnlineCatalogSearchResponse,
 } from '../types/knx'
 import {
   TopologyResponse,
@@ -496,6 +498,58 @@ export async function importKnxprodFile(
   return res.json()
 }
 
+export async function importYamlFile(file: File): Promise<CatalogProductSummary> {
+  const text = await file.text()
+  return importYamlText(text)
+}
+
+export async function importYamlText(yamlText: string): Promise<CatalogProductSummary> {
+  const res = await fetch(`${API_BASE}/catalog/import-yaml`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ yaml_text: yamlText }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || `YAML-Import fehlgeschlagen: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function searchOnlineCatalog(
+  query: string = '',
+  page: number = 1,
+  pageSize: number = 30
+): Promise<OnlineCatalogSearchResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  })
+  if (query.trim()) {
+    params.set('q', query.trim())
+  }
+
+  const res = await fetch(`${API_BASE}/catalog/online/search?${params.toString()}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || `Online-Katalog Abfrage fehlgeschlagen: ${res.statusText}`)
+  }
+  return res.json()
+}
+
+export async function importOnlineDevice(orderNumber: string): Promise<CatalogProduct> {
+  const res = await fetch(`${API_BASE}/catalog/online/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_number: orderNumber }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || `Online-Import für '${orderNumber}' fehlgeschlagen: ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export interface DownloadDefaultCatalogResponse {
   success: boolean
   loaded_count: number
@@ -846,7 +900,8 @@ export async function fetchStorageSettings(): Promise<StorageSettings> {
 export async function updateStorageSettings(
   dataDir?: string,
   migrate: boolean = true,
-  signingKey?: string | null
+  signingKey?: string | null,
+  onlineCatalogUrl?: string
 ): Promise<StorageSettings> {
   const res = await fetch(`${API_BASE}/storage/settings`, {
     method: 'POST',
@@ -855,6 +910,7 @@ export async function updateStorageSettings(
       data_dir: dataDir || undefined,
       migrate,
       signing_key: signingKey !== undefined ? signingKey : undefined,
+      online_catalog_url: onlineCatalogUrl !== undefined ? onlineCatalogUrl : undefined,
     }),
   })
   if (!res.ok) {

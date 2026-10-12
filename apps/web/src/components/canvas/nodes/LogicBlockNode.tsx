@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Binary, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface LogicBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface LogicBlockNodeProps {
 }
 
 export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
   const gateType = block.parameters?.gate_type ?? 'AND'
   const in1 = block.state?.in1 ?? false
@@ -37,7 +39,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
   }
 
   return (
-    <div className={`w-80 rounded-xl border-2 shadow-lg transition-all ${
+    <div className={`w-80 rounded-xl border-2 shadow-lg transition-[border-color,box-shadow,background-color] duration-150 ${
       out
         ? 'border-emerald-400 bg-slate-900 shadow-emerald-500/10'
         : 'border-slate-700 bg-slate-900 shadow-black/40'
@@ -67,7 +69,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.logic.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -79,7 +81,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
       {/* Interactive Input Toggles */}
       <div className="p-3.5 space-y-2.5 bg-slate-950/50">
         <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">
-          Eingangssignale simulieren
+          {t('nodes.logic.simulateInputs')}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -111,7 +113,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
       {/* Handles */}
       <div className="grid grid-cols-2 p-3 gap-2 border-t border-slate-800 bg-slate-900/80 rounded-b-lg text-xs">
         <div className="space-y-2">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Eingänge</div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">{t('nodes.blind.inputs')}</div>
           <div className="relative flex items-center justify-between text-slate-300 py-0.5 pr-1">
             <div className="flex items-center gap-1.5">
               <Handle
@@ -121,7 +123,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">IN1</span>
-              <span className="text-[11px]">Eingang 1</span>
+              <span className="text-[11px]">In 1</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -140,7 +142,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
                 className="!w-3 !h-3 !bg-sky-500 !border-2 !border-slate-900 !-left-4"
               />
               <span className="font-mono text-sky-400 font-semibold text-[11px]">IN2</span>
-              <span className="text-[11px]">Eingang 2</span>
+              <span className="text-[11px]">In 2</span>
             </div>
             <span
               className="text-[10px] bg-slate-800/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-sky-400 font-mono"
@@ -153,7 +155,7 @@ export const LogicBlockNodeComponent: React.FC<LogicBlockNodeProps> = ({ data })
 
         <div className="space-y-1 text-right">
           <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-            KNX Ausgang
+            {t('nodes.blind.outputs')}
           </div>
           <div className="relative flex items-center justify-end gap-1.5 text-slate-300 py-0.5">
             <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-emerald-400 font-mono">

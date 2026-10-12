@@ -288,21 +288,29 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
           {/* Recording Status Dot */}
           <button
             onClick={toggleRecording}
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono transition-colors ${
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
               isRecording
-                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                : 'bg-slate-800 text-slate-500 hover:text-slate-300'
+                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
+                : 'bg-slate-800/80 text-slate-400 border border-slate-700/80 hover:text-slate-200 hover:bg-slate-800'
             }`}
-            title={isRecording ? 'Aufzeichnung stoppen' : 'Aufzeichnung starten'}
+            title={
+              isRecording
+                ? 'Aufnahme aktiv: Telegramme werden im Ringspeicher für CSV/XML-Export aufgezeichnet (Klicken zum Pausieren)'
+                : 'Aufnahme inaktiv: Telegramme werden nur live angezeigt, aber nicht exportiert (Klicken zum Starten)'
+            }
           >
-            <Circle className={`w-2 h-2 ${isRecording ? 'fill-rose-500 text-rose-500 animate-pulse' : 'text-slate-500'}`} />
-            <span>{isRecording ? 'REC' : 'STOP'}</span>
+            <Circle
+              className={`w-2 h-2 ${
+                isRecording ? 'fill-rose-500 text-rose-500 animate-pulse' : 'fill-slate-500 text-slate-500'
+              }`}
+            />
+            <span className="font-bold">REC</span>
           </button>
 
           {/* Live Bus Load Gauge */}
           <div
             className="hidden sm:flex items-center gap-2 px-2 py-0.5 rounded bg-slate-900 border border-slate-800"
-            title="Berechnete KNX TP1-Buslast (9.600 Baud inklusive Frame-Pausen)"
+            title={t('monitor.busLoadTooltip')}
           >
             <div className="w-12 h-1.5 bg-slate-800 rounded-full overflow-hidden">
               <div
@@ -316,9 +324,9 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
                 style={{ width: `${Math.min(100, Math.max(4, loadPercent))}%` }}
               />
             </div>
-            <span className="text-[10px] font-mono text-slate-300 font-semibold">{loadPercent}% Buslast</span>
+            <span className="text-[10px] font-mono text-slate-300 font-semibold">{loadPercent}% {t('monitor.busLoad')}</span>
             <span className="text-slate-600">•</span>
-            <span className="text-[10px] font-mono text-slate-400">{tlgSec} Tlg/s</span>
+            <span className="text-[10px] font-mono text-slate-400">{t('monitor.telegramsPerSec', { count: tlgSec })}</span>
           </div>
 
           {isConnected ? (
@@ -467,12 +475,12 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
         <div className="px-4 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center gap-3 flex-wrap text-xs">
           <div className="flex items-center gap-1 text-slate-400">
             <Filter className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="font-semibold text-slate-200">Filtermatrix:</span>
+            <span className="font-semibold text-slate-200">{t('monitor.filterMatrixTitle')}</span>
           </div>
 
           <input
             type="text"
-            placeholder="Quelle z.B. 1.1.*"
+            placeholder={t('monitor.filterMatrixSourcePlaceholder')}
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-sky-400 font-mono w-28 focus:outline-none focus:border-indigo-500"
@@ -480,7 +488,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
 
           <input
             type="text"
-            placeholder="Ziel z.B. 2/0/*"
+            placeholder={t('monitor.filterMatrixDestPlaceholder')}
             value={destFilter}
             onChange={(e) => setDestFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-emerald-400 font-mono w-28 focus:outline-none focus:border-indigo-500"
@@ -491,10 +499,10 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
             onChange={(e) => setTypeFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
           >
-            <option value="ALL">Alle Dienste</option>
-            <option value="Write">Write (Schreiben)</option>
-            <option value="Read">Read (Lesen)</option>
-            <option value="Response">Response (Antwort)</option>
+            <option value="ALL">{t('monitor.allServices')}</option>
+            <option value="Write">{t('monitor.writeService')}</option>
+            <option value="Read">{t('monitor.readService')}</option>
+            <option value="Response">{t('monitor.responseService')}</option>
           </select>
 
           <select
@@ -502,7 +510,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
             onChange={(e) => setDptFilter(e.target.value)}
             className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500"
           >
-            <option value="ALL">Alle DPTs</option>
+            <option value="ALL">{t('monitor.allDpts')}</option>
             <option value="1.">DPT 1.* (1 Bit / Schalten)</option>
             <option value="5.">DPT 5.* (1 Byte / Prozent)</option>
             <option value="9.">DPT 9.* (2 Byte / Temperatur/Sensor)</option>
@@ -518,7 +526,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
               }}
               className="text-[11px] text-indigo-400 hover:text-indigo-300 underline ml-2"
             >
-              Filter zurücksetzen
+              {t('monitor.resetFilter')}
             </button>
           )}
         </div>
@@ -529,13 +537,13 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
         <div className="px-4 py-3 bg-slate-950/95 border-b border-slate-800 text-xs shrink-0 grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in">
           {/* Box 1: Counts & Load */}
           <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Telegramme & Rate</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">{t('monitor.hudTelegramsRate')}</span>
             <div className="flex items-baseline gap-2">
               <span className="text-base font-bold text-slate-100">{busStats.total_telegrams}</span>
-              <span className="text-[11px] text-slate-400">gesamt ({busStats.telegrams_per_sec} Tlg/s)</span>
+              <span className="text-[11px] text-slate-400">{t('monitor.totalCount')} ({t('monitor.telegramsPerSec', { count: busStats.telegrams_per_sec })})</span>
             </div>
             <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
-              <span>Buslast:</span>
+              <span>{t('monitor.busLoad')}:</span>
               <span className={`font-mono font-bold ${loadPercent > 50 ? 'text-rose-400' : 'text-emerald-400'}`}>
                 {busStats.bus_load_percent}%
               </span>
@@ -544,7 +552,7 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
 
           {/* Box 2: Services */}
           <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Dienste</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">{t('monitor.hudServices')}</span>
             <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
                 <span className="text-slate-400">Write:</span>
@@ -563,10 +571,10 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
 
           {/* Box 3: Top Senders */}
           <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Top Sender (IA)</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">{t('monitor.hudTopSenders')}</span>
             <div className="space-y-1 text-[11px] font-mono">
               {busStats.top_senders.length === 0 ? (
-                <span className="text-slate-600 italic">Keine Daten</span>
+                <span className="text-slate-600 italic">{t('monitor.noData')}</span>
               ) : (
                 busStats.top_senders.slice(0, 3).map(([ia, count]) => (
                   <div key={ia} className="flex justify-between">
@@ -580,10 +588,10 @@ export const BusMonitor: React.FC<BusMonitorProps> = ({
 
           {/* Box 4: Top GAs */}
           <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">Top Zieladressen (GA)</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider block mb-1">{t('monitor.hudTopDestinations')}</span>
             <div className="space-y-1 text-[11px] font-mono">
               {busStats.top_destinations.length === 0 ? (
-                <span className="text-slate-600 italic">Keine Daten</span>
+                <span className="text-slate-600 italic">{t('monitor.noData')}</span>
               ) : (
                 busStats.top_destinations.slice(0, 3).map(([ga, count]) => (
                   <div key={ga} className="flex justify-between">

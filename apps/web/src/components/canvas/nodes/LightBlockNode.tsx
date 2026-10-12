@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Lightbulb, Sun, Power, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n/I18nContext'
 
 interface LightBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface LightBlockNodeProps {
 }
 
 export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, isSimulating, onAction, onDelete } = data
   const isOn = block.state?.is_on ?? false
   const brightness = block.state?.brightness ?? (isOn ? 100 : 0)
@@ -44,7 +46,7 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
-    onAction?.('t', !isOn)
+    onAction?.('sw', !isOn)
   }
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +55,7 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
   }
 
   return (
-    <div className={`w-80 rounded-xl border-2 shadow-lg transition-all ${
+    <div className={`w-80 rounded-xl border-2 shadow-lg transition-[border-color,box-shadow,background-color] duration-150 ${
       isOn
         ? 'border-amber-400 bg-slate-900 shadow-amber-500/10 ring-1 ring-amber-400/40'
         : 'border-slate-700 bg-slate-900 shadow-black/40'
@@ -69,14 +71,14 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
               {block.name}
             </div>
             <div className="text-[10px] text-slate-400 font-mono">
-              Lichtsteuerung (Dimmer)
+              {t('nodes.light.blockTitle')}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleToggle}
-            title={isSimulating ? "Klicken zum Schalten (Simulation)" : "Schalten"}
+            title={t('nodes.light.toggleTooltip')}
             className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1 transition-all ${
               isOn
                 ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/30 hover:bg-amber-400'
@@ -84,7 +86,7 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
             }`}
           >
             <Power className="w-3.5 h-3.5" />
-            {isOn ? 'AN' : 'AUS'}
+            {isOn ? t('nodes.light.on') : t('nodes.light.off')}
           </button>
           {onDelete && (
             <button
@@ -92,7 +94,7 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen (Entf)"
+              title={t('nodes.light.deleteTooltip')}
               className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -105,7 +107,7 @@ export const LightBlockNodeComponent: React.FC<LightBlockNodeProps> = ({ data })
       <div className="p-4 space-y-3 bg-slate-950/40">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-400 flex items-center gap-1">
-            <Sun className="w-3.5 h-3.5 text-amber-400" /> Helligkeit
+            <Sun className="w-3.5 h-3.5 text-amber-400" /> {t('nodes.light.brightness')}
           </span>
           <span className="font-mono font-bold text-slate-200">{brightness} %</span>
         </div>

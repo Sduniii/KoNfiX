@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { ProgrammingJob, ProgrammingJobStatus } from '../../types/programming'
 import { fetchProgrammingJobs, cancelProgrammingJob, createProgrammingJob } from '../../services/api'
+import { useTranslation } from '../../i18n'
 
 export const getJobStatusStr = (status: any): string => {
   if (typeof status === 'string') return status
@@ -34,6 +35,7 @@ interface ProgrammingJobDrawerProps {
 export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
   onJobsUpdated,
 }) => {
+  const { t } = useTranslation()
   const [jobs, setJobs] = useState<ProgrammingJob[]>([])
   const [isOpen, setIsOpen] = useState<boolean>(false)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
@@ -122,14 +124,14 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
     if (s === 'Verifying') {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded animate-pulse">
-          <ShieldCheck className="w-3 h-3" /> Prüflauf...
+          <ShieldCheck className="w-3 h-3" /> {t('programming.verifying')}
         </span>
       )
     }
     if (s === 'Success' && jobType === 'Verify') {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 py-0.5 rounded">
-          <ShieldCheck className="w-3 h-3" /> Geprüft
+          <ShieldCheck className="w-3 h-3" /> {t('programming.verified')}
         </span>
       )
     }
@@ -137,31 +139,31 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
       case 'Success':
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">
-            <CheckCircle2 className="w-3 h-3" /> Erfolgreich
+            <CheckCircle2 className="w-3 h-3" /> {t('programming.success')}
           </span>
         )
       case 'Failed':
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">
-            <AlertCircle className="w-3 h-3" /> Fehler
+            <AlertCircle className="w-3 h-3" /> {t('programming.failed')}
           </span>
         )
       case 'Cancelled':
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded">
-            <Ban className="w-3 h-3" /> Abgebrochen
+            <Ban className="w-3 h-3" /> {t('programming.cancelled')}
           </span>
         )
       case 'Queued':
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
-            <Clock className="w-3 h-3" /> Wartend
+            <Clock className="w-3 h-3" /> {t('programming.queued')}
           </span>
         )
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-400 bg-sky-500/10 border border-sky-500/20 px-1.5 py-0.5 rounded animate-pulse">
-            <Zap className="w-3 h-3" /> Schreibt...
+            <Zap className="w-3 h-3" /> {t('programming.writing')}
           </span>
         )
     }
@@ -177,7 +179,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-bold text-slate-100">
-                KNX Flash-Manager & Job-Queue
+                {t('programming.drawerTitle')}
               </span>
               <span className="text-[10px] font-mono bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded">
                 {jobs.length} Jobs
@@ -232,7 +234,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
 
               {jobs.length === 0 && (
                 <div className="p-4 text-center text-slate-500 text-xs italic">
-                  Keine Programmier-Aufträge vorhanden.
+                  {t('programming.queueEmpty')}
                 </div>
               )}
             </div>
@@ -251,9 +253,9 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
-                      <span>Typ: {selectedJob.job_type}</span>
+                      <span>{t('programming.jobType')}: {selectedJob.job_type}</span>
                       <span>•</span>
-                      <span>Fortschritt: {selectedJob.progress_percent}%</span>
+                      <span>{t('programming.progressPercent')}: {selectedJob.progress_percent}%</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -262,16 +264,16 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                       <button
                         onClick={() => handleRetry(selectedJob)}
                         className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 border border-rose-500/30 flex items-center gap-1 transition-colors"
-                        title="Job erneut starten"
+                        title={t('programming.retryJob')}
                       >
-                        <RotateCcw className="w-3 h-3" /> Erneut versuchen
+                        <RotateCcw className="w-3 h-3" /> {t('programming.retryJob')}
                       </button>
                     )}
                     {getJobStatusStr(selectedJob.status) === 'Queued' && (
                       <button
                         onClick={() => handleCancel(selectedJob.id)}
                         className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 transition-colors"
-                        title="Job abbrechen"
+                        title={t('programming.cancelJob')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -304,8 +306,8 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                   <div className="mb-2 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-2.5 text-xs text-amber-300 animate-pulse">
                     <Zap className="w-4 h-4 text-amber-400 shrink-0" />
                     <div>
-                      <div className="font-bold">Programmiertaste am Gerät drücken!</div>
-                      <div className="text-[10px] text-amber-400/80">Die rote Programmier-LED am KNX-Gerät muss aufleuchten.</div>
+                      <div className="font-bold">{t('programming.pressProgButtonAlert')}</div>
+                      <div className="text-[10px] text-amber-400/80">{t('programming.pressButtonHint')}</div>
                     </div>
                   </div>
                 )}
@@ -318,13 +320,13 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                         {selectedJob.verification_report.is_identical ? (
                           <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>100% Identisch (Gerät ist synchron)</span>
+                            <span>{t('programming.fullyIdenticalSynced')}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5 text-cyan-400 font-semibold text-xs">
                             <ShieldCheck className="w-4 h-4" />
                             <span>
-                              {selectedJob.verification_report.diff_bytes_count} Bytes Abweichung
+                              {selectedJob.verification_report.diff_bytes_count} {t('programming.diffBytes')}
                               ({selectedJob.verification_report.diff_chunks.length} Blöcke)
                             </span>
                           </div>
@@ -341,7 +343,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                             className="py-1 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-sm shadow-amber-600/20 transition-colors"
                           >
                             <Zap className="w-3 h-3 text-amber-200" />
-                            <span>Jetzt übertragen</span>
+                            <span>{t('programming.transferNowBtn')}</span>
                           </button>
                         )}
                       </div>
@@ -355,7 +357,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                     {selectedJob.verification_report.parameter_diffs && selectedJob.verification_report.parameter_diffs.length > 0 && (
                       <div className="space-y-1">
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
-                          Geänderte Parameter ({selectedJob.verification_report.parameter_diffs.length})
+                          {t('programming.changedParams')} ({selectedJob.verification_report.parameter_diffs.length})
                         </div>
                         <div className="max-h-20 overflow-y-auto space-y-1 text-[11px]">
                           {selectedJob.verification_report.parameter_diffs.map((diff, i) => (
@@ -382,7 +384,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                           onClick={() => setShowHexDiff(!showHexDiff)}
                           className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
                         >
-                          <span>{showHexDiff ? '▼ Hex-Speicherabgleich ausblenden' : '▶ Hex-Speicherabgleich anzeigen'}</span>
+                          <span>{showHexDiff ? t('programming.hideHexDiff') : t('programming.showHexDiff')}</span>
                         </button>
                         {showHexDiff && (
                           <div className="max-h-24 overflow-y-auto font-mono text-[10px] bg-slate-900 p-2 rounded border border-slate-800 space-y-1">
@@ -394,7 +396,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                                 <div className="flex items-center gap-2">
                                   <span className="text-rose-400/90 font-mono" title="Aktor (Ist)">{chk.device_bytes_hex}</span>
                                   <span className="text-slate-500">vs</span>
-                                  <span className="text-emerald-400 font-bold font-mono" title="Projekt (Soll)">{chk.target_bytes_hex}</span>
+                                  <span className="text-emerald-400 font-bold font-mono" title={t('programming.projectTargetState')}>{chk.target_bytes_hex}</span>
                                 </div>
                               </div>
                             ))}
@@ -409,7 +411,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
                 <div className="flex-1 flex flex-col rounded-lg bg-slate-950 border border-slate-800 overflow-hidden mt-1">
                   <div className="px-2.5 py-1 bg-slate-900 border-b border-slate-800 flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
                     <Terminal className="w-3 h-3 text-sky-400" />
-                    <span>Live-Protokoll</span>
+                    <span>{t('programming.logs')}</span>
                   </div>
                   <div className="flex-1 p-2 overflow-y-auto font-mono text-[11px] space-y-1 text-slate-300">
                     {selectedJob.log_messages.map((msg, i) => (
@@ -422,7 +424,7 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
               </div>
             ) : (
               <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">
-                Wähle einen Job links aus.
+                {t('programming.selectJobLeft')}
               </div>
             )}
           </div>
@@ -456,8 +458,8 @@ export const ProgrammingJobDrawer: React.FC<ProgrammingJobDrawerProps> = ({
             </div>
           ) : (
             <div>
-              <div className="text-slate-200 font-semibold">Flash-Manager</div>
-              <div className="text-[10px] text-slate-400">{jobs.length} Jobs protokolliert</div>
+              <div className="text-slate-200 font-semibold">{t('programming.drawerTitle')}</div>
+              <div className="text-[10px] text-slate-400">{jobs.length} {t('programming.jobsLogged')}</div>
             </div>
           )}
         </div>

@@ -6,6 +6,7 @@ import {
   getBezierPath,
 } from '@xyflow/react'
 import { X } from 'lucide-react'
+import { useTranslation } from '../../../i18n'
 
 export interface KnxWireEdgeData {
   gaAddress?: string
@@ -29,6 +30,7 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
   selected,
   animated,
 }) => {
+  const { t } = useTranslation()
   const [isHovered, setIsHovered] = useState(false)
 
   // n8n-typische harmonische Bezier-Kurve mit definierter Krümmung
@@ -107,7 +109,7 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
                 ? 'bg-slate-900 text-sky-200 border-sky-400 shadow-md shadow-sky-500/30 ring-1 ring-sky-400/50 scale-105 z-30'
                 : 'bg-slate-900/95 text-slate-300 border-slate-700/80 hover:border-slate-500 shadow-sm shadow-black/40 z-10'
             }`}
-            title={`KNX Gruppenadresse ${gaAddress}${gaName ? ` (${gaName})` : ''} - [Entf] drücken zum Löschen`}
+            title={`KNX GA ${gaAddress}${gaName ? ` (${gaName})` : ''} - [Del]`}
           >
             <span className="font-bold text-sky-400 bg-sky-950/80 px-1 py-0.2 rounded border border-sky-800/40">
               {gaAddress}
@@ -134,7 +136,7 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
                   e.stopPropagation()
                   onDelete(id)
                 }}
-                title="Verbindung löschen"
+                title={t('nodes.wire.deleteTooltip')}
                 className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-rose-500 transition-colors ml-0.5 shrink-0"
               >
                 <X className="w-2.5 h-2.5" />

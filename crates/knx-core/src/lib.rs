@@ -18,3 +18,4 @@ pub mod storage;
 pub mod dpt;
 pub mod recorder;
 pub mod project_compare;
+pub mod catalog_yaml;

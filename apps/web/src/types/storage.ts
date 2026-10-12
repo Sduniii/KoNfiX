@@ -3,6 +3,7 @@ export interface StorageSettings {
   active_project_name: string | null
   auto_save: boolean
   signing_key?: string | null
+  online_catalog_url?: string
 }
 
 export interface ProjectMetadata {

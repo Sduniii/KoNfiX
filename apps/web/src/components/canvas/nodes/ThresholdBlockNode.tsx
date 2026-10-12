@@ -2,6 +2,7 @@ import React, { memo } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { Sliders, Activity, Trash2 } from 'lucide-react'
 import { FunctionBlock, GroupAddress } from '../../../types/knx'
+import { useTranslation } from '../../../i18n'
 
 interface ThresholdBlockNodeProps {
   data: {
@@ -14,6 +15,7 @@ interface ThresholdBlockNodeProps {
 }
 
 export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({ data }) => {
+  const { t } = useTranslation()
   const { block, groupAddresses, onAction, onDelete } = data
 
   const state = block.state || {}
@@ -31,7 +33,7 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
 
   return (
     <div
-      className={`w-80 rounded-2xl border-2 shadow-lg transition-all ${
+      className={`w-80 rounded-2xl border-2 shadow-lg transition-[border-color,box-shadow,background-color] duration-150 ${
         out
           ? 'border-emerald-400 bg-slate-900 shadow-emerald-500/10'
           : 'border-slate-700 bg-slate-900 shadow-black/40'
@@ -44,8 +46,8 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-sm font-bold text-slate-100">{block.name}</div>
-            <div className="text-[11px] text-slate-400 font-mono">Schwellwertschalter (Hysterese)</div>
+            <div className="text-sm font-semibold text-slate-100">{block.name}</div>
+            <div className="text-[11px] text-slate-400 font-mono">{t('nodes.threshold.blockTitle')}</div>
           </div>
         </div>
 
@@ -57,7 +59,7 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
                 : 'bg-slate-800 text-slate-400 border-slate-700'
             }`}
           >
-            {out ? 'EIN (1)' : 'AUS (0)'}
+            {out ? `${t('nodes.light.on')} (1)` : `${t('nodes.light.off')} (0)`}
           </div>
 
           {onDelete && (
@@ -66,7 +68,7 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
                 e.stopPropagation()
                 onDelete(block.id)
               }}
-              title="Baustein löschen"
+              title={t('nodes.threshold.deleteTooltip')}
               className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
             >
               <Trash2 className="w-4 h-4" />
@@ -80,15 +82,15 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
         {/* Value and Threshold Display */}
         <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 text-center">
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">Ist-Wert</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">Ist</div>
             <div className="text-base font-bold text-sky-400 font-mono mt-0.5">{inVal.toFixed(1)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">EIN ab</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">ON &ge;</div>
             <div className="text-sm font-bold text-emerald-400 font-mono mt-1">&ge; {threshOn}</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-400 uppercase font-semibold">AUS unter</div>
+            <div className="text-[10px] text-slate-400 uppercase font-semibold">OFF &le;</div>
             <div className="text-sm font-bold text-rose-400 font-mono mt-1">&le; {threshOff}</div>
           </div>
         </div>
@@ -96,7 +98,7 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
         {/* Quick Simulation Slider */}
         <div className="space-y-1.5">
           <div className="flex justify-between text-[11px] text-slate-400">
-            <span>Eingangssignal testen:</span>
+            <span>{t('nodes.logic.simulateInputs')}:</span>
             <span className="font-mono font-bold text-slate-200">{inVal.toFixed(1)}</span>
           </div>
           <input
@@ -123,7 +125,7 @@ export const ThresholdBlockNodeComponent: React.FC<ThresholdBlockNodeProps> = ({
             id="in_val"
             className="!w-3 !h-3 !bg-sky-400 !border-2 !border-slate-900"
           />
-          <span className="text-slate-300 font-mono text-[11px] pl-1">in_val (analoger Wert)</span>
+          <span className="text-slate-300 font-mono text-[11px] pl-1">in_val</span>
         </div>
 
         <div className="relative flex items-center justify-end gap-2">
