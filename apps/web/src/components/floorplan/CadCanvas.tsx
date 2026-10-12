@@ -31,7 +31,7 @@ interface CadCanvasProps {
   cadModel: FloorCadModel
   widgets: FloorPlanWidget[]
   backgroundImage?: string | null
-  backgroundOpacity?: number
+  backgroundOpacity?: number | null
   isEditMode: boolean
   activeTool: CadTool
   scale: number // px per meter (e.g. 40)
@@ -392,7 +392,7 @@ export const CadCanvas: React.FC<CadCanvasProps> = ({
               y={0}
               width={20 * scale}
               height={15 * scale}
-              opacity={backgroundOpacity}
+              opacity={backgroundOpacity ?? 0.4}
               className="pointer-events-none select-none"
             />
           )}

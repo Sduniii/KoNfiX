@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Save,
   FolderOpen,
+  FolderCog,
   Check,
   Globe,
   GitCompare,

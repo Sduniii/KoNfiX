@@ -1168,23 +1168,6 @@ export async function mergeDeviceLive(
   return res.json()
 }
 
-export async function sendKnxTelegram(
-  destination: string,
-  value: any,
-  dpt: string = '1.001'
-): Promise<{ success: boolean; destination: string }> {
-  const res = await fetch(`${API_BASE}/knx/send`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ destination, value, dpt }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error(err.error || 'Fehler beim Senden des KNX-Telegramms')
-  }
-  return res.json()
-}
-
 
 
 

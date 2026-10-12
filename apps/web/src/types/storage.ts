@@ -19,7 +19,7 @@ export interface ProjectMetadata {
 }
 
 export interface ProjectViewState {
-  active_workspace?: 'canvas' | 'topology' | 'diagnostics'
+  active_workspace?: 'canvas' | 'topology' | 'diagnostics' | 'floorplan'
   selected_room_id?: string | null
   selected_block_id?: string | null
   zoom?: number

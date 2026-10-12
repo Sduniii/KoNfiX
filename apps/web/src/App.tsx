@@ -1210,7 +1210,7 @@ export function App() {
                 telegrams={telegrams}
                 onSendTelegram={async (dest, val, dpt) => {
                   try {
-                    await sendKnxTelegram(dest, val, dpt)
+                    await sendKnxTelegram(dest, dpt || '1.001', val)
                   } catch (err) {
                     console.error('Failed to send telegram from floorplan:', err)
                   }
