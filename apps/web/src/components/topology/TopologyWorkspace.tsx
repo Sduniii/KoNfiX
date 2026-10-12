@@ -4,6 +4,7 @@ import {
   Layers,
   ShieldCheck,
   AlertTriangle,
+  AlertCircle,
   CheckCircle2,
   ArrowRight,
   ArrowLeftRight,
@@ -48,6 +49,7 @@ import {
   TopologyValidationIssue,
   KnxMediumType,
   LineCouplerFilterMode,
+  CouplerFilterAuditResult,
 } from '../../types/topology'
 import {
   fetchTopology,
@@ -60,6 +62,7 @@ import {
   validateTopology,
   flashFilterTable,
   fetchTopologyDiagnostics,
+  auditLineCoupler,
 } from '../../services/api'
 import { useTranslation } from '../../i18n/I18nContext'
 
@@ -114,6 +117,25 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
 
   // Flash Filter Table State
   const [isFlashingFilterTable, setIsFlashingFilterTable] = useState<boolean>(false)
+
+  // Coupler Live Audit State
+  const [isAuditingCoupler, setIsAuditingCoupler] = useState<boolean>(false)
+  const [auditResult, setAuditResult] = useState<CouplerFilterAuditResult | null>(null)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false)
+
+  const handleAuditCoupler = async () => {
+    if (!selectedLineId) return
+    setIsAuditingCoupler(true)
+    try {
+      const res = await auditLineCoupler(selectedLineId)
+      setAuditResult(res)
+      setIsAuditModalOpen(true)
+    } catch (err: any) {
+      alert(err.message || 'Fehler beim Linienkoppler-Live-Audit')
+    } finally {
+      setIsAuditingCoupler(false)
+    }
+  }
 
   const handleFlashFilterTable = async () => {
     if (!selectedLineId) return
@@ -721,6 +743,15 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span>.bin Export</span>
+                  </button>
+                  <button
+                    onClick={handleAuditCoupler}
+                    disabled={isAuditingCoupler}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold text-sky-200 bg-sky-950/80 hover:bg-sky-900 border border-sky-500/40 disabled:opacity-50 transition-colors shadow-sm"
+                    title="Aktuelle 8192-Byte Filter-Bitmap aus dem Koppler über den Bus auslesen und bitgenau mit dem Projekt vergleichen"
+                  >
+                    <Activity className={`w-3.5 h-3.5 text-sky-400 ${isAuditingCoupler ? 'animate-spin' : ''}`} />
+                    <span>{isAuditingCoupler ? 'Lese Koppler...' : 'Live-Audit: Koppler abgleichen'}</span>
                   </button>
                   <button
                     onClick={handleFlashFilterTable}
@@ -1641,6 +1672,142 @@ export const TopologyWorkspace: React.FC<TopologyWorkspaceProps> = ({
               >
                 {isMoving ? 'Verschiebe...' : 'Auf Linie verschieben'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coupler Live Audit Modal */}
+      {isAuditModalOpen && auditResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/90">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg ${
+                  auditResult.is_synchronized ? 'bg-emerald-600 shadow-emerald-600/20' : 'bg-amber-600 shadow-amber-600/20'
+                }`}>
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                    Linienkoppler Live-Audit: {auditResult.coupler_address}
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold border ${
+                      auditResult.is_synchronized
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}>
+                      {auditResult.is_synchronized ? '100% Synchron' : `${auditResult.discrepancy_count} Diskrepanzen`}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Bitgenauer 8.192-Byte Abgleich zwischen KNX-Bus Hardware und Projektierung für {auditResult.line_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAuditModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {/* Summary Banner */}
+              <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                auditResult.is_synchronized
+                  ? 'bg-emerald-950/30 border-emerald-800/60 text-emerald-200'
+                  : 'bg-amber-950/30 border-amber-800/60 text-amber-200'
+              }`}>
+                {auditResult.is_synchronized ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <div className="font-semibold text-sm">{auditResult.message}</div>
+                  <div className="text-[11px] text-slate-400 mt-1">
+                    Geprüft: 65.536 KNX Gruppenadressen (8.192 Bytes Bitmap). Übereinstimmende Bits: {auditResult.matching_bits_count}.
+                  </div>
+                </div>
+              </div>
+
+              {/* Critical Blocked Discrepancies */}
+              {auditResult.unexpectedly_blocked_gas.length > 0 && (
+                <div className="space-y-2">
+                  <div className="font-bold text-rose-400 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                    <AlertCircle className="w-4 h-4 text-rose-400" />
+                    <span>Kritisch: Fälschlicherweise blockierte Gruppenadressen ({auditResult.unexpectedly_blocked_gas.length})</span>
+                  </div>
+                  <div className="border border-rose-950/80 rounded-xl overflow-hidden divide-y divide-rose-950/60 bg-rose-950/20">
+                    {auditResult.unexpectedly_blocked_gas.map((d) => (
+                      <div key={d.ga_address} className="p-2.5 flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold bg-rose-900/60 text-rose-200 px-2 py-0.5 rounded border border-rose-700/60">
+                            {d.ga_address}
+                          </span>
+                          <span className="text-slate-200 font-medium">{d.ga_name || 'Unbenannte GA'}</span>
+                        </div>
+                        <span className="text-rose-300 italic">{d.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warning Open Discrepancies */}
+              {auditResult.unexpectedly_forwarded_gas.length > 0 && (
+                <div className="space-y-2">
+                  <div className="font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                    <ShieldAlert className="w-4 h-4 text-amber-400" />
+                    <span>Warnung: Unerwartet durchgelassene Gruppenadressen ({auditResult.unexpectedly_forwarded_gas.length})</span>
+                  </div>
+                  <div className="border border-amber-950/80 rounded-xl overflow-hidden divide-y divide-amber-950/60 bg-amber-950/20">
+                    {auditResult.unexpectedly_forwarded_gas.map((d) => (
+                      <div key={d.ga_address} className="p-2.5 flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold bg-amber-900/60 text-amber-200 px-2 py-0.5 rounded border border-amber-700/60">
+                            {d.ga_address}
+                          </span>
+                          <span className="text-slate-200 font-medium">{d.ga_name || 'Freie GA'}</span>
+                        </div>
+                        <span className="text-amber-300 italic">{d.message}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-400">
+                {auditResult.discrepancy_count > 0 ? 'Abweichungen können durch Flashen der Projekt-Filtertabelle korrigiert werden.' : 'Alles in bester Ordnung.'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAuditModalOpen(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                >
+                  Schließen
+                </button>
+                {auditResult.discrepancy_count > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAuditModalOpen(false)
+                      handleFlashFilterTable()
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 hover:bg-amber-500 text-white shadow-md transition-colors"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-200" />
+                    <span>Jetzt Soll-Filtertabelle flashen</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

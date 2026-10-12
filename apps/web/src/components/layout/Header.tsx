@@ -16,10 +16,10 @@ import {
   ChevronDown,
   Save,
   FolderOpen,
-  FolderCog,
   Check,
   Globe,
   GitCompare,
+  Home,
 } from 'lucide-react'
 import { Project, GatewayConnectionStatus } from '../../types/knx'
 import { downloadEtsCsv, downloadEtsXml, downloadKnxproj } from '../../services/api'
@@ -31,8 +31,8 @@ interface HeaderProps {
   isSimulating: boolean
   isWsConnected: boolean
   gatewayStatus?: GatewayConnectionStatus | null
-  activeWorkspace?: 'canvas' | 'topology' | 'diagnostics'
-  onWorkspaceChange?: (ws: 'canvas' | 'topology' | 'diagnostics') => void
+  activeWorkspace?: 'canvas' | 'topology' | 'diagnostics' | 'floorplan'
+  onWorkspaceChange?: (ws: 'canvas' | 'topology' | 'diagnostics' | 'floorplan') => void
   onToggleSimulate: () => void
   onAutoRoute: () => void
   isRouting: boolean
@@ -449,6 +449,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Activity className="w-3.5 h-3.5 text-sky-300" />
               <span>{t('workspaces.diagnostics')}</span>
+            </button>
+            <button
+              onClick={() => onWorkspaceChange('floorplan')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeWorkspace === 'floorplan'
+                  ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+              title="Gebäude-Grundriss & Live-Haussteuerung"
+            >
+              <Home className="w-3.5 h-3.5 text-purple-300" />
+              <span>Hausplan</span>
             </button>
           </div>
         </div>

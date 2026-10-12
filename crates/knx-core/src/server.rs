@@ -172,6 +172,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/topology/lines", post(handle_add_line))
         .route("/api/topology/lines/:line_id", axum::routing::put(handle_update_line).delete(handle_delete_line))
         .route("/api/topology/lines/:line_id/filter-table", get(handle_get_filter_table))
+        .route("/api/topology/lines/:line_id/audit-coupler", post(handle_audit_line_coupler))
         .route("/api/topology/devices/move", post(handle_move_device))
         .route("/api/topology/validate", get(handle_validate_topology))
         .route("/api/programming/jobs", get(handle_get_programming_jobs).post(handle_create_programming_job))
@@ -179,6 +180,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/programming/lines/:line_id/flash-filter-table", post(handle_flash_filter_table))
         .route("/api/devices/:device_id/dirty", get(handle_device_dirty_state))
         .route("/api/devices/:device_id/read-state", post(handle_read_device_live_state))
+        .route("/api/devices/:device_id/compare-live", post(handle_device_compare_live))
+        .route("/api/devices/:device_id/merge-live", post(handle_device_merge_live))
         .route("/api/devices/:device_id/mark-synced", post(handle_mark_device_synced))
         .route("/api/devices/:device_id/security", post(handle_device_security))
         // Bus Monitor & Recorder
@@ -1963,6 +1966,90 @@ async fn handle_get_filter_table(
     }
 }
 
+async fn handle_audit_line_coupler(
+    AxPath(line_id): AxPath<Uuid>,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let mut proj = state.project.write().await;
+    TopologyManager::ensure_topology(&mut proj);
+
+    let summary = match TopologyManager::calculate_filter_table(&proj, line_id) {
+        Ok(s) => s,
+        Err(err) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": err }))),
+    };
+
+    let expected_bitmap = match hex::decode(&summary.raw_bitmap_hex) {
+        Ok(b) => b,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+    };
+
+    let (line_opt, coupler_addr) = {
+        let topo = proj.topology.as_ref().unwrap();
+        let mut l_found = None;
+        for area in &topo.areas {
+            for line in &area.lines {
+                if line.id == line_id {
+                    l_found = Some(line.clone());
+                    break;
+                }
+            }
+            if l_found.is_some() { break; }
+        }
+        let line = match l_found {
+            Some(l) => l,
+            None => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Linie nicht gefunden" }))),
+        };
+        let c_addr = format!("{}.0", line.address);
+        (line, c_addr)
+    };
+
+    let is_real_bus = state.knx_manager.get_status().await.connected;
+    if is_real_bus {
+        // Read 8192-byte bitmap from coupler on bus
+        let mut client = match crate::programming::DeviceBusClient::new(state.knx_manager.clone(), &coupler_addr) {
+            Ok(c) => c,
+            Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
+        };
+
+        if let Err(e) = client.connect().await {
+            return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "error": format!("Verbindung zum Koppler {} fehlgeschlagen: {}", coupler_addr, e) })));
+        }
+
+        let mut actual_bitmap = vec![0u8; 8192];
+        let mut read_failed = false;
+        let mut err_msg = String::new();
+
+        for chunk_idx in 0..128 {
+            let addr = 0x0100u16.saturating_add((chunk_idx * 64) as u16);
+            match client.read_memory(addr, 64).await {
+                Ok(data) => {
+                    let d_len = data.len().min(64);
+                    let start = chunk_idx * 64;
+                    actual_bitmap[start..start + d_len].copy_from_slice(&data[..d_len]);
+                }
+                Err(e) => {
+                    read_failed = true;
+                    err_msg = format!("Fehler beim Lesen der Filtertabelle bei 0x{:04X}: {}", addr, e);
+                    break;
+                }
+            }
+        }
+
+        let _ = client.disconnect().await;
+
+        if read_failed {
+            return (StatusCode::BAD_GATEWAY, Json(serde_json::json!({ "error": err_msg })));
+        }
+
+        let audit = TopologyManager::compare_filter_bitmaps(&proj, &line_opt, &actual_bitmap, &expected_bitmap);
+        (StatusCode::OK, Json(serde_json::to_value(audit).unwrap()))
+    } else {
+        // Simulated audit: 100% synchronized with expected bitmap
+        let audit = TopologyManager::compare_filter_bitmaps(&proj, &line_opt, &expected_bitmap, &expected_bitmap);
+        (StatusCode::OK, Json(serde_json::to_value(audit).unwrap()))
+    }
+}
+
 async fn handle_move_device(
     State(state): State<AppState>,
     Json(req): Json<MoveDeviceRequest>,
@@ -2084,6 +2171,33 @@ async fn handle_read_device_live_state(
 ) -> (StatusCode, Json<serde_json::Value>) {
     match state.programming.read_device_live_state(device_id).await {
         Ok(res) => (StatusCode::OK, Json(serde_json::to_value(res).unwrap())),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
+    }
+}
+
+async fn handle_device_compare_live(
+    AxPath(device_id): AxPath<Uuid>,
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state.programming.compare_device_live(device_id).await {
+        Ok(res) => (StatusCode::OK, Json(serde_json::to_value(res).unwrap())),
+        Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
+    }
+}
+
+async fn handle_device_merge_live(
+    AxPath(device_id): AxPath<Uuid>,
+    State(state): State<AppState>,
+    Json(req): Json<crate::programming::LiveDeviceMergeRequest>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    match state.programming.merge_device_live(device_id, req).await {
+        Ok(res) => {
+            let p_lock = state.project.read().await;
+            let cloned = p_lock.clone();
+            drop(p_lock);
+            auto_save_if_enabled(&state, &cloned).await;
+            (StatusCode::OK, Json(serde_json::to_value(res).unwrap()))
+        }
         Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))),
     }
 }

@@ -22,6 +22,7 @@ import {
   ProjectDiff,
   SelectiveMergeRequest,
   MergeSummary,
+  LiveDeviceCompareResult,
 } from '../../types/knx'
 import { ProjectMetadata } from '../../types/storage'
 import {
@@ -29,6 +30,8 @@ import {
   mergeProjects,
   listStorageProjects,
   loadStorageProject,
+  compareDeviceLive,
+  mergeDeviceLive,
 } from '../../services/api'
 import { useTranslation } from '../../i18n/I18nContext'
 
@@ -36,6 +39,7 @@ interface ProjectCompareModalProps {
   isOpen: boolean
   onClose: () => void
   currentProject: Project | null
+  initialDeviceId?: string | null
   onProjectUpdated?: (updatedProject: Project) => void
 }
 
@@ -43,6 +47,7 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
   isOpen,
   onClose,
   currentProject,
+  initialDeviceId,
   onProjectUpdated,
 }) => {
   const { t } = useTranslation()
@@ -58,6 +63,10 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
   const [activeTab, setActiveTab] = useState<'gas' | 'devices' | 'parameters' | 'kos'>('gas')
   const [error, setError] = useState<string | null>(null)
 
+  // Live Device State
+  const [selectedLiveDeviceId, setSelectedLiveDeviceId] = useState<string>('')
+  const [liveDeviceResult, setLiveDeviceResult] = useState<LiveDeviceCompareResult | null>(null)
+
   // Selection state for selective merge
   const [selectedGas, setSelectedGas] = useState<Set<string>>(new Set())
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set())
@@ -70,8 +79,13 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
       setDiff(null)
       setMergeSummary(null)
       setError(null)
+      if (initialDeviceId) {
+        handleSelectLiveDevice(initialDeviceId)
+      } else {
+        setSelectedLiveDeviceId('')
+      }
     }
-  }, [isOpen])
+  }, [isOpen, initialDeviceId])
 
   const loadProjectsList = async () => {
     try {
@@ -129,6 +143,93 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
       setError(err.message || 'Fehler beim Parsen der Datei')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleSelectLiveDevice = async (deviceId: string) => {
+    setSelectedLiveDeviceId(deviceId)
+    if (!deviceId) return
+
+    setIsLoading(true)
+    setError(null)
+    setMergeSummary(null)
+    setDiff(null)
+    setCompareProject(null)
+    setSelectedFilename('')
+
+    try {
+      const liveRes = await compareDeviceLive(deviceId)
+      setLiveDeviceResult(liveRes)
+
+      const transformedDiff: ProjectDiff = {
+        base_project_name: currentProject?.name || 'Aktives Projekt',
+        compare_project_name: `Live Hardware: ${liveRes.device_name} (${liveRes.address})`,
+        total_differences: liveRes.total_differences,
+        devices: [],
+        group_addresses: [],
+        parameters: liveRes.parameters
+          .filter((p) => p.is_different)
+          .map((p) => ({
+            device_address: liveRes.address,
+            device_name: liveRes.device_name,
+            param_id: p.param_id,
+            param_name: p.param_name,
+            value_base: p.project_value,
+            value_compare: p.live_value,
+          })),
+        ko_links: liveRes.ko_links
+          .filter((k) => k.is_different)
+          .map((k) => ({
+            device_address: liveRes.address,
+            device_name: liveRes.device_name,
+            ko_number: k.ko_number,
+            ko_name: k.ko_name,
+            gas_base: k.project_gas,
+            gas_compare: k.live_gas,
+          })),
+      }
+
+      setDiff(transformedDiff)
+      selectAllDiffs(transformedDiff)
+      if (transformedDiff.parameters.length > 0) {
+        setActiveTab('parameters')
+      } else if (transformedDiff.ko_links.length > 0) {
+        setActiveTab('kos')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Auslesen des Live-Geräts')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleMergeLiveDevice = async (mergeAll: boolean = false) => {
+    if (!selectedLiveDeviceId || !liveDeviceResult) return
+
+    setIsMerging(true)
+    setError(null)
+
+    try {
+      const paramIds = (diff?.parameters || [])
+        .filter((p) => mergeAll || selectedParams.has(`${p.device_address}:${p.param_id}`))
+        .map((p) => p.param_id)
+
+      const koNumbers = (diff?.ko_links || [])
+        .filter((k) => mergeAll || selectedKos.has(`${k.device_address}:${k.ko_number}`))
+        .map((k) => k.ko_number)
+
+      const summary = await mergeDeviceLive(selectedLiveDeviceId, {
+        merge_all: mergeAll,
+        merge_param_ids: paramIds,
+        merge_ko_numbers: koNumbers,
+      })
+
+      setMergeSummary(summary)
+      await handleSelectLiveDevice(selectedLiveDeviceId)
+    } catch (err: any) {
+      setError(err.message || 'Fehler beim Synchronisieren des Live-Geräts')
+    } finally {
+      setIsMerging(false)
     }
   }
 
@@ -279,6 +380,29 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
               <span>Projektdatei hochladen...</span>
               <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
             </label>
+
+            <span className="text-slate-500 text-[11px]">oder</span>
+
+            {/* Live Hardware Device Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-sky-400 font-semibold flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Live-Aktor vom Bus:</span>
+              </span>
+              <select
+                value={selectedLiveDeviceId}
+                onChange={(e) => handleSelectLiveDevice(e.target.value)}
+                disabled={isLoading}
+                className="bg-slate-800 border border-sky-500/40 rounded-lg px-3 py-1.5 text-sky-200 focus:outline-none focus:border-sky-400 text-xs font-mono"
+              >
+                <option value="">-- Physisches Gerät wählen --</option>
+                {currentProject?.devices.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.individual_address} - {d.name} ({d.model})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {diff && (
@@ -632,7 +756,7 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
           {diff && (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => handleMerge(false)}
+                onClick={() => (selectedLiveDeviceId ? handleMergeLiveDevice(false) : handleMerge(false))}
                 disabled={isMerging || (selectedGas.size === 0 && selectedDevices.size === 0 && selectedParams.size === 0 && selectedKos.size === 0)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white shadow-lg shadow-sky-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -641,15 +765,23 @@ export const ProjectCompareModal: React.FC<ProjectCompareModalProps> = ({
                 ) : (
                   <Check className="w-4 h-4" />
                 )}
-                <span>Ausgewählte Differenzen übernehmen</span>
+                <span>
+                  {selectedLiveDeviceId
+                    ? 'Ausgewählte Werte in Projekt übernehmen'
+                    : 'Ausgewählte Differenzen übernehmen'}
+                </span>
               </button>
 
               <button
-                onClick={() => handleMerge(true)}
+                onClick={() => (selectedLiveDeviceId ? handleMergeLiveDevice(true) : handleMerge(true))}
                 disabled={isMerging}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50"
               >
-                <span>Alles zusammenführen (Merge All)</span>
+                <span>
+                  {selectedLiveDeviceId
+                    ? 'Alle Hardware-Werte übernehmen'
+                    : 'Alles zusammenführen (Merge All)'}
+                </span>
               </button>
             </div>
           )}

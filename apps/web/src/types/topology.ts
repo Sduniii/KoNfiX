@@ -54,6 +54,29 @@ export interface FilterTableSummary {
   raw_bitmap_hex: string
 }
 
+export interface FilterDiscrepancy {
+  ga_address: string
+  ga_name?: string | null
+  expected_forward: boolean
+  actual_forward: boolean
+  severity: 'critical_blocked' | 'warning_open'
+  message: string
+}
+
+export interface CouplerFilterAuditResult {
+  line_address: string
+  line_name: string
+  coupler_address: string
+  is_connected: boolean
+  total_bits_checked: number
+  matching_bits_count: number
+  discrepancy_count: number
+  unexpectedly_blocked_gas: FilterDiscrepancy[]
+  unexpectedly_forwarded_gas: FilterDiscrepancy[]
+  is_synchronized: boolean
+  message: string
+}
+
 export interface TopologyValidationIssue {
   severity: 'error' | 'warning' | 'info'
   message: string

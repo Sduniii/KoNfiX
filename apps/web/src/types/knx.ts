@@ -295,6 +295,66 @@ export interface KnxTelegram {
   telegram_type: string
 }
 
+export interface CadWall {
+  id: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  thickness: number
+  is_outer?: boolean
+}
+
+export type CadOpeningType = 'Door' | 'Window'
+
+export interface CadOpening {
+  id: string
+  wall_id: string
+  opening_type: CadOpeningType
+  position: number // 0.0 .. 1.0 entlang Wand
+  width: number    // Meter
+  flip?: boolean
+}
+
+export interface CadRoomZone {
+  id: string
+  room_id?: string | null
+  name: string
+  points: Position[]
+  area_sqm?: number | null
+}
+
+export interface FloorCadModel {
+  walls: CadWall[]
+  openings: CadOpening[]
+  room_zones: CadRoomZone[]
+  scale_pixels_per_meter: number // Standard z. B. 40
+}
+
+export type FloorPlanWidgetType = 'Light' | 'Blind' | 'Climate' | 'Socket' | 'Sensor' | 'Scene'
+
+export interface FloorPlanWidget {
+  id: string
+  floor_id: string
+  room_id?: string | null
+  title: string
+  widget_type: FloorPlanWidgetType
+  x: number
+  y: number
+  ga_switch?: string | null
+  ga_state?: string | null
+  ga_value?: string | null
+  dpt?: string | null
+}
+
+export interface FloorPlan {
+  floor_id: string
+  background_image?: string | null
+  background_opacity?: number | null
+  cad_model?: FloorCadModel | null
+  widgets: FloorPlanWidget[]
+}
+
 export interface Project {
   id: string
   name: string
@@ -306,6 +366,7 @@ export interface Project {
   blocks: FunctionBlock[]
   connections: WireConnection[]
   group_addresses: GroupAddress[]
+  floor_plans?: FloorPlan[]
 }
 
 export interface DiscoveredGateway {
@@ -565,6 +626,46 @@ export interface MergeSummary {
   parameters_merged: number
   ko_links_merged: number
   message: string
+}
+
+export interface LiveParamValue {
+  param_id: string
+  param_name: string
+  project_value: string
+  live_value: string
+  is_different: boolean
+}
+
+export interface LiveKoLink {
+  ko_number: number
+  ko_name: string
+  project_gas: string[]
+  live_gas: string[]
+  is_different: boolean
+}
+
+export interface LiveDeviceCompareResult {
+  success: boolean
+  device_id: string
+  address: string
+  device_name: string
+  model: string
+  reachable: boolean
+  rtt_ms?: number | null
+  mask_version?: string | null
+  total_differences: number
+  parameters: LiveParamValue[]
+  ko_links: LiveKoLink[]
+  raw_gat_hex?: string | null
+  raw_at_hex?: string | null
+  raw_params_hex?: string | null
+  message: string
+}
+
+export interface LiveDeviceMergeRequest {
+  merge_all: boolean
+  merge_param_ids: string[]
+  merge_ko_numbers: number[]
 }
 
 // =========================================================================

@@ -1126,6 +1126,66 @@ export async function fetchTopologyDiagnostics(): Promise<TopologyHealthReport> 
   return res.json()
 }
 
+// =========================================================================
+// Coupler Filter Audit & Live Device APIs
+// =========================================================================
+
+export async function auditLineCoupler(lineId: string): Promise<import('../types/topology').CouplerFilterAuditResult> {
+  const res = await fetch(`${API_BASE}/topology/lines/${lineId}/audit-coupler`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Ausführen des Linienkoppler-Audits')
+  }
+  return res.json()
+}
+
+export async function compareDeviceLive(deviceId: string): Promise<import('../types/knx').LiveDeviceCompareResult> {
+  const res = await fetch(`${API_BASE}/devices/${deviceId}/compare-live`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Auslesen des Live-Geräts')
+  }
+  return res.json()
+}
+
+export async function mergeDeviceLive(
+  deviceId: string,
+  request: import('../types/knx').LiveDeviceMergeRequest
+): Promise<MergeSummary> {
+  const res = await fetch(`${API_BASE}/devices/${deviceId}/merge-live`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Synchronisieren des Live-Geräts')
+  }
+  return res.json()
+}
+
+export async function sendKnxTelegram(
+  destination: string,
+  value: any,
+  dpt: string = '1.001'
+): Promise<{ success: boolean; destination: string }> {
+  const res = await fetch(`${API_BASE}/knx/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ destination, value, dpt }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || 'Fehler beim Senden des KNX-Telegramms')
+  }
+  return res.json()
+}
+
+
 
 
 

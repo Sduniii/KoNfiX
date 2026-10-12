@@ -52,6 +52,7 @@ interface RightSidebarProps {
   onUpdateDevice?: (device: KnxDevice) => void
   onOpenDeviceKoModal?: (device: KnxDevice) => void
   onOpenSecurityModal?: (device: KnxDevice) => void
+  onOpenProjectCompare?: (deviceId?: string) => void
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({
@@ -67,6 +68,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
   onUpdateDevice,
   onOpenDeviceKoModal,
   onOpenSecurityModal,
+  onOpenProjectCompare,
 }) => {
   const { t, locale } = useTranslation()
   const [editingGaId, setEditingGaId] = useState<string | null>(null)
@@ -841,6 +843,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                           </li>
                         ))}
                       </ul>
+
+                      {onOpenProjectCompare && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenProjectCompare(selectedDevice.id)}
+                          className="w-full mt-2 py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Activity className="w-3 h-3 text-amber-400" />
+                          <span>Im Diff-Viewer abgleichen & Werte übernehmen</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

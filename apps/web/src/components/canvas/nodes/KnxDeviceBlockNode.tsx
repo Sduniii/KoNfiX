@@ -483,14 +483,14 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                               : 'bg-slate-900/50 border-slate-800/50 hover:border-slate-700'
                           }`}
                         >
-                          {/* PROMINENT BLUEPRINT PIN HANDLE (LEFT EDGE) */}
+                          {/* PROMINENT BLUEPRINT PIN HANDLE (LEFT EDGE) MIT ERWEITERTER FANGZONE */}
                           <Handle
                             type="target"
                             position={Position.Left}
                             id={`ko-${ko.number}`}
                             style={{ left: -7, top: '50%', transform: 'translateY(-50%)' }}
-                            className="!w-3.5 !h-3.5 !bg-sky-400 !border-2 !border-slate-950 shadow-[0_0_8px_rgba(56,189,248,0.9)] hover:!scale-125 !cursor-crosshair transition-transform z-20"
-                            title={`Eingang-Pin ko-${ko.number}: Empfängt KNX Telegramme (Write)`}
+                            className="!w-3.5 !h-3.5 !bg-sky-400 !border-2 !border-slate-950 shadow-[0_0_8px_rgba(56,189,248,0.9)] hover:!scale-125 !cursor-crosshair transition-transform z-20 after:content-[''] after:absolute after:-inset-2.5 after:pointer-events-auto"
+                            title={`Eingang #${ko.number} (${ko.dpt ? `DPT ${ko.dpt}` : 'DPT ?'}): ${ko.function_text || ko.name}${ko.group_addresses?.length ? ` → [${ko.group_addresses.join(', ')}]` : ''}`}
                           />
 
                           {/* Left label & KO info */}
@@ -651,14 +651,14 @@ export const KnxDeviceBlockNodeComponent: React.FC<KnxDeviceBlockNodeProps> = ({
                             </span>
                           </div>
 
-                          {/* PROMINENT BLUEPRINT PIN HANDLE (RIGHT EDGE) */}
+                          {/* PROMINENT BLUEPRINT PIN HANDLE (RIGHT EDGE) MIT ERWEITERTER FANGZONE */}
                           <Handle
                             type="source"
                             position={Position.Right}
                             id={`ko-${ko.number}`}
                             style={{ right: -7, top: '50%', transform: 'translateY(-50%)' }}
-                            className="!w-3.5 !h-3.5 !bg-amber-400 !border-2 !border-slate-950 shadow-[0_0_8px_rgba(251,191,36,0.9)] hover:!scale-125 !cursor-crosshair transition-transform z-20"
-                            title={`Ausgang-Pin ko-${ko.number}: Sendet KNX Telegramme (Transmit)`}
+                            className="!w-3.5 !h-3.5 !bg-amber-400 !border-2 !border-slate-950 shadow-[0_0_8px_rgba(251,191,36,0.9)] hover:!scale-125 !cursor-crosshair transition-transform z-20 after:content-[''] after:absolute after:-inset-2.5 after:pointer-events-auto"
+                            title={`Ausgang #${ko.number} (${ko.dpt ? `DPT ${ko.dpt}` : 'DPT ?'}): ${ko.function_text || ko.name}${ko.group_addresses?.length ? ` → [${ko.group_addresses.join(', ')}]` : ''}`}
                           />
                         </div>
                       )

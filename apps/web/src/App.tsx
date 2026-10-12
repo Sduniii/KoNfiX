@@ -23,6 +23,7 @@ import {
   saveStorageProject,
   fetchStorageView,
   saveStorageView,
+  sendKnxTelegram,
 } from './services/api'
 import { useBusMonitor } from './services/useBusMonitor'
 import { Header } from './components/layout/Header'
@@ -43,6 +44,7 @@ const ImportModal = React.lazy(() => import('./components/import/ImportModal').t
 const SceneMixerModal = React.lazy(() => import('./components/scenes/SceneMixerModal').then(m => ({ default: m.SceneMixerModal })))
 const DiagnosticsWorkspace = React.lazy(() => import('./components/diagnostics/DiagnosticsWorkspace').then(m => ({ default: m.DiagnosticsWorkspace })))
 const TopologyWorkspace = React.lazy(() => import('./components/topology/TopologyWorkspace').then(m => ({ default: m.TopologyWorkspace })))
+const FloorplanWorkspace = React.lazy(() => import('./components/floorplan/FloorplanWorkspace').then(m => ({ default: m.FloorplanWorkspace })))
 const DeviceSecurityModal = React.lazy(() => import('./components/devices/DeviceSecurityModal').then(m => ({ default: m.DeviceSecurityModal })))
 const ExportKnxprojModal = React.lazy(() => import('./components/export/ExportKnxprojModal').then(m => ({ default: m.ExportKnxprojModal })))
 const ProgrammingJobDrawer = React.lazy(() => import('./components/programming/ProgrammingJobDrawer').then(m => ({ default: m.ProgrammingJobDrawer })))
@@ -62,7 +64,7 @@ function WorkspaceFallback({ label }: { label: string }) {
 export function App() {
   const [project, setProject] = useState<Project | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [activeWorkspace, setActiveWorkspace] = useState<'canvas' | 'topology' | 'diagnostics'>('canvas')
+  const [activeWorkspace, setActiveWorkspace] = useState<'canvas' | 'topology' | 'diagnostics' | 'floorplan'>('canvas')
   const [diagnosticsInitialAddress, setDiagnosticsInitialAddress] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
@@ -91,6 +93,7 @@ export function App() {
   const [isOpenProjectModalOpen, setIsOpenProjectModalOpen] = useState<boolean>(false)
   const [isStorageSettingsModalOpen, setIsStorageSettingsModalOpen] = useState<boolean>(false)
   const [isProjectCompareModalOpen, setIsProjectCompareModalOpen] = useState<boolean>(false)
+  const [compareModalInitialDeviceId, setCompareModalInitialDeviceId] = useState<string | null>(null)
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState<boolean>(false)
 
@@ -1190,6 +1193,32 @@ export function App() {
             </React.Suspense>
           </ErrorBoundary>
         </div>
+      ) : activeWorkspace === 'floorplan' ? (
+        <div className="flex-1 flex flex-col overflow-hidden relative w-full h-full">
+          <ErrorBoundary fallbackTitle="Fehler im Hausplan-Workspace">
+            <React.Suspense fallback={<WorkspaceFallback label="Hausplan-Arbeitsbereich" />}>
+              <FloorplanWorkspace
+                project={project}
+                onUpdateProject={async (updated) => {
+                  setProject(updated)
+                  try {
+                    await updateProject(updated)
+                  } catch (err) {
+                    console.error('Failed to auto-save floorplan update:', err)
+                  }
+                }}
+                telegrams={telegrams}
+                onSendTelegram={async (dest, val, dpt) => {
+                  try {
+                    await sendKnxTelegram(dest, val, dpt)
+                  } catch (err) {
+                    console.error('Failed to send telegram from floorplan:', err)
+                  }
+                }}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
+        </div>
       ) : (
         <ErrorBoundary fallbackTitle="Fehler im Projekt- & Canvas-Arbeitsbereich">
           <div className="flex-1 flex overflow-hidden relative">
@@ -1273,6 +1302,10 @@ export function App() {
               onOpenSecurityModal={(dev) => {
                 setDeviceForSecurityModal(dev)
                 setIsSecurityModalOpen(true)
+              }}
+              onOpenProjectCompare={(devId) => {
+                setCompareModalInitialDeviceId(devId || null)
+                setIsProjectCompareModalOpen(true)
               }}
             />
           </div>
@@ -1409,7 +1442,11 @@ export function App() {
         {/* 13. Project Compare & Selective Merge Modal */}
         <ProjectCompareModal
           isOpen={isProjectCompareModalOpen}
-          onClose={() => setIsProjectCompareModalOpen(false)}
+          onClose={() => {
+            setIsProjectCompareModalOpen(false)
+            setCompareModalInitialDeviceId(null)
+          }}
+          initialDeviceId={compareModalInitialDeviceId}
           currentProject={project}
           onProjectUpdated={(p) => {
             setProject(p)

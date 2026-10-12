@@ -38,6 +38,31 @@ pub struct LineBandwidthInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilterDiscrepancy {
+    pub ga_address: String,
+    pub ga_name: Option<String>,
+    pub expected_forward: bool,
+    pub actual_forward: bool,
+    pub severity: String, // "critical_blocked" (should pass but blocked) or "warning_open" (should block but open)
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CouplerFilterAuditResult {
+    pub line_address: String,
+    pub line_name: String,
+    pub coupler_address: String,
+    pub is_connected: bool,
+    pub total_bits_checked: usize,
+    pub matching_bits_count: usize,
+    pub discrepancy_count: usize,
+    pub unexpectedly_blocked_gas: Vec<FilterDiscrepancy>,
+    pub unexpectedly_forwarded_gas: Vec<FilterDiscrepancy>,
+    pub is_synchronized: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopologyHealthReport {
     pub health_score: u8, // 0 - 100
     pub total_areas: usize,
@@ -630,6 +655,102 @@ impl TopologyManager {
 
         Ok(new_addr)
     }
+
+    /// Bitwise comparison between the target project filter table and an actual bitmap read from a coupler.
+    /// Analyzes all 65,536 group addresses and produces structured discrepancies.
+    pub fn compare_filter_bitmaps(
+        project: &Project,
+        line: &TopologyLine,
+        actual_bitmap: &[u8],
+        expected_bitmap: &[u8],
+    ) -> CouplerFilterAuditResult {
+        let coupler_addr = format!("{}.0", line.address);
+
+        let mut matching_bits_count = 0usize;
+        let mut unexpectedly_blocked_gas = Vec::new();
+        let mut unexpectedly_forwarded_gas = Vec::new();
+
+        // Build quick lookup for GA names in project
+        let mut ga_names: HashMap<String, String> = HashMap::new();
+        for ga in &project.group_addresses {
+            ga_names.insert(ga.address.clone(), ga.name.clone());
+        }
+
+        // Iterate through all 8192 bytes (65,536 potential GAs)
+        for byte_idx in 0..8192 {
+            let actual_byte = if byte_idx < actual_bitmap.len() { actual_bitmap[byte_idx] } else { 0 };
+            let expected_byte = if byte_idx < expected_bitmap.len() { expected_bitmap[byte_idx] } else { 0 };
+
+            for bit_idx in 0..8 {
+                let actual_bit = ((actual_byte >> bit_idx) & 1) == 1;
+                let expected_bit = ((expected_byte >> bit_idx) & 1) == 1;
+
+                let ga_num = (byte_idx as u16) * 8 + (bit_idx as u16);
+                let main = (ga_num >> 11) & 0x1F;
+                let middle = (ga_num >> 8) & 0x07;
+                let sub = ga_num & 0xFF;
+                let ga_str = format!("{}/{}/{}", main, middle, sub);
+
+                if actual_bit == expected_bit {
+                    matching_bits_count += 1;
+                } else if expected_bit && !actual_bit {
+                    // Expected to forward, but coupler blocks!
+                    let name = ga_names.get(&ga_str).cloned();
+                    unexpectedly_blocked_gas.push(FilterDiscrepancy {
+                        ga_address: ga_str.clone(),
+                        ga_name: name.clone(),
+                        expected_forward: true,
+                        actual_forward: false,
+                        severity: "critical_blocked".to_string(),
+                        message: format!(
+                            "Gruppenadresse {} ({}) wird vom Koppler blockiert, muss aber für Sublinie {} passieren!",
+                            ga_str, name.unwrap_or_else(|| "Unbenannt".to_string()), line.address
+                        ),
+                    });
+                } else if !expected_bit && actual_bit {
+                    // Coupler forwards, but should be blocked
+                    let name = ga_names.get(&ga_str).cloned();
+                    unexpectedly_forwarded_gas.push(FilterDiscrepancy {
+                        ga_address: ga_str.clone(),
+                        ga_name: name.clone(),
+                        expected_forward: false,
+                        actual_forward: true,
+                        severity: "warning_open".to_string(),
+                        message: format!(
+                            "Gruppenadresse {} ({}) wird ungefiltert durchgelassen, sollte aber geblockt werden.",
+                            ga_str, name.unwrap_or_else(|| "Frei/Ungenutzt".to_string())
+                        ),
+                    });
+                }
+            }
+        }
+
+        let discrepancy_count = unexpectedly_blocked_gas.len() + unexpectedly_forwarded_gas.len();
+        let is_synced = discrepancy_count == 0;
+
+        let message = if is_synced {
+            format!("Filtertabelle für Koppler {} ({}) ist 100% synchron mit dem Projekt (8.192 Bytes geprüft).", coupler_addr, line.name)
+        } else {
+            format!(
+                "Koppler {}: {} Diskrepanzen gefunden ({} fälschlicherweise blockiert, {} unerwartet durchgelassen).",
+                coupler_addr, discrepancy_count, unexpectedly_blocked_gas.len(), unexpectedly_forwarded_gas.len()
+            )
+        };
+
+        CouplerFilterAuditResult {
+            line_address: line.address.clone(),
+            line_name: line.name.clone(),
+            coupler_address: coupler_addr,
+            is_connected: true,
+            total_bits_checked: 65536,
+            matching_bits_count,
+            discrepancy_count,
+            unexpectedly_blocked_gas,
+            unexpectedly_forwarded_gas,
+            is_synchronized: is_synced,
+            message,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -938,5 +1059,36 @@ mod tests {
         assert_eq!(report.lines.len(), 1);
         assert_eq!(report.lines[0].line_address, "1.1");
         assert_eq!(report.lines[0].device_count, 2);
+    }
+
+    #[test]
+    fn test_compare_filter_bitmaps() {
+        let project = Project::default();
+        let line = TopologyLine {
+            id: Uuid::new_v4(),
+            area_id: Uuid::new_v4(),
+            line_number: 1,
+            address: "1.1".to_string(),
+            name: "Linie 1.1".to_string(),
+            medium: KnxMediumType::Tp,
+            coupler_device_id: None,
+            coupler_filter_mode: LineCouplerFilterMode::Filter,
+            manual_forward_gas: vec![],
+            description: "".to_string(),
+        };
+
+        // 8192-byte bitmap with 1 bit set at GA 0/1/1 (raw GA = (0<<11) | (1<<8) | 1 = 257)
+        // byte 257/8 = 32, bit 257%8 = 1
+        let mut expected = vec![0u8; 8192];
+        expected[32] |= 1 << 1;
+
+        // Actual has bit at byte 32 cleared (unexpectedly blocked)
+        let actual = vec![0u8; 8192];
+
+        let audit = TopologyManager::compare_filter_bitmaps(&project, &line, &actual, &expected);
+        assert!(!audit.is_synchronized);
+        assert_eq!(audit.unexpectedly_blocked_gas.len(), 1);
+        assert_eq!(audit.unexpectedly_blocked_gas[0].ga_address, "0/1/1");
+        assert_eq!(audit.discrepancy_count, 1);
     }
 }

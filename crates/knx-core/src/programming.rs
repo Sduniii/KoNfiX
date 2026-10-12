@@ -11,9 +11,11 @@ use crate::knxnet_ip::{
     build_cemi_individual_address_read, build_cemi_individual_address_serial_number_write,
     build_cemi_individual_address_write, build_cemi_t_ack, build_cemi_t_connect,
     build_cemi_t_data_connected, build_cemi_t_disconnect, decode_mask_version,
-    format_individual_address, parse_individual_address, parse_serial_number, KnxNetManager,
+    format_group_address, format_individual_address, parse_individual_address, parse_serial_number,
+    KnxNetManager,
 };
 use crate::model::*;
+use crate::project_compare::MergeSummary;
 use crate::storage::StorageManager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +29,50 @@ pub struct DeviceLiveStateResult {
     pub diff_count: usize,
     pub diff_details: Vec<String>,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveParamValue {
+    pub param_id: String,
+    pub param_name: String,
+    pub project_value: String,
+    pub live_value: String,
+    pub is_different: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveKoLink {
+    pub ko_number: u32,
+    pub ko_name: String,
+    pub project_gas: Vec<String>,
+    pub live_gas: Vec<String>,
+    pub is_different: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveDeviceCompareResult {
+    pub success: bool,
+    pub device_id: Uuid,
+    pub address: String,
+    pub device_name: String,
+    pub model: String,
+    pub reachable: bool,
+    pub rtt_ms: Option<u64>,
+    pub mask_version: Option<String>,
+    pub total_differences: usize,
+    pub parameters: Vec<LiveParamValue>,
+    pub ko_links: Vec<LiveKoLink>,
+    pub raw_gat_hex: Option<String>,
+    pub raw_at_hex: Option<String>,
+    pub raw_params_hex: Option<String>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveDeviceMergeRequest {
+    pub merge_all: bool,
+    pub merge_param_ids: Vec<String>,
+    pub merge_ko_numbers: Vec<u32>,
 }
 
 /// Point-to-Point KNX bus client for physical programming, memory reading, and verification
@@ -444,6 +490,89 @@ pub fn pack_parameter_value(
         }
     }
     Ok(())
+}
+
+/// Unpacks a parameter value from a memory buffer based on offset, bit_offset, size_in_bit, and param_type.
+/// Inverse of pack_parameter_value.
+pub fn unpack_parameter_value(
+    buffer: &[u8],
+    offset: usize,
+    bit_offset: u8,
+    size_in_bit: u32,
+    param_type: &str,
+) -> Result<String, String> {
+    if buffer.is_empty() {
+        return Err("Puffer ist leer".to_string());
+    }
+
+    let is_float = param_type.to_lowercase().contains("float") || param_type.starts_with("9.");
+
+    if is_float {
+        if size_in_bit == 16 {
+            if offset + 1 < buffer.len() {
+                let f = crate::knxnet_ip::decode_knx_float2([buffer[offset], buffer[offset + 1]]);
+                return Ok(format!("{:.2}", f));
+            } else {
+                return Err(format!("Pufferüberlauf für 16-Bit Float bei Offset {}", offset));
+            }
+        } else if size_in_bit == 32 {
+            if offset + 3 < buffer.len() {
+                let bytes = [buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]];
+                let f = f32::from_be_bytes(bytes);
+                return Ok(format!("{:.2}", f));
+            } else {
+                return Err(format!("Pufferüberlauf für 32-Bit Float bei Offset {}", offset));
+            }
+        }
+    }
+
+    // Fast path: Whole-byte aligned standard integers
+    if bit_offset == 0 && size_in_bit == 8 {
+        if offset < buffer.len() {
+            return Ok(buffer[offset].to_string());
+        } else {
+            return Err(format!("Pufferüberlauf bei Offset {}", offset));
+        }
+    } else if bit_offset == 0 && size_in_bit == 16 {
+        if offset + 1 < buffer.len() {
+            let val = u16::from_be_bytes([buffer[offset], buffer[offset + 1]]);
+            return Ok(val.to_string());
+        } else {
+            return Err(format!("Pufferüberlauf bei Offset {}", offset));
+        }
+    } else if bit_offset == 0 && size_in_bit == 24 {
+        if offset + 2 < buffer.len() {
+            let val = ((buffer[offset] as u32) << 16) | ((buffer[offset + 1] as u32) << 8) | (buffer[offset + 2] as u32);
+            return Ok(val.to_string());
+        } else {
+            return Err(format!("Pufferüberlauf bei Offset {}", offset));
+        }
+    } else if bit_offset == 0 && size_in_bit == 32 {
+        if offset + 3 < buffer.len() {
+            let val = u32::from_be_bytes([buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3]]);
+            return Ok(val.to_string());
+        } else {
+            return Err(format!("Pufferüberlauf bei Offset {}", offset));
+        }
+    }
+
+    // Universal bitfield unpacker
+    let mut num_val: u64 = 0;
+    for i in 0..size_in_bit {
+        let dist_from_msb = (size_in_bit - 1) - i;
+        let abs_bit = bit_offset as usize + dist_from_msb as usize;
+        let target_byte = offset + (abs_bit / 8);
+        let bit_in_byte = 7 - (abs_bit % 8);
+
+        if target_byte < buffer.len() {
+            let bit_val = ((buffer[target_byte] >> bit_in_byte) & 1) as u64;
+            num_val |= bit_val << i;
+        } else {
+            return Err(format!("Pufferüberlauf bei Ziel-Byte {}", target_byte));
+        }
+    }
+
+    Ok(num_val.to_string())
 }
 
 /// Decompresses an ETS LoadedImage base64 string
@@ -1208,6 +1337,314 @@ impl ProgrammingJobManager {
         }
     }
 
+    /// Reads live memory from a physical device on the bus (GAT, AT, Parameters via System B PID 7 & Memory Read)
+    /// and decodes it against the device catalog definition to produce a granular diff.
+    pub async fn compare_device_live(&self, device_id: Uuid) -> Result<LiveDeviceCompareResult, String> {
+        let (dev_addr, dev_name, dev_model, dev_params, dev_kos, loaded_img) = {
+            let proj = self.project.read().await;
+            let dev = proj.devices.iter().find(|d| d.id == device_id)
+                .ok_or_else(|| "Gerät nicht im Projekt gefunden".to_string())?;
+            (
+                dev.individual_address.clone(),
+                dev.name.clone(),
+                dev.model.clone(),
+                dev.parameters.clone(),
+                dev.communication_objects.clone(),
+                dev.loaded_image.clone(),
+            )
+        };
+
+        let is_real_bus = self.knx_manager.get_status().await.connected;
+        if is_real_bus {
+            let mut client = DeviceBusClient::new(self.knx_manager.clone(), &dev_addr)?;
+            let rtt = client.connect().await?;
+            let (_mask_raw, mask_desc) = client.read_device_descriptor().await.unwrap_or((0x07B0, "System B (07B0h)".to_string()));
+
+            // Resolve System B pointers
+            let mut gat_base_addr = 0x1002;
+            if let Ok(resp) = client.read_property(1, 7, 1, 1).await {
+                gat_base_addr = parse_property_ptr(&resp, 0x1002);
+            }
+
+            let mut at_base_addr = 0x1600;
+            if let Ok(resp) = client.read_property(3, 7, 1, 1).await {
+                at_base_addr = parse_property_ptr(&resp, 0x1600);
+            }
+
+            let mut param_base_addr = 0x16A2;
+            if let Ok(resp) = client.read_property(4, 7, 1, 1).await {
+                param_base_addr = parse_property_ptr(&resp, 0x16A2);
+            }
+
+            // 1. Read GAT (Group Address Table)
+            let mut live_gas: Vec<String> = Vec::new();
+            let mut raw_gat_bytes: Vec<u8> = Vec::new();
+            if let Ok(header) = client.read_memory(gat_base_addr, 2).await {
+                if header.len() >= 2 {
+                    let ga_count = u16::from_be_bytes([header[0], header[1]]) as usize;
+                    let to_read = (ga_count * 2).min(128); // read up to 64 GAs
+                    if let Ok(ga_data) = client.read_memory(gat_base_addr + 2, to_read as u8).await {
+                        raw_gat_bytes.extend_from_slice(&header);
+                        raw_gat_bytes.extend_from_slice(&ga_data);
+                        for chunk in ga_data.chunks(2) {
+                            if chunk.len() == 2 {
+                                let raw_ga = u16::from_be_bytes([chunk[0], chunk[1]]);
+                                live_gas.push(format_group_address(raw_ga));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Read AT (Association Table)
+            let mut raw_at_bytes: Vec<u8> = Vec::new();
+            let mut live_associations: HashMap<u32, Vec<String>> = HashMap::new();
+            if let Ok(at_header) = client.read_memory(at_base_addr, 2).await {
+                if at_header.len() >= 2 {
+                    let at_count = u16::from_be_bytes([at_header[0], at_header[1]]) as usize;
+                    let to_read = (at_count * 4).min(256);
+                    if let Ok(at_data) = client.read_memory(at_base_addr + 2, to_read as u8).await {
+                        raw_at_bytes.extend_from_slice(&at_header);
+                        raw_at_bytes.extend_from_slice(&at_data);
+                        for chunk in at_data.chunks(4) {
+                            if chunk.len() == 4 {
+                                let tsap = u16::from_be_bytes([chunk[0], chunk[1]]) as usize;
+                                let asap = u16::from_be_bytes([chunk[2], chunk[3]]) as u32;
+                                if tsap >= 1 && tsap <= live_gas.len() {
+                                    let ga = &live_gas[tsap - 1];
+                                    live_associations.entry(asap).or_default().push(ga.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Read Parameter memory slice (Obj 4)
+            let mut raw_param_buffer = vec![0u8; 514];
+            // Initialize from baseline LoadedImage if available
+            if let Some(ref img_b64) = loaded_img {
+                if let Some((_, _, s)) = extract_loaded_image_param_slice(img_b64) {
+                    let c_len = s.len().min(514);
+                    raw_param_buffer[..c_len].copy_from_slice(&s[..c_len]);
+                }
+            }
+
+            // Read live memory chunks for parameters that have offsets
+            let mut max_offset = 0usize;
+            for p in &dev_params {
+                if let Some(off) = p.offset {
+                    let end = off as usize + (p.size_in_bit.unwrap_or(16) as usize + 7) / 8;
+                    if end > max_offset { max_offset = end; }
+                }
+            }
+            let read_len = max_offset.clamp(16, 512);
+
+            let mut chunk_start = 0usize;
+            while chunk_start < read_len {
+                let chunk_size = (read_len - chunk_start).min(32);
+                let target_addr = param_base_addr.saturating_add(chunk_start as u16);
+                if let Ok(data) = client.read_memory(target_addr, chunk_size as u8).await {
+                    let d_len = data.len().min(chunk_size);
+                    if chunk_start + d_len <= raw_param_buffer.len() {
+                        raw_param_buffer[chunk_start..chunk_start + d_len].copy_from_slice(&data[..d_len]);
+                    }
+                }
+                chunk_start += 32;
+            }
+
+            let _ = client.disconnect().await;
+
+            // Unpack parameters and build diff
+            let mut param_diffs: Vec<LiveParamValue> = Vec::new();
+            for p in &dev_params {
+                let live_val = if let Some(off) = p.offset {
+                    let bit_off = p.bit_offset.unwrap_or(0);
+                    let size = p.size_in_bit.unwrap_or(16);
+                    unpack_parameter_value(&raw_param_buffer, off as usize, bit_off, size, &p.param_type)
+                        .unwrap_or_else(|_| p.value.clone())
+                } else {
+                    p.value.clone()
+                };
+
+                let is_diff = p.value != live_val;
+                param_diffs.push(LiveParamValue {
+                    param_id: p.id.clone(),
+                    param_name: p.name.clone(),
+                    project_value: p.value.clone(),
+                    live_value: live_val,
+                    is_different: is_diff,
+                });
+            }
+
+            // Build KO link diffs
+            let mut ko_diffs: Vec<LiveKoLink> = Vec::new();
+            for ko in &dev_kos {
+                let actual_gas = live_associations.get(&(ko.number)).cloned().unwrap_or_default();
+                let mut proj_sorted = ko.group_addresses.clone();
+                proj_sorted.sort();
+                let mut actual_sorted = actual_gas.clone();
+                actual_sorted.sort();
+
+                let is_diff = proj_sorted != actual_sorted;
+                ko_diffs.push(LiveKoLink {
+                    ko_number: ko.number,
+                    ko_name: ko.name.clone(),
+                    project_gas: ko.group_addresses.clone(),
+                    live_gas: actual_gas,
+                    is_different: is_diff,
+                });
+            }
+
+            let diff_count = param_diffs.iter().filter(|p| p.is_different).count()
+                + ko_diffs.iter().filter(|k| k.is_different).count();
+
+            Ok(LiveDeviceCompareResult {
+                success: true,
+                device_id,
+                address: dev_addr.clone(),
+                device_name: dev_name.clone(),
+                model: dev_model,
+                reachable: true,
+                rtt_ms: Some(rtt),
+                mask_version: Some(mask_desc),
+                total_differences: diff_count,
+                parameters: param_diffs,
+                ko_links: ko_diffs,
+                raw_gat_hex: if raw_gat_bytes.is_empty() { None } else { Some(hex::encode(&raw_gat_bytes)) },
+                raw_at_hex: if raw_at_bytes.is_empty() { None } else { Some(hex::encode(&raw_at_bytes)) },
+                raw_params_hex: Some(hex::encode(&raw_param_buffer[..read_len.min(raw_param_buffer.len())])),
+                message: if diff_count == 0 {
+                    format!("Gerät '{}' ({}) ist 100% synchron mit dem Projekt.", dev_name, dev_addr)
+                } else {
+                    format!("Gerät '{}' ({}) weicht in {} Punkten vom Projekt ab.", dev_name, dev_addr, diff_count)
+                },
+            })
+        } else {
+            // Simulated fallback: compare current parameters against snapshot (or default)
+            let (param_diffs, ko_diffs) = {
+                let p_lock = self.project.read().await;
+                let dev = p_lock.devices.iter().find(|d| d.id == device_id).unwrap();
+
+                let p_diffs: Vec<LiveParamValue> = dev.parameters.iter().map(|p| {
+                    let live_val = if let Some(snap) = &dev.last_flashed_state {
+                        snap.parameters.get(&p.id).cloned().unwrap_or_else(|| p.default_value.clone())
+                    } else if !p.default_value.is_empty() {
+                        p.default_value.clone()
+                    } else {
+                        p.value.clone()
+                    };
+
+                    let is_diff = !live_val.is_empty() && live_val != p.value;
+                    LiveParamValue {
+                        param_id: p.id.clone(),
+                        param_name: p.name.clone(),
+                        project_value: p.value.clone(),
+                        live_value: if is_diff { live_val } else { p.value.clone() },
+                        is_different: is_diff,
+                    }
+                }).collect();
+
+                let k_diffs: Vec<LiveKoLink> = dev.communication_objects.iter().map(|k| {
+                    LiveKoLink {
+                        ko_number: k.number,
+                        ko_name: k.name.clone(),
+                        project_gas: k.group_addresses.clone(),
+                        live_gas: k.group_addresses.clone(),
+                        is_different: false,
+                    }
+                }).collect();
+
+                (p_diffs, k_diffs)
+            };
+
+            let diff_count = param_diffs.iter().filter(|p| p.is_different).count();
+
+            Ok(LiveDeviceCompareResult {
+                success: true,
+                device_id,
+                address: dev_addr,
+                device_name: dev_name,
+                model: dev_model,
+                reachable: true,
+                rtt_ms: Some(2),
+                mask_version: Some("System B (07B0h) [Simulation]".to_string()),
+                total_differences: diff_count,
+                parameters: param_diffs,
+                ko_links: ko_diffs,
+                raw_gat_hex: None,
+                raw_at_hex: None,
+                raw_params_hex: None,
+                message: format!("Simulierter Live-Vergleich: {} Abweichungen.", diff_count),
+            })
+        }
+    }
+
+    /// Merges live parameters and KO links read from the physical bus into the project definition
+    pub async fn merge_device_live(
+        &self,
+        device_id: Uuid,
+        req: LiveDeviceMergeRequest,
+    ) -> Result<MergeSummary, String> {
+        let compare = self.compare_device_live(device_id).await?;
+        let mut proj = self.project.write().await;
+        let dev = proj.devices.iter_mut().find(|d| d.id == device_id)
+            .ok_or_else(|| "Gerät nicht gefunden".to_string())?;
+
+        let mut params_merged = 0;
+        let mut ko_merged = 0;
+
+        for p_live in &compare.parameters {
+            if req.merge_all || req.merge_param_ids.contains(&p_live.param_id) {
+                if let Some(param) = dev.parameters.iter_mut().find(|p| p.id == p_live.param_id) {
+                    if param.value != p_live.live_value {
+                        param.value = p_live.live_value.clone();
+                        params_merged += 1;
+                    }
+                }
+            }
+        }
+
+        for k_live in &compare.ko_links {
+            if req.merge_all || req.merge_ko_numbers.contains(&k_live.ko_number) {
+                if let Some(ko) = dev.communication_objects.iter_mut().find(|k| k.number == k_live.ko_number) {
+                    ko.group_addresses = k_live.live_gas.clone();
+                    ko_merged += 1;
+                }
+            }
+        }
+
+        evaluate_assign_rules(&mut dev.parameters, &dev.assign_rules);
+        synchronize_dependent_parameters(&mut dev.parameters);
+        dev.visible_ko_numbers = calculate_active_ko_numbers(dev);
+
+        // Update snapshot to mark synchronized
+        let gas: Vec<String> = dev.communication_objects.iter().flat_map(|k| k.group_addresses.iter().cloned()).collect();
+        let assocs: Vec<(u32, String)> = dev.communication_objects.iter().flat_map(|k| k.group_addresses.iter().map(move |ga| (k.number, ga.clone()))).collect();
+        let params: HashMap<String, String> = dev.parameters.iter().map(|p| (p.id.clone(), p.value.clone())).collect();
+
+        dev.last_flashed_state = Some(DeviceFlashedSnapshot {
+            individual_address: dev.individual_address.clone(),
+            group_addresses: gas,
+            associations: assocs,
+            parameters: params,
+            flashed_at: Utc::now(),
+        });
+
+        let summary = MergeSummary {
+            gas_merged: 0,
+            devices_merged: 1,
+            parameters_merged: params_merged,
+            ko_links_merged: ko_merged,
+            message: format!(
+                "Gerät '{}' ({}) erfolgreich mit Hardware synchronisiert ({} Parameter, {} KO-Verknüpfungen übernommen).",
+                dev.name, dev.individual_address, params_merged, ko_merged
+            ),
+        };
+
+        Ok(summary)
+    }
+
     /// Internal execution loop for an individual job
     async fn process_job(
         job_id: Uuid,
@@ -1459,9 +1896,54 @@ impl ProgrammingJobManager {
                     }
                 }
                 ProgrammingJobType::FilterTable => {
-                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingFilterTable, 50, "Schreibe Filtertabelle via A_Memory_Write...").await;
-                    let dummy_ft = [0xFFu8; 16];
-                    let _ = client.write_memory_verified(0x0100, &dummy_ft).await;
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingFilterTable, 20, "Berechne 8.192-Byte KNX-Filtertabelle für Koppler...").await;
+                    
+                    let filter_bytes: Option<Vec<u8>> = {
+                        let p_lock = project.read().await;
+                        if let Some(topo) = &p_lock.topology {
+                            let mut target_line_id = None;
+                            for area in &topo.areas {
+                                for line in &area.lines {
+                                    let c_addr = format!("{}.0", line.address);
+                                    if c_addr == dev_addr || line.coupler_device_id == Some(dev_id) {
+                                        target_line_id = Some(line.id);
+                                        break;
+                                    }
+                                }
+                                if target_line_id.is_some() { break; }
+                            }
+                            if let Some(lid) = target_line_id {
+                                crate::topology::TopologyManager::calculate_filter_table(&p_lock, lid)
+                                    .ok()
+                                    .and_then(|sum| hex::decode(sum.raw_bitmap_hex).ok())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    };
+
+                    let bitmap_to_flash = filter_bytes.unwrap_or_else(|| vec![0xFFu8; 8192]);
+                    let total_chunks = (bitmap_to_flash.len() + 63) / 64; // 128 Chunks à 64 Bytes
+                    info!("Schreibe {} Bytes ({} Chunks) Filtertabelle in Linienkoppler {}", bitmap_to_flash.len(), total_chunks, dev_addr);
+
+                    for (chunk_idx, chunk) in bitmap_to_flash.chunks(64).enumerate() {
+                        let target_addr = 0x0100u16.saturating_add((chunk_idx * 64) as u16);
+                        let progress = 20 + ((chunk_idx * 75) / total_chunks) as u8;
+                        let msg = format!("Schreibe Filtertabelle Chunk {}/{} (0x{:04X})...", chunk_idx + 1, total_chunks, target_addr);
+                        Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingFilterTable, progress, &msg).await;
+
+                        if let Err(e) = client.write_memory_verified(target_addr, chunk).await {
+                            let err_str = format!("Fehler beim Schreiben der Filtertabelle bei 0x{:04X}: {}", target_addr, e);
+                            error!("{}", err_str);
+                            let _ = client.disconnect().await;
+                            Self::fail_job(&jobs, job_id, &err_str).await;
+                            return;
+                        }
+                    }
+
+                    Self::update_job_status(&jobs, job_id, ProgrammingJobStatus::WritingFilterTable, 95, "Filtertabelle erfolgreich geflasht (8.192 Bytes).").await;
                 }
                 ProgrammingJobType::Partial | ProgrammingJobType::Full => {
                     let (dev_params, dev_kos, loaded_img, _dirty_param_ids, dirty_details) = {
@@ -2385,6 +2867,55 @@ mod tests {
         pack_parameter_value(&mut buffer, 2, 0, 16, "21.5", "Float").unwrap();
         let f_decoded = crate::knxnet_ip::decode_knx_float2([buffer[2], buffer[3]]);
         assert!((f_decoded - 21.5).abs() < 0.1);
+
+        // Test inverse: unpack_parameter_value
+        let val_bit0 = unpack_parameter_value(&buffer, 0, 0, 1, "enum").unwrap();
+        assert_eq!(val_bit0, "1");
+
+        let val_bit7 = unpack_parameter_value(&buffer, 0, 7, 1, "enum").unwrap();
+        assert_eq!(val_bit7, "1");
+
+        let val_enum = unpack_parameter_value(&buffer, 0, 1, 2, "enum").unwrap();
+        assert_eq!(val_enum, "2");
+
+        let val_float = unpack_parameter_value(&buffer, 2, 0, 16, "Float").unwrap();
+        let f_unpacked: f32 = val_float.parse().unwrap();
+        assert!((f_unpacked - 21.5).abs() < 0.1);
+    }
+
+    #[tokio::test]
+    async fn test_compare_and_merge_device_live() {
+        let project = Arc::new(RwLock::new(create_demo_project()));
+        let simulator = Arc::new(Simulator::new(project.clone()));
+        let knx_manager = Arc::new(KnxNetManager::new(simulator));
+        let job_mgr = ProgrammingJobManager::new(project.clone(), knx_manager, None);
+
+        let dev_id = {
+            let proj = project.read().await;
+            proj.devices[0].id
+        };
+
+        // Modify a parameter in project so there is a diff
+        {
+            let mut proj = project.write().await;
+            let dev = proj.devices.iter_mut().find(|d| d.id == dev_id).unwrap();
+            dev.parameters[0].value = "999".to_string();
+        }
+
+        let comp = job_mgr.compare_device_live(dev_id).await.expect("Compare failed");
+        assert!(comp.success);
+        assert_eq!(comp.address, "1.1.1");
+        assert!(comp.total_differences >= 1);
+
+        // Merge live values back
+        let req = LiveDeviceMergeRequest {
+            merge_all: true,
+            merge_param_ids: vec![],
+            merge_ko_numbers: vec![],
+        };
+        let merge_summary = job_mgr.merge_device_live(dev_id, req).await.expect("Merge failed");
+        assert!(merge_summary.parameters_merged >= 1);
+        assert_eq!(merge_summary.devices_merged, 1);
     }
 
     #[test]

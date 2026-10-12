@@ -13,6 +13,7 @@ import {
   useEdgesState,
   ReactFlowProvider,
   useStore,
+  ConnectionLineType,
 } from '@xyflow/react'
 import { Wand2, Maximize2, Grid3X3 } from 'lucide-react'
 import { useTranslation } from '../../i18n/I18nContext'
@@ -1292,6 +1293,8 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
         elevateNodesOnSelect={false}
         snapToGrid={true}
         snapGrid={snapGrid}
+        connectionRadius={28}
+        connectionLineType={ConnectionLineType.SmoothStep}
         defaultEdgeOptions={{ type: 'knxWire' }}
       >
         <Background color="#334155" gap={tier.gap} size={tier.dotSize} />

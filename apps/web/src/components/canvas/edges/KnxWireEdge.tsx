@@ -3,7 +3,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   EdgeProps,
-  getBezierPath,
+  getSmoothStepPath,
 } from '@xyflow/react'
 import { X } from 'lucide-react'
 import { useTranslation } from '../../../i18n'
@@ -14,6 +14,16 @@ export interface KnxWireEdgeData {
   dpt?: string
   onDelete?: (edgeId: string) => void
   [key: string]: unknown
+}
+
+const getWireColor = (dpt?: string, isHighlighted?: boolean) => {
+  if (isHighlighted) return '#38bdf8'
+  if (!dpt) return '#0284c7'
+  if (dpt.startsWith('1.')) return '#10b981' // Bool / Schalten: Smaragdgrün
+  if (dpt.startsWith('3.') || dpt.startsWith('5.')) return '#f59e0b' // Dimmen / Position: Bernstein
+  if (dpt.startsWith('9.')) return '#ec4899' // Float / Temperatur / Lux: Rose
+  if (dpt.startsWith('17.') || dpt.startsWith('18.')) return '#a855f7' // Szene: Violett
+  return '#0284c7'
 }
 
 export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
@@ -33,15 +43,16 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
   const { t } = useTranslation()
   const [isHovered, setIsHovered] = useState(false)
 
-  // n8n-typische harmonische Bezier-Kurve mit definierter Krümmung
-  const [edgePath, labelX, labelY] = getBezierPath({
+  // Professionelles orthogonales SmoothStep-Routing mit abgerundeten Ecken
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetPosition,
     targetX,
     targetY,
-    curvature: 0.38,
+    borderRadius: 12,
+    offset: 20,
   })
 
   const edgeData = data as KnxWireEdgeData | undefined
@@ -51,15 +62,16 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
   const onDelete = edgeData?.onDelete
 
   const isHighlighted = selected || isHovered
+  const strokeColor = getWireColor(dpt, isHighlighted)
 
   return (
     <>
-      {/* Unsichtbarer breiterer Klick-/Hover-Pfad für einfache Interaktion */}
+      {/* Unsichtbarer breiterer Klick-/Hover-Pfad (24px) für einfaches Anklicken */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={20}
+        strokeWidth={24}
         className="cursor-pointer"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -71,10 +83,10 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
         markerEnd={markerEnd}
         style={{
           ...style,
-          stroke: isHighlighted ? '#38bdf8' : (style.stroke || '#0284c7'),
+          stroke: isHighlighted ? '#38bdf8' : (style.stroke || strokeColor),
           strokeWidth: isHighlighted ? 3 : 2,
           strokeDasharray: animated ? '6 6' : undefined,
-          filter: isHighlighted ? 'drop-shadow(0 0 4px rgba(56, 189, 248, 0.7))' : undefined,
+          filter: isHighlighted ? 'drop-shadow(0 0 5px rgba(56, 189, 248, 0.8))' : undefined,
           transition: 'stroke 0.15s ease, stroke-width 0.15s ease',
         }}
       />

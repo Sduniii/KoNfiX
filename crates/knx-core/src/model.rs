@@ -545,6 +545,108 @@ pub struct DeviceCertificateInfo {
     pub fdsk: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CadWall {
+    pub id: Uuid,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+    #[serde(default = "default_wall_thickness")]
+    pub thickness: f64, // z. B. 0.24 (24cm)
+    #[serde(default)]
+    pub is_outer: bool,
+}
+
+fn default_wall_thickness() -> f64 {
+    0.24
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CadOpeningType {
+    Door,
+    Window,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CadOpening {
+    pub id: Uuid,
+    pub wall_id: Uuid,
+    pub opening_type: CadOpeningType,
+    pub position: f64, // 0.0 .. 1.0 entlang der Wandlinie
+    pub width: f64,    // z. B. 0.90m
+    #[serde(default)]
+    pub flip: bool,    // Anschlag
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CadRoomZone {
+    pub id: Uuid,
+    pub room_id: Option<Uuid>,
+    pub name: String,
+    pub points: Vec<Position>,
+    #[serde(default)]
+    pub area_sqm: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct FloorCadModel {
+    #[serde(default)]
+    pub walls: Vec<CadWall>,
+    #[serde(default)]
+    pub openings: Vec<CadOpening>,
+    #[serde(default)]
+    pub room_zones: Vec<CadRoomZone>,
+    #[serde(default = "default_cad_scale")]
+    pub scale_pixels_per_meter: f64, // z. B. 40 px/m
+}
+
+fn default_cad_scale() -> f64 {
+    40.0
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FloorPlanWidgetType {
+    Light,
+    Blind,
+    Climate,
+    Socket,
+    Sensor,
+    Scene,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FloorPlanWidget {
+    pub id: Uuid,
+    pub floor_id: Uuid,
+    pub room_id: Option<Uuid>,
+    pub title: String,
+    pub widget_type: FloorPlanWidgetType,
+    pub x: f64,
+    pub y: f64,
+    #[serde(default)]
+    pub ga_switch: Option<String>,
+    #[serde(default)]
+    pub ga_state: Option<String>,
+    #[serde(default)]
+    pub ga_value: Option<String>,
+    #[serde(default)]
+    pub dpt: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct FloorPlan {
+    pub floor_id: Uuid,
+    #[serde(default)]
+    pub background_image: Option<String>,
+    #[serde(default)]
+    pub background_opacity: Option<f64>,
+    #[serde(default)]
+    pub cad_model: Option<FloorCadModel>,
+    #[serde(default)]
+    pub widgets: Vec<FloorPlanWidget>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Project {
     pub id: Uuid,
@@ -570,6 +672,8 @@ pub struct Project {
     pub ets_traces: Vec<ProjectTraceInfo>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ets_device_certificates: Vec<DeviceCertificateInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub floor_plans: Vec<FloorPlan>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -758,6 +862,77 @@ pub fn calculate_active_ko_numbers(dev: &KnxDevice) -> Vec<u32> {
     active.sort_unstable();
     active.dedup();
     active
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_floorplan_and_cad_serialization() {
+        let floor_id = Uuid::new_v4();
+        let wall_id = Uuid::new_v4();
+        let wall = CadWall {
+            id: wall_id,
+            x1: 0.0,
+            y1: 0.0,
+            x2: 10.0,
+            y2: 0.0,
+            thickness: 0.24,
+            is_outer: true,
+        };
+        let door = CadOpening {
+            id: Uuid::new_v4(),
+            wall_id,
+            opening_type: CadOpeningType::Door,
+            position: 0.5,
+            width: 0.9,
+            flip: false,
+        };
+        let widget = FloorPlanWidget {
+            id: Uuid::new_v4(),
+            floor_id,
+            room_id: None,
+            title: "Deckenlampe Wohnzimmer".into(),
+            widget_type: FloorPlanWidgetType::Light,
+            x: 25.0,
+            y: 40.0,
+            ga_switch: Some("1/1/1".into()),
+            ga_state: Some("1/1/2".into()),
+            ga_value: None,
+            dpt: Some("1.001".into()),
+        };
+
+        let floor_plan = FloorPlan {
+            floor_id,
+            background_image: None,
+            background_opacity: Some(0.5),
+            cad_model: Some(FloorCadModel {
+                walls: vec![wall],
+                openings: vec![door],
+                room_zones: vec![],
+                scale_pixels_per_meter: 40.0,
+            }),
+            widgets: vec![widget],
+        };
+
+        let mut project = Project::default();
+        project.name = "CAD Test Project".into();
+        project.floor_plans.push(floor_plan);
+
+        let json = serde_json::to_string(&project).expect("Serialization failed");
+        let decoded: Project = serde_json::from_str(&json).expect("Deserialization failed");
+        assert_eq!(decoded.floor_plans.len(), 1);
+        let fp = &decoded.floor_plans[0];
+        assert_eq!(fp.floor_id, floor_id);
+        assert_eq!(fp.widgets.len(), 1);
+        assert_eq!(fp.widgets[0].title, "Deckenlampe Wohnzimmer");
+        assert!(fp.cad_model.is_some());
+        let cad = fp.cad_model.as_ref().unwrap();
+        assert_eq!(cad.walls.len(), 1);
+        assert_eq!(cad.openings.len(), 1);
+        assert_eq!(cad.walls[0].thickness, 0.24);
+    }
 }
 
 
