@@ -4,6 +4,8 @@
 [![React](https://img.shields.io/badge/React-19.0-blue.svg?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-purple.svg?logo=vite)](https://vitejs.dev/)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-blue?logo=tauri)](https://tauri.app/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20|%20Windows%20|%20macOS-lightgrey.svg)](https://github.com/Sduniii/KoNfiX/releases)
 [![KNX IP Secure](https://img.shields.io/badge/KNX-IP%20Secure%20(TCP)-green.svg)](https://www.knx.org/)
 [![KNX Data Secure](https://img.shields.io/badge/KNX-Data%20Secure%20(TP)-emerald.svg)](https://www.knx.org/)
 [![Storage ~/.konfix](https://img.shields.io/badge/Storage-~%2F.konfix-cyan.svg)](https://github.com/)
@@ -372,12 +374,22 @@ flowchart TD
 * **Bun** or **Node.js** (Version 18+): [bun.sh](https://bun.sh/) / [nodejs.org](https://nodejs.org/)
 
 ### 1. Launch with One Command
-Clone the repository and run the startup script:
+
+#### A. Native Desktop Application (Empfohlen)
+Start KoNfiX as a standalone native desktop application with a single command:
+```bash
+./start-desktop.sh
+# or:
+./start.sh --desktop
+```
+* Runs the embedded Rust core engine in-process and opens the native OS application window.
+* No browser tab, no separate terminal processes, and zero orphaned background servers upon window close.
+
+#### B. Headless Web Daemon (Server / Browser)
+Run the headless Axum server and open in your web browser:
 ```bash
 ./start.sh
 ```
-The script builds the web frontend, starts the Rust backend daemon on port `8080`, and connects to your KNX IP Gateway automatically in the background (if configured).
-
 Open your browser at:
 👉 **[http://localhost:8080](http://localhost:8080)**
 
@@ -516,6 +528,12 @@ bun run build
 │       │   ├── services/       # REST API client & bus monitor hooks
 │       │   └── types/          # TypeScript definitions (knx.ts, topology.ts, storage.ts)
 │       └── package.json
+├── src-tauri/                  # Tauri v2 Native Desktop Application
+│   ├── src/                    # Desktop entry, embedded Tokio runtime & lifecycle
+│   ├── capabilities/           # Window permissions & desktop security configuration
+│   ├── icons/                  # Multi-platform application icons (.icns, .ico, PNGs)
+│   ├── tauri.conf.json         # Window framing, bundle metadata & build settings
+│   └── Cargo.toml              # Desktop crate dependencies (tauri, wry, tao, knx-core)
 ├── database/                   # SQLite seed database (catalog.sql)
 ├── docs/                       # Official ETS 6.2 XML Schema 23 specifications
 ├── tools/
@@ -523,7 +541,9 @@ bun run build
 │   └── knx-mcp/                # Model Context Protocol (MCP) server for AI assistants
 ├── CHANGELOG.md                # Detailed version history
 ├── LICENSE                     # GNU Affero General Public License v3 (AGPLv3)
-└── start.sh                    # 1-click startup script
+├── start.sh                    # Headless server & CLI startup script
+├── start-desktop.sh            # 1-click native desktop application launcher
+└── konfix.desktop              # Linux application menu launcher entry
 ```
 
 ---

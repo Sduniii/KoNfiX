@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.5] - 2026-10-13 (Native Desktop Application & Multi-Platform CI/CD Pipeline)
+
+### Native Desktop Application (`src-tauri`, `konfix-desktop`, `wry`/`tao`)
+- **Tauri v2 Desktop Architecture:** Integrated full native desktop support using Tauri v2. KoNfiX runs as a true OS-level standalone application utilizing native system webviews (WebKitGTK on Linux, WebView2 on Windows, WebKit on macOS), reducing memory consumption from ~200MB+ (Electron) down to ~35–45 MB RAM.
+- **In-Process Tokio Core Engine:** The Rust backend (`knx-core`) executes directly within a background Tokio task in the desktop process. When the application window closes, the entire server shuts down cleanly with zero orphaned processes or locked ports (`8080`).
+- **Native Window Ergonomics:** Standard 1440x900 resolution (minimum 1024x700), native window controls, and official high-resolution icon sets (`.icns`, `.ico`, 32px to 512px) generated from `favicon.svg`.
+- **Intelligent Origin Detection:** Updated `apps/web` API client (`api.ts`) and WebSocket bus monitor (`useBusMonitor.ts`) to automatically detect whether the frontend runs inside a web browser or the Tauri desktop runtime (`tauri://localhost`, `http://tauri.localhost`), seamlessly routing to `http://127.0.0.1:8080`.
+
+### 1-Click Launchers & Desktop Integration (`start-desktop.sh`, `konfix.desktop`)
+- **Dedicated Desktop Runner (`start-desktop.sh`):** Added a 1-click bash runner that verifies dependencies, builds frontend assets if needed, and launches the desktop app.
+- **Enhanced `start.sh`:** Added `--desktop` / `-d` flags to seamlessly launch in desktop mode.
+- **Linux Application Menu (`konfix.desktop`):** Standard Freedesktop `.desktop` launcher for direct integration into application menus on Ubuntu, Debian, Arch, Fedora, and other Linux distributions.
+
+### Cross-Platform CI/CD Release Pipeline (`.github/workflows/desktop-release.yml`)
+- **Automated Multi-Platform Packaging:** Added official `tauri-action` GitHub workflow triggering on release tags (`v*`) and manual workflow dispatch across `ubuntu-22.04`, `windows-latest`, and `macos-latest`.
+- **Native Installer Outputs:**
+  - **Linux:** Standalone portable `.AppImage` (runs on any Linux distribution without installation) and Debian/Ubuntu `.deb` packages.
+  - **Windows:** Full NSIS Setup-Wizard `.exe` installer and enterprise `.msi` package.
+  - **macOS:** Standard `.dmg` disk image and `.app` bundle.
+- **CI Build Hardening (`ci.yml`):** Added Linux WebKitGTK and GTK development headers to automated CI workflows to guarantee workspace compilation on every commit and pull request.
+
+### Monorepo Synchronization & Bumper Upgrades (`tools/bump-version.sh`)
+- **Atomic Multi-Crate CalVer Bumping:** Upgraded `tools/bump-version.sh` to synchronize `crates/knx-core`, `src-tauri`, `tauri.conf.json`, `apps/web`, `server.rs`, `Cargo.lock`, and `CHANGELOG.md` in a single command.
+
 ## [2026.10.4] - 2026-10-12
 
 ### changed

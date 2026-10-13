@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=KoNfiX
+Comment=Der visuelle KNX-Konfigurator
+Exec=konfix-desktop
+Icon=konfix
+Terminal=false
+Type=Application
+Categories=Development;Engineering;
+Keywords=KNX;ETS;SmartHome;Automation;
+StartupNotify=true

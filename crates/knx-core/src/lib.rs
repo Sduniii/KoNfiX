@@ -19,3 +19,5 @@ pub mod dpt;
 pub mod recorder;
 pub mod project_compare;
 pub mod catalog_yaml;
+
+pub use server::start_server;

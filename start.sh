@@ -6,6 +6,10 @@ cd "$DIR"
 
 echo "=== KoNfiX — Der visuelle KNX-Konfigurator ==="
 
+if [ "$1" = "--desktop" ] || [ "$1" = "-d" ] || [ "$1" = "desktop" ]; then
+    exec ./start-desktop.sh
+fi
+
 # Check if frontend is built
 if [ ! -d "apps/web/dist" ]; then
     echo "[1/2] Building Web Frontend..."

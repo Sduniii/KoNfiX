@@ -51,7 +51,14 @@ import {
   ProjectViewState,
 } from '../types/storage'
 
-const API_BASE = '/api'
+const isTauriOrLocal =
+  typeof window !== 'undefined' &&
+  (window.location.protocol === 'file:' ||
+    window.location.protocol === 'tauri:' ||
+    window.location.hostname === 'tauri.localhost' ||
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== undefined)
+
+const API_BASE = isTauriOrLocal ? 'http://127.0.0.1:8080/api' : '/api'
 
 export interface AppVersionInfo {
   version: string

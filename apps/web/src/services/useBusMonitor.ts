@@ -10,7 +10,14 @@ export function useBusMonitor() {
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/bus`
+    const isTauriOrLocal =
+      typeof window !== 'undefined' &&
+      (window.location.protocol === 'file:' ||
+        window.location.protocol === 'tauri:' ||
+        window.location.hostname === 'tauri.localhost' ||
+        (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== undefined)
+    const host = isTauriOrLocal ? '127.0.0.1:8080' : window.location.host
+    const wsUrl = `${protocol}//${host}/ws/bus`
 
     try {
       const ws = new WebSocket(wsUrl)

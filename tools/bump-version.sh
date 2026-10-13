@@ -79,6 +79,8 @@ done
 # 1. Aktuelle Version aus Cargo.toml ermitteln
 CARGO_TOML="${ROOT_DIR}/crates/knx-core/Cargo.toml"
 PACKAGE_JSON="${ROOT_DIR}/apps/web/package.json"
+TAURI_CARGO_TOML="${ROOT_DIR}/src-tauri/Cargo.toml"
+TAURI_CONF_JSON="${ROOT_DIR}/src-tauri/tauri.conf.json"
 SERVER_RS="${ROOT_DIR}/crates/knx-core/src/server.rs"
 CHANGELOG_MD="${ROOT_DIR}/CHANGELOG.md"
 
@@ -132,10 +134,12 @@ fi
 # Betroffene Dateien auflisten
 echo "Zu aktualisierende Komponenten:"
 echo "  1. Backend Core:       crates/knx-core/Cargo.toml"
-echo "  2. Backend Lockfile:   Cargo.lock"
-echo "  3. Server Unit-Test:   crates/knx-core/src/server.rs"
-echo "  4. Web Frontend:       apps/web/package.json"
-echo "  5. Dokumentation:      CHANGELOG.md"
+echo "  2. Desktop Crate:      src-tauri/Cargo.toml"
+echo "  3. Tauri Config:       src-tauri/tauri.conf.json"
+echo "  4. Backend Lockfile:   Cargo.lock"
+echo "  5. Server Unit-Test:   crates/knx-core/src/server.rs"
+echo "  6. Web Frontend:       apps/web/package.json"
+echo "  7. Dokumentation:      CHANGELOG.md"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
@@ -147,6 +151,16 @@ fi
 echo "-> Aktualisiere crates/knx-core/Cargo.toml..."
 sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" "$CARGO_TOML"
 
+if [ -f "$TAURI_CARGO_TOML" ]; then
+    echo "-> Aktualisiere src-tauri/Cargo.toml..."
+    sed -i "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" "$TAURI_CARGO_TOML"
+fi
+
+if [ -f "$TAURI_CONF_JSON" ]; then
+    echo "-> Aktualisiere src-tauri/tauri.conf.json..."
+    sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" "$TAURI_CONF_JSON"
+fi
+
 echo "-> Aktualisiere apps/web/package.json..."
 sed -i "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" "$PACKAGE_JSON"
 
@@ -154,7 +168,7 @@ echo "-> Aktualisiere server.rs (test_version_endpoint)..."
 sed -i "s/assert_eq!(res.0.version, \"$CURRENT_VERSION\")/assert_eq!(res.0.version, \"$NEW_VERSION\")/" "$SERVER_RS"
 
 echo "-> Synchronisiere Cargo.lock..."
-(cd "$ROOT_DIR" && cargo check --package knx-core --quiet)
+(cd "$ROOT_DIR" && cargo check --workspace --quiet)
 
 echo "-> Aktualisiere CHANGELOG.md..."
 if ! grep -q "## \[$NEW_VERSION\]" "$CHANGELOG_MD"; then

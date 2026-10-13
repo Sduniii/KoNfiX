@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "KoNfiX",
+  "version": "2026.10.5",
+  "identifier": "org.knx.konfix",
+  "build": {
+    "frontendDist": "../apps/web/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "bun run --cwd apps/web dev",
+    "beforeBuildCommand": "bun run --cwd apps/web build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "KoNfiX — Der visuelle KNX-Konfigurator",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "Visueller KNX-Konfigurator",
+    "longDescription": "Vollwertige Open-Source-Alternative zur ETS mit visuellem Funktionsblock-Editor, Auto-GA-Routing, CAD-Hausplan und KNX IP Secure.",
+    "copyright": "Copyright 2026 Torsten Sdun"
+  }
+}

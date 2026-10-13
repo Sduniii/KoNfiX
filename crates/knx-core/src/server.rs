@@ -63,7 +63,7 @@ async fn security_headers_middleware(
     headers.insert(header::REFERRER_POLICY, "strict-origin-when-cross-origin".parse().unwrap());
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
-        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self';"
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'self';"
             .parse()
             .unwrap(),
     );
@@ -80,6 +80,11 @@ pub fn create_router(state: AppState) -> Router {
                     || origin_str.starts_with("http://[::1]:")
                     || origin_str.starts_with("https://localhost:")
                     || origin_str.starts_with("https://127.0.0.1:")
+                    || origin_str.starts_with("tauri://")
+                    || origin_str.starts_with("http://tauri.localhost")
+                    || origin_str.starts_with("https://tauri.localhost")
+                    || origin_str == "tauri://localhost"
+                    || origin_str == "http://tauri.localhost"
                     || origin_str == "http://localhost"
                     || origin_str == "http://127.0.0.1"
                     || origin_str == "http://[::1]"
@@ -2496,6 +2501,198 @@ async fn handle_topology_diagnostics(State(state): State<AppState>) -> Json<Topo
     Json(TopologyManager::diagnose_topology(&proj))
 }
 
+// =========================================================================
+// Server Initialization & Lifecycle
+// =========================================================================
+
+pub async fn build_app_state() -> (AppState, Router) {
+    let storage = Arc::new(StorageManager::new());
+
+    let initial_project = {
+        let settings = storage.get_settings().await;
+        let mut loaded = None;
+
+        // 1. Try loading the active project from storage
+        if let Some(active_name) = &settings.active_project_name {
+            if let Ok(p) = storage.load_project(active_name).await {
+                tracing::info!(
+                    "Loaded active project '{}' from ~/.konfix ({} GAs, {} devices)",
+                    p.name,
+                    p.group_addresses.len(),
+                    p.devices.len()
+                );
+                loaded = Some(p);
+            }
+        }
+
+        // 2. If no active project, try the first project in storage
+        if loaded.is_none() {
+            if let Ok(projects) = storage.list_projects().await {
+                if let Some(first) = projects.first() {
+                    if let Ok(p) = storage.load_project(&first.name).await {
+                        tracing::info!(
+                            "Loaded most recent project '{}' from ~/.konfix ({} GAs)",
+                            p.name,
+                            p.group_addresses.len()
+                        );
+                        loaded = Some(p);
+                    }
+                }
+            }
+        }
+
+        // 3. Optional initial project seeding via KONFIX_INITIAL_PROJECT env var
+        if loaded.is_none() {
+            if let Ok(initial_path) = std::env::var("KONFIX_INITIAL_PROJECT") {
+                if std::path::Path::new(&initial_path).exists() {
+                    if let Ok(bytes) = std::fs::read(&initial_path) {
+                        let password = std::env::var("KONFIX_PROJECT_PASSWORD").ok();
+                        match crate::ets_import::parse_knxproj(&bytes, password.as_deref(), "Initiales Projekt") {
+                            Ok(proj) => {
+                                tracing::info!("Imported initial project from {} and saving...", initial_path);
+                                let _ = storage.save_project(&proj, Some(&proj.name)).await;
+                                loaded = Some(proj);
+                            }
+                            Err(e) => {
+                                tracing::warn!("Could not parse initial project {}: {}", initial_path, e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Fallback to demo project and save
+        match loaded {
+            Some(p) => p,
+            None => {
+                let demo = crate::sample_data::create_demo_project();
+                let _ = storage.save_project(&demo, Some("Demo")).await;
+                demo
+            }
+        }
+    };
+
+    let project = Arc::new(RwLock::new(initial_project));
+    let simulator = Arc::new(Simulator::new(project.clone()));
+    let knx_manager = Arc::new(KnxNetManager::new(simulator.clone()));
+    let diagnostics = Arc::new(DiagnosticsManager::new(
+        knx_manager.clone(),
+        project.clone(),
+        simulator.clone(),
+    ));
+    let catalog = Arc::new(CatalogManager::new());
+    let programming = ProgrammingJobManager::new(
+        project.clone(),
+        knx_manager.clone(),
+        Some(storage.clone()),
+    );
+
+    let recorder = Arc::new(RwLock::new(TelegramRecorder::new(10_000)));
+
+    let app_state = AppState {
+        project,
+        simulator,
+        knx_manager,
+        diagnostics,
+        catalog,
+        programming,
+        storage,
+        recorder,
+    };
+
+    // Auto-connect to physical KNX IP Secure gateway if gateway.knxkeys or KONFIX_KEYRING_PATH is present
+    {
+        let knx_mgr_init = app_state.knx_manager.clone();
+        tokio::spawn(async move {
+            let mut keyring_candidates = Vec::new();
+            if let Ok(path) = std::env::var("KONFIX_KEYRING_PATH") {
+                keyring_candidates.push(path);
+            }
+            if let Ok(home) = std::env::var("HOME") {
+                keyring_candidates.push(format!("{}/.konfix/gateway.knxkeys", home));
+            }
+            keyring_candidates.push("gateway.knxkeys".to_string());
+
+            let pass_env = std::env::var("KONFIX_KEYRING_PASSWORD").ok();
+            let passwords = if let Some(p) = pass_env {
+                vec![p]
+            } else {
+                vec!["".to_string()]
+            };
+
+            'outer: for keyring_path in keyring_candidates {
+                if std::path::Path::new(&keyring_path).exists() {
+                    if let Ok(xml_text) = std::fs::read_to_string(&keyring_path) {
+                        for password in &passwords {
+                            if let Ok(decrypted) = crate::keyring::parse_and_decrypt_knxkeys(&xml_text, password) {
+                                if let Some(tunnel) = decrypted.tunnels.iter().find(|t| t.user_id == 3).or_else(|| decrypted.tunnels.first()) {
+                                    let creds = crate::knx_secure::KnxSecureCredentials {
+                                        user_id: tunnel.user_id,
+                                        user_password: tunnel.password.clone(),
+                                        device_authentication: tunnel.authentication.clone(),
+                                    };
+                                    let gw_ip = std::env::var("KONFIX_GATEWAY_IP").unwrap_or_else(|_| "192.168.1.120".to_string());
+                                    let gw_port: u16 = std::env::var("KONFIX_GATEWAY_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(3671);
+                                    tracing::info!("Auto-connecting to KNX IP Secure Gateway {}:{} (Tunnel IA: {}, User ID: {})...", gw_ip, gw_port, tunnel.individual_address, tunnel.user_id);
+                                    match knx_mgr_init.connect(&gw_ip, gw_port, Some(creds)).await {
+                                        Ok(msg) => tracing::info!("KNX IP Secure auto-connected successfully: {}", msg),
+                                        Err(e) => tracing::info!("KNX IP Secure auto-connect result: {}", e),
+                                    }
+                                    break 'outer;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Background automation tick loop (every 5 seconds)
+    let sim_tick = app_state.simulator.clone();
+    let knx_mgr_tick = app_state.knx_manager.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        let mut last_values: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+        loop {
+            interval.tick().await;
+            let emitted = sim_tick.tick_automation().await;
+            if !emitted.is_empty() {
+                let knx_status = knx_mgr_tick.get_status().await;
+                if knx_status.connected {
+                    for t in emitted {
+                        let val = if t.value_formatted.starts_with("EIN") {
+                            serde_json::json!(true)
+                        } else if t.value_formatted.starts_with("AUS") {
+                            serde_json::json!(false)
+                        } else {
+                            serde_json::json!(t.value_formatted)
+                        };
+                        if last_values.get(&t.destination) != Some(&val) {
+                            last_values.insert(t.destination.clone(), val.clone());
+                            let _ = knx_mgr_tick.send_telegram(&t.destination, &t.dpt, &val).await;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    let router = create_router(app_state.clone());
+    (app_state, router)
+}
+
+pub async fn start_server(port: u16) -> Result<(), Box<dyn std::error::Error>> {
+    let (_app_state, router) = build_app_state().await;
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+    tracing::info!("KNX Config Server listening on http://{}", addr);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, router).await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2503,7 +2700,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.10.4");
+        assert_eq!(res.0.version, "2026.10.5");
         assert_eq!(res.0.name, "knx-core");
     }
 

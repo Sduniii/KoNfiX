@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "crates/knx-core",
+    "src-tauri",
 ]
 resolver = "2"
