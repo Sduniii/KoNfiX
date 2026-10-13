@@ -19,16 +19,29 @@ A modern, cross-platform, open-source alternative to classical ETS (Engineering 
   <img src="docs/screenshots/hero_canvas.png" alt="KoNfiX — Visual KNX Configurator Blueprint Canvas, Room Portals & Live Bus Monitor" width="100%" />
 </p>
 
-> **Visual Blueprint Canvas in Action:** Direct hardware KO wiring (e.g. MDT Glass Push Button II), climate controllers, inter-room signal portals (`AUS RAUM` / `NACH RAUM` with 1-click jump navigation), 24/7 real-time bus monitor with live cEMI telegram decoding, and instant workspace switching (*Project & Canvas*, *Topology & Filter*, *ETS Diagnostics*).
+> **Visual Blueprint Canvas in Action:** Direct hardware KO wiring (e.g. MDT Glass Push Button II, AKD Dimming Actuators), inter-room signal portals (`AUS RAUM` / `NACH RAUM` with 1-click jump navigation), 24/7 real-time bus monitor with live cEMI telegram decoding, and instant 1-click workspace switching (*Project & Canvas*, *2D-CAD Hausplan*, *Topology & Filter*, *ETS Diagnostics*).
+
+---
+
+## Workspace Showcase
+
+| 🎨 **1. Visual Blueprint Canvas** | 📐 **2. 2D-CAD Architectural Floorplan** |
+|:---:|:---:|
+| [![Logic & Blueprint Canvas](docs/screenshots/hero_canvas.png)](docs/screenshots/hero_canvas.png) | [![2D-CAD Floorplan](docs/screenshots/cad_floorplan.png)](docs/screenshots/cad_floorplan.png) |
+| *Visual function block wiring, MDT hardware KOs, live minimap, room portals & 24/7 bus monitor.* | *Interactive architectural CAD editor, orthogonal wall snapping, doors, windows & live KNX widgets.* |
+| 🌐 **3. Topology & Coupler Filters** | 🔍 **4. ETS Diagnostics & Addressing** |
+| [![KNX Topology & Filter Tables](docs/screenshots/topology_workspace.png)](docs/screenshots/topology_workspace.png) | [![ETS Diagnostics](docs/screenshots/ets_diagnostics.png)](docs/screenshots/ets_diagnostics.png) |
+| *Hierarchical areas & lines, automatic 8192-byte coupler bitmasks, bus load modeling & integrity score.* | *Point-to-point line scanner (16x16 matrix), programming mode locator & direct physical address flasher.* |
 
 ---
 
 ## Table of Contents
 
-- [The Three Primary Workspaces](#the-three-primary-workspaces)
+- [The Four Primary Workspaces](#the-four-primary-workspaces)
   - [1. Project & Canvas (Visual Logic & Blueprint Wiring)](#1-project--canvas-visual-logic--blueprint-wiring)
-  - [2. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)](#2-topology--filters-areas-lines-filter-tables--coupler-health)
-  - [3. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)](#3-ets-diagnostics--addressing-line-scanner-wizard--flasher)
+  - [2. 2D-CAD Architectural Floorplan (Walls, Openings & Live Widgets)](#2-2d-cad-architectural-floorplan-walls-openings--live-widgets)
+  - [3. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)](#3-topology--filters-areas-lines-filter-tables--coupler-health)
+  - [4. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)](#4-ets-diagnostics--addressing-line-scanner-wizard--flasher)
 - [Project Management, Filesystem & Storage (~/.konfix)](#project-management-filesystem--storage-konfix)
 - [Additional Core Features](#additional-core-features)
   - [Professional Bus Monitor & Telegram Recorder (TP Bus Load & ETS Formats)](#professional-bus-monitor--telegram-recorder-tp-bus-load--ets-formats)
@@ -52,15 +65,15 @@ A modern, cross-platform, open-source alternative to classical ETS (Engineering 
 
 ---
 
-## The Three Primary Workspaces
+## The Four Primary Workspaces
 
 The header features a clean, modern three-zone layout (Left: Branding, key metrics, quick-save & central "Project & ETS" menu; Center: Centered workspace switcher; Right: Contextual tools, language switcher & combined Gateway/Core status):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ [K] KoNfiX (KNX)                │ [ Project & Canvas │ Topology │ Diagnostics ] │ [⚡ Auto-GA] [▶ Sim]   │
-│     Residential • 436 GAs       │                                               │ [🇬🇧 EN ▾]             │
-│     [💾 Save] [Project & ETS ▾] │                                               │ [● KNX: 192.168.1.50] │
+│ [K] KoNfiX (KNX)                │ [ Canvas │ Hausplan │ Topologie │ Diagnose ] │ [⚡ Auto-GA] [▶ Sim]   │
+│     Residential • 436 GAs       │                                              │ [🇬🇧 EN ▾]             │
+│     [💾 Save] [Project & ETS ▾] │                                              │ [● KNX: 192.168.1.50] │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -91,7 +104,25 @@ The header features a clean, modern three-zone layout (Left: Branding, key metri
 
 ---
 
-### 2. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)
+### 2. 2D-CAD Architectural Floorplan (Walls, Openings & Live Widgets)
+* **Architectural Blueprint CAD Construction (`CadCanvas`):**
+  * **Interactive Vector Drawing:** Draw exterior walls (24cm / 36cm) and interior partition walls (12cm / 17.5cm) with 5cm grid snapping.
+  * **90° Orthogonal & Vertex Snapping:** Walls automatically align to horizontal/vertical axes and magnetize to existing wall endpoints for watertight polygons.
+  * **DIN Openings:** Insert doors with realistic DIN swing arc graphics (flippable left/right) and windows with multi-pane architectural styling.
+  * **Tracing Template Overlay:** Import architectural drawings (PNG, JPEG, SVG) as a blueprint tracing template with adjustable background opacity and scale calibration.
+* **Autonomous Room Zone Area Calculation (Shoelace Formula):**
+  * Define room boundaries to automatically calculate exact living space areas in square meters ($m^2$) using the geometric Shoelace formula.
+* **Interactive Live KNX Floorplan Widgets:**
+  * **Direct Hardware Binding:** Place Lights, Blinds, HVAC Thermostats, and Sockets directly into room plans.
+  * **Live KNX Bus Triggers:** Click widgets to send real-time `GroupValue_Write` telegrams directly over the KNX IP Secure connection.
+  * **WebSocket State Sync:** Widget icons dynamically reflect the true physical state of the building based on incoming cEMI telegrams.
+* **Dual Interaction Modes:**
+  * **CAD-Editor Mode:** Complete architectural drafting toolbox for walls, doors, windows, and widget positioning.
+  * **Live-Bedienung Mode:** Distraction-free, clean architectural visualization for wall-mounted touch tablets and daily building operation.
+
+---
+
+### 3. Topology & Filters (Areas, Lines, Filter Tables & Coupler Health)
 * **Hierarchical KNX Topology:**
   * Management of areas (0..15) and lines (x.0..x.15).
   * Support for multiple transmission media: **TP** (Twisted Pair), **IP** (KNXnet/IP Routing), **RF** (Radio Frequency).
@@ -118,7 +149,7 @@ The header features a clean, modern three-zone layout (Left: Branding, key metri
 
 ---
 
-### 3. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)
+### 4. ETS Diagnostics & Addressing (Line Scanner, Wizard & Flasher)
 * **255-Address Matrix (16x16 Line Scan):**
   * Fast line scan of all physical addresses on a line (e.g. `1.1.1` to `1.1.255`).
   * Color-coded states: *Occupied* (green), *Free* (dark grey), *Programming Mode* (pulsing red).

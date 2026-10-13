@@ -64,7 +64,16 @@ function WorkspaceFallback({ label }: { label: string }) {
 export function App() {
   const [project, setProject] = useState<Project | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
-  const [activeWorkspace, setActiveWorkspace] = useState<'canvas' | 'topology' | 'diagnostics' | 'floorplan'>('canvas')
+  const [activeWorkspace, setActiveWorkspace] = useState<'canvas' | 'topology' | 'diagnostics' | 'floorplan'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const ws = params.get('workspace')
+      if (ws && ['canvas', 'topology', 'diagnostics', 'floorplan'].includes(ws)) {
+        return ws as 'canvas' | 'topology' | 'diagnostics' | 'floorplan'
+      }
+    }
+    return 'canvas'
+  })
   const [diagnosticsInitialAddress, setDiagnosticsInitialAddress] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
@@ -183,8 +192,9 @@ export function App() {
           if (p.name) {
             fetchStorageView(p.name).then((view) => {
               if (!view) return
-              if (view.active_workspace && ['canvas', 'topology', 'diagnostics'].includes(view.active_workspace)) {
-                setActiveWorkspace(view.active_workspace as 'canvas' | 'topology' | 'diagnostics')
+              const urlWs = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('workspace') : null
+              if (!urlWs && view.active_workspace && ['canvas', 'topology', 'diagnostics', 'floorplan'].includes(view.active_workspace)) {
+                setActiveWorkspace(view.active_workspace as 'canvas' | 'topology' | 'diagnostics' | 'floorplan')
               }
               if (view.selected_room_id && p.rooms.some((r) => r.id === view.selected_room_id)) {
                 setSelectedRoomId(view.selected_room_id)

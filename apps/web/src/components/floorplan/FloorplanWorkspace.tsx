@@ -63,7 +63,14 @@ export const FloorplanWorkspace: React.FC<FloorplanWorkspaceProps> = ({
   // 'live': Bereinigter Architektenplan mit interaktiven Widgets
   // 'cad': Konstruktionsmodus mit Werkzeugleiste (Wand, Tür, Fenster etc.)
   // 'grid': Automatisches Raum-Grid (sofort nutzbar ohne CAD)
-  const [viewMode, setViewMode] = useState<'live' | 'cad' | 'grid'>('live')
+  const [viewMode, setViewMode] = useState<'live' | 'cad' | 'grid'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const m = params.get('mode')
+      if (m === 'cad' || m === 'grid' || m === 'live') return m as 'live' | 'cad' | 'grid'
+    }
+    return 'cad'
+  })
   const [cadTool, setCadTool] = useState<CadTool>('select')
 
   // 3. Aktueller FloorPlan für die gewählte Etage
