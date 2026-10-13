@@ -1,8 +1,6 @@
 import React, { useState } from 'react'
 import {
   Download,
-  Play,
-  Pencil,
   Network,
   FileSpreadsheet,
   FileCode,
@@ -21,6 +19,9 @@ import {
   Globe,
   GitCompare,
   Home,
+  Settings,
+  PanelLeft,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { Project, GatewayConnectionStatus } from '../../types/knx'
 import { downloadEtsCsv, downloadEtsXml, downloadKnxproj } from '../../services/api'
@@ -29,12 +30,10 @@ import { useTranslation } from '../../i18n/I18nContext'
 interface HeaderProps {
   project: Project | null
   appVersion?: string | null
-  isSimulating: boolean
   isWsConnected: boolean
   gatewayStatus?: GatewayConnectionStatus | null
   activeWorkspace?: 'canvas' | 'topology' | 'diagnostics' | 'floorplan'
   onWorkspaceChange?: (ws: 'canvas' | 'topology' | 'diagnostics' | 'floorplan') => void
-  onToggleSimulate: () => void
   onAutoRoute: () => void
   isRouting: boolean
   onOpenGaManager?: () => void
@@ -49,17 +48,19 @@ interface HeaderProps {
   isSaving?: boolean
   onExportJson?: () => void
   onImportJson?: (e: React.ChangeEvent<HTMLInputElement>) => void
+  isLeftSidebarOpen?: boolean
+  isRightSidebarOpen?: boolean
+  onToggleLeftSidebar?: () => void
+  onToggleRightSidebar?: () => void
 }
 
 export const Header: React.FC<HeaderProps> = ({
   project,
   appVersion,
-  isSimulating,
   isWsConnected,
   gatewayStatus,
   activeWorkspace = 'canvas',
   onWorkspaceChange,
-  onToggleSimulate,
   onAutoRoute,
   isRouting,
   onOpenGaManager,
@@ -74,6 +75,10 @@ export const Header: React.FC<HeaderProps> = ({
   isSaving = false,
   onExportJson,
   onImportJson,
+  isLeftSidebarOpen = false,
+  isRightSidebarOpen = false,
+  onToggleLeftSidebar,
+  onToggleRightSidebar,
 }) => {
   const { locale, setLocale, languages, t } = useTranslation()
   const [showProjectMenu, setShowProjectMenu] = useState(false)
@@ -104,14 +109,14 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
             <div
-              className="text-[11px] text-slate-400 font-medium truncate max-w-[180px] sm:max-w-[240px] flex items-center gap-1 mt-0.5"
+              className="text-[11px] text-slate-400 font-medium truncate max-w-[130px] sm:max-w-[240px] flex items-center gap-1 mt-0.5"
               title={`${project?.name || t('sidebar.project')} (${gaCount} GAs, ${deviceCount} ${t('common.devices')})`}
             >
-              <span className="text-slate-300 font-semibold">{project?.name || t('sidebar.project')}</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400 text-[10px]">{gaCount} GAs</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400 text-[10px]">{deviceCount} {t('common.devices')}</span>
+              <span className="text-slate-300 font-semibold truncate">{project?.name || t('sidebar.project')}</span>
+              <span className="hidden sm:inline text-slate-600">•</span>
+              <span className="hidden sm:inline text-slate-400 text-[10px]">{gaCount} GAs</span>
+              <span className="hidden sm:inline text-slate-600">•</span>
+              <span className="hidden sm:inline text-slate-400 text-[10px]">{deviceCount} {t('common.devices')}</span>
             </div>
           </div>
         </div>
@@ -148,8 +153,8 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
             title={t('header.projectAndEts')}
           >
-            <FolderArchive className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{t('header.projectAndEts')}</span>
+            <FolderArchive className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="hidden lg:inline">{t('header.projectAndEts')}</span>
             <ChevronDown
               className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${
                 showProjectMenu ? 'rotate-180 text-emerald-400' : ''
@@ -413,55 +418,55 @@ export const Header: React.FC<HeaderProps> = ({
       {/* ZONE 2: MITTE (Zentrierter Arbeitsbereichs-Umschalter)                     */}
       {/* ========================================================================= */}
       {onWorkspaceChange && (
-        <div className="hidden md:flex items-center absolute left-1/2 -translate-x-1/2">
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 shadow-inner">
+        <div className="hidden md:flex items-center justify-center flex-1 min-w-0 px-2 mx-1">
+          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 shadow-inner shrink-0 gap-0.5">
             <button
               onClick={() => onWorkspaceChange('canvas')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 xl:px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 activeWorkspace === 'canvas'
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/40'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title={t('workspaces.canvasDesc')}
             >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span>{t('workspaces.canvas')}</span>
+              <LayoutGrid className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xl:inline">{t('workspaces.canvas')}</span>
             </button>
             <button
               onClick={() => onWorkspaceChange('topology')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 xl:px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 activeWorkspace === 'topology'
                   ? 'bg-amber-600 text-white shadow-md shadow-amber-900/40'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title={t('workspaces.topologyDesc')}
             >
-              <Network className="w-3.5 h-3.5 text-amber-300" />
-              <span>{t('workspaces.topology')}</span>
+              <Network className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              <span className="hidden xl:inline">{t('workspaces.topology')}</span>
             </button>
             <button
               onClick={() => onWorkspaceChange('diagnostics')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 xl:px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 activeWorkspace === 'diagnostics'
                   ? 'bg-sky-600 text-white shadow-md shadow-sky-900/40'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title={t('workspaces.diagnosticsDesc')}
             >
-              <Activity className="w-3.5 h-3.5 text-sky-300" />
-              <span>{t('workspaces.diagnostics')}</span>
+              <Activity className="w-3.5 h-3.5 text-sky-300 shrink-0" />
+              <span className="hidden xl:inline">{t('workspaces.diagnostics')}</span>
             </button>
             <button
               onClick={() => onWorkspaceChange('floorplan')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 xl:px-3 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                 activeWorkspace === 'floorplan'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-900/40'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
               title="Gebäude-Grundriss & Live-Haussteuerung"
             >
-              <Home className="w-3.5 h-3.5 text-purple-300" />
-              <span>Hausplan</span>
+              <Home className="w-3.5 h-3.5 text-purple-300 shrink-0" />
+              <span className="hidden xl:inline">Hausplan</span>
             </button>
           </div>
         </div>
@@ -470,48 +475,55 @@ export const Header: React.FC<HeaderProps> = ({
       {/* ========================================================================= */}
       {/* ZONE 3: RECHTS (Kontextbezogene Aktionen & Kombinierter Systemstatus)      */}
       {/* ========================================================================= */}
-      <div className="flex items-center gap-2 shrink-0">
-        {/* Canvas-spezifische Aktionen: Auto-GA & Simulation */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Mobile & Tablet Drawer Toggles (Canvas Workspace) */}
         {activeWorkspace === 'canvas' && (
-          <div className="flex items-center gap-2 border-r border-slate-800 pr-2">
+          <div className="flex items-center gap-1 xl:hidden">
+            {onToggleLeftSidebar && (
+              <button
+                type="button"
+                onClick={onToggleLeftSidebar}
+                className={`lg:hidden flex items-center justify-center w-8 h-8 rounded-lg border transition-all ${
+                  isLeftSidebarOpen
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                    : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border-slate-700/80'
+                }`}
+                title="Bausteine & Räume Leiste öffnen/schließen"
+              >
+                <PanelLeft className="w-4 h-4 shrink-0" />
+              </button>
+            )}
+            {onToggleRightSidebar && (
+              <button
+                type="button"
+                onClick={onToggleRightSidebar}
+                className={`flex items-center justify-center w-8 h-8 rounded-lg border transition-all ${
+                  isRightSidebarOpen
+                    ? 'bg-sky-600 text-white border-sky-500 shadow-sm'
+                    : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border-slate-700/80'
+                }`}
+                title="Inspektor & Auto-GAs öffnen/schließen"
+              >
+                <SlidersHorizontal className="w-4 h-4 shrink-0" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Canvas-spezifische Schnellaktion: Auto-GA */}
+        {activeWorkspace === 'canvas' && (
+          <div className="flex items-center border-r border-slate-800 pr-1.5 sm:pr-2">
             {/* Auto-Route Quick Action */}
             <button
               onClick={onAutoRoute}
               disabled={isRouting}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-amber-500/40 transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-200 border border-slate-700/80 hover:border-amber-500/40 transition-all disabled:opacity-50 whitespace-nowrap shrink-0"
               title={t('header.autoGaDesc')}
             >
               <Sparkles
-                className={`w-3.5 h-3.5 text-amber-400 ${isRouting ? 'animate-spin' : ''}`}
+                className={`w-3.5 h-3.5 text-amber-400 shrink-0 ${isRouting ? 'animate-spin' : ''}`}
               />
               <span className="hidden sm:inline">{t('header.autoGa')}</span>
-            </button>
-
-            {/* Mode Switch: Simulation vs Entwurf */}
-            <button
-              onClick={onToggleSimulate}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                isSimulating
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-950'
-                  : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
-              }`}
-              title={
-                isSimulating
-                  ? `${t('header.simulation')} aktiv`
-                  : `${t('header.draft')} aktiv`
-              }
-            >
-              {isSimulating ? (
-                <>
-                  <Play className="w-3 h-3 fill-emerald-400 text-emerald-400 animate-pulse" />
-                  <span>{t('header.simulation')}</span>
-                </>
-              ) : (
-                <>
-                  <Pencil className="w-3 h-3 text-sky-400" />
-                  <span>{t('header.draft')}</span>
-                </>
-              )}
             </button>
           </div>
         )}
@@ -519,7 +531,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Kombinierte System-Status-Pill (Gateway & Daemon) */}
         <button
           onClick={onOpenGatewayModal}
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all border ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg text-xs font-mono transition-all border whitespace-nowrap shrink-0 ${
             gatewayStatus?.connected
               ? 'bg-emerald-950/40 hover:bg-emerald-900/40 border-emerald-500/40 text-emerald-300 shadow-sm'
               : 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -528,7 +540,7 @@ export const Header: React.FC<HeaderProps> = ({
             gatewayStatus?.connected ? gatewayStatus.gateway_ip : t('header.disconnected')
           }\nRust Core Daemon: ${isWsConnected ? 'Online (Port 8080)' : 'Offline'}\nKlicken für Verbindungsmanager`}
         >
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <div
               className={`w-2 h-2 rounded-full shrink-0 ${
                 gatewayStatus?.connected && isWsConnected
@@ -540,21 +552,24 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <Radio className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           </div>
-          <span className="font-semibold text-[11px]">
+          <span className="font-semibold text-[11px] whitespace-nowrap hidden sm:inline">
             {gatewayStatus?.connected ? gatewayStatus.gateway_ip : `KNX: ${t('header.disconnected')}`}
           </span>
+          <span className="font-semibold text-[10px] whitespace-nowrap sm:hidden">
+            {gatewayStatus?.connected ? 'KNX' : 'Off'}
+          </span>
           {isWsConnected && (
-            <span className="hidden xl:inline text-[9px] text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded font-semibold">
+            <span className="hidden xl:inline text-[9px] text-emerald-400 bg-emerald-500/10 px-1 py-0.2 rounded font-semibold whitespace-nowrap">
               Core
             </span>
           )}
         </button>
 
         {/* Mehrsprachigkeit / Language Switcher Dropdown */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => setShowLangMenu(!showLangMenu)}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/80 transition-all"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/80 transition-all whitespace-nowrap shrink-0"
             title={t('header.language')}
           >
             <span className="text-sm leading-none">{locale === 'de' ? '🇩🇪' : '🇬🇧'}</span>
@@ -597,6 +612,19 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           )}
         </div>
+
+        {/* Direkter Einstellungs-Button */}
+        {onOpenStorageSettingsModal && (
+          <button
+            type="button"
+            onClick={onOpenStorageSettingsModal}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-700/80 hover:border-slate-600 transition-all whitespace-nowrap shrink-0 cursor-pointer group"
+            title="Einstellungen (Katalog-URL, Datenverzeichnis, Signaturschlüssel, MCP)"
+          >
+            <Settings className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-300 group-hover:rotate-45 transition-transform duration-300 shrink-0" />
+            <span className="hidden xl:inline text-[11px] font-medium text-slate-300">Einstellungen</span>
+          </button>
+        )}
       </div>
     </header>
   )

@@ -168,6 +168,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
             <button
               key={room.id}
               onClick={() => onSelectRoom(room.id)}
+              title={floor ? `${room.name} (${floor.name})` : room.name}
               className={`flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-medium transition-all shrink-0 group ${
                 isSelected
                   ? 'bg-slate-800 text-slate-100 border border-slate-700 shadow-sm shadow-black/40'
@@ -184,7 +185,7 @@ export const RoomTabBar: React.FC<RoomTabBarProps> = ({
                 {getRoomIcon(room.icon)}
               </span>
 
-              <span>{room.name}</span>
+              <span className="truncate max-w-[130px]">{room.name}</span>
 
               {floor && (
                 <span className="text-[9px] font-mono uppercase bg-slate-950/80 text-slate-500 px-1 py-0.2 rounded border border-slate-800">

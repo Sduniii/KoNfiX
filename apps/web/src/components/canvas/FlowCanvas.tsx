@@ -15,7 +15,7 @@ import {
   useStore,
   ConnectionLineType,
 } from '@xyflow/react'
-import { Wand2, Maximize2, Grid3X3 } from 'lucide-react'
+import { Wand2, Maximize2, Grid3X3, Map as MapIcon, Zap } from 'lucide-react'
 import { useTranslation } from '../../i18n/I18nContext'
 import { Project, GroupAddress } from '../../types/knx'
 import { LightBlockNode } from './nodes/LightBlockNode'
@@ -40,6 +40,7 @@ interface FlowCanvasProps {
   selectedRoomId: string | null
   selectedBlockId: string | null
   isSimulating: boolean
+  onToggleSimulate?: () => void
   onSelectBlock: (blockId: string | null) => void
   onBlockAction: (blockId: string, pin: string, value: any) => void
   onTriggerSwitch: (deviceId: string, channelId: string, channelCode: string) => void
@@ -119,17 +120,17 @@ const CanvasZoomSnapIndicator: React.FC = React.memo(() => {
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-slate-300 border border-slate-800 shadow-lg shadow-black/60 select-none backdrop-blur"
+      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-900/90 text-slate-300 border border-slate-800 shadow-lg shadow-black/60 select-none backdrop-blur whitespace-nowrap"
       title={`${t('canvas.gridPattern')}: ${tier.gap}px, ${t('canvas.snap')} ${tier.snap}px (${zoomPct}%)`}
     >
-      <Grid3X3 className="w-3.5 h-3.5 text-sky-400" />
+      <Grid3X3 className="w-3.5 h-3.5 text-sky-400 shrink-0" />
       <span>
-        {t('canvas.gridPattern')}: <strong className="text-white font-mono">{tier.gap}px</strong>
+        <strong className="text-white font-mono">{tier.gap}px</strong> Raster
       </span>
       <span className="text-slate-600">·</span>
-      <span className="text-slate-400 font-mono">{t('canvas.snap')} {tier.snap}px</span>
+      <span className="text-slate-400 font-mono">Fang {tier.snap}px</span>
       <span className="text-slate-600">·</span>
-      <span className="font-mono text-slate-400">{zoomPct}%</span>
+      <span className="font-mono text-slate-300">{zoomPct}%</span>
     </div>
   )
 })
@@ -139,6 +140,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
   selectedRoomId,
   selectedBlockId,
   isSimulating,
+  onToggleSimulate,
   onSelectBlock,
   onBlockAction,
   onTriggerSwitch,
@@ -165,6 +167,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
 }) => {
   const { t } = useTranslation()
   const [reactFlowInstance, setReactFlowInstance] = React.useState<any>(null)
+  const [showMiniMap, setShowMiniMap] = React.useState<boolean>(false)
 
   // Zoom-abhängige dynamische Raster- & Fang-Stufe (re-rendert nur wenn Stufe wechselt!)
   const tierIndex = useStore((state) => getTierIndex(state.transform[2]))
@@ -1296,19 +1299,50 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
         connectionRadius={28}
         connectionLineType={ConnectionLineType.SmoothStep}
         defaultEdgeOptions={{ type: 'knxWire' }}
+        proOptions={{ hideAttribution: true }}
       >
         <Background color="#334155" gap={tier.gap} size={tier.dotSize} />
         <Controls />
-        <Panel position="top-right" className="flex items-center gap-2 m-3">
+        <Panel position="top-right" className="flex items-center gap-1.5 sm:gap-2 m-2 sm:m-3">
           <CanvasZoomSnapIndicator />
           <button
             type="button"
             onClick={handleAutoLayout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-sky-400 border border-sky-500/40 shadow-lg shadow-black/60 backdrop-blur transition-all active:scale-95 cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-sky-400 border border-sky-500/40 shadow-lg shadow-black/60 backdrop-blur transition-all active:scale-95 cursor-pointer whitespace-nowrap"
             title={t('canvas.autoLayoutTooltip')}
           >
-            <Wand2 className="w-3.5 h-3.5" />
-            <span>{t('canvas.autoLayout')}</span>
+            <Wand2 className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">{t('canvas.autoLayout')}</span>
+          </button>
+          {onToggleSimulate && (
+            <button
+              type="button"
+              onClick={onToggleSimulate}
+              className={`p-1.5 rounded-lg border shadow-lg shadow-black/60 transition-all cursor-pointer ${
+                isSimulating
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
+                  : 'bg-slate-900/90 text-slate-500 hover:text-slate-300 border-slate-800 hover:bg-slate-800'
+              }`}
+              title={
+                isSimulating
+                  ? 'Signalfluss-Animation pausieren (wandernde Leitungs-Impulse ausschalten)'
+                  : 'Signalfluss-Animation aktivieren (wandernde Leitungs-Impulse einschalten)'
+              }
+            >
+              <Zap className={`w-4 h-4 ${isSimulating ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowMiniMap((prev) => !prev)}
+            className={`p-1.5 rounded-lg border shadow-lg shadow-black/60 transition-all cursor-pointer ${
+              showMiniMap
+                ? 'bg-sky-500/20 text-sky-400 border-sky-500/40'
+                : 'bg-slate-900/90 text-slate-400 hover:text-slate-200 border-slate-800 hover:bg-slate-800'
+            }`}
+            title={showMiniMap ? 'Minimap verbergen' : 'Minimap einblenden'}
+          >
+            <MapIcon className="w-4 h-4" />
           </button>
           <button
             type="button"
@@ -1319,20 +1353,25 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
             <Maximize2 className="w-4 h-4" />
           </button>
         </Panel>
-        <MiniMap
-          nodeColor={(node) => {
-            if (node.type === 'lightBlock') return '#eab308'
-            if (node.type === 'blindBlock') return '#14b8a6'
-            if (node.type === 'climateBlock') return '#f97316'
-            if (node.type === 'sceneBlock') return '#a855f7'
-            if (node.type === 'staircaseBlock') return '#eab308'
-            if (node.type === 'logicBlock') return '#ec4899'
-            if (node.type === 'channelTerminal') return '#38bdf8'
-            if (node.type === 'knxDevice') return '#0284c7'
-            return '#38bdf8'
-          }}
-          maskColor="rgba(15, 23, 42, 0.7)"
-        />
+        {showMiniMap && (
+          <MiniMap
+            className="!m-3 !rounded-lg !border !border-slate-800 !bg-slate-950/90 !shadow-xl !backdrop-blur"
+            nodeColor={(node) => {
+              if (node.type === 'lightBlock') return '#eab308'
+              if (node.type === 'blindBlock') return '#14b8a6'
+              if (node.type === 'climateBlock') return '#f97316'
+              if (node.type === 'sceneBlock') return '#a855f7'
+              if (node.type === 'staircaseBlock') return '#eab308'
+              if (node.type === 'logicBlock') return '#ec4899'
+              if (node.type === 'channelTerminal') return '#38bdf8'
+              if (node.type === 'knxDevice') return '#0284c7'
+              return '#38bdf8'
+            }}
+            maskColor="rgba(15, 23, 42, 0.7)"
+            zoomable
+            pannable
+          />
+        )}
       </ReactFlow>
     </div>
   )

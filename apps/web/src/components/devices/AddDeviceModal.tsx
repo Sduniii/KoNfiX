@@ -85,7 +85,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [syncStatusMessage, setSyncStatusMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Online Catalog State (konfix.sduni.de)
+  // Online Catalog State (db.konfix.sduni.de)
   const [catalogMode, setCatalogMode] = useState<'local' | 'online'>('local')
   const [onlineProducts, setOnlineProducts] = useState<OnlineCatalogDevice[]>([])
   const [isLoadingOnline, setIsLoadingOnline] = useState<boolean>(false)
@@ -839,7 +839,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   isLoadingOnline ? (
                     <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
                       <Loader2 className="w-6 h-6 animate-spin text-sky-400" />
-                      <span className="text-xs">Online-Katalog (konfix.sduni.de) wird durchsucht...</span>
+                      <span className="text-xs">Online-Katalog (db.konfix.sduni.de) wird durchsucht...</span>
                     </div>
                   ) : onlineError ? (
                     <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-xs text-red-300 space-y-2">
@@ -890,7 +890,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                         <div className="flex items-center justify-between pt-1 border-t border-slate-800/60">
                           <span className="text-[10px] text-slate-400 flex items-center gap-1">
                             <Globe className="w-3 h-3 text-sky-400" />
-                            konfix.sduni.de YAML
+                            db.konfix.sduni.de YAML
                           </span>
                           <button
                             type="button"

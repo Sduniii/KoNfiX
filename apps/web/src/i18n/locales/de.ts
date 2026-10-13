@@ -523,7 +523,7 @@ export const de: Translations = {
     tabTemplates: 'Schnell-Vorlagen',
     tabCustom: 'Manuell / Eigener Aktor',
     localSaved: 'Lokal gespeichert ({count})',
-    onlineCatalog: 'Online-Katalog (konfix.sduni.de)',
+    onlineCatalog: 'Online-Katalog (db.konfix.sduni.de)',
     searchLocalPlaceholder: 'Lokal suchen (Produkt, Bestellnummer, Hersteller)...',
     searchOnlinePlaceholder: 'Online suchen (z. B. AKS, MDT, Gira, Universalaktor)...',
     loadDatabaseBtn: 'Datenbank laden',

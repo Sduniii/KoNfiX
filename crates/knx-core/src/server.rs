@@ -2700,7 +2700,7 @@ mod tests {
     #[tokio::test]
     async fn test_version_endpoint() {
         let res = handle_get_version().await;
-        assert_eq!(res.0.version, "2026.10.5");
+        assert_eq!(res.0.version, "2026.10.6");
         assert_eq!(res.0.name, "knx-core");
     }
 

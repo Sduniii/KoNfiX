@@ -2170,7 +2170,7 @@ dependencies = [
 
 [[package]]
 name = "knx-core"
-version = "2026.10.5"
+version = "2026.10.6"
 dependencies = [
  "aes 0.8.4",
  "axum",
@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "konfix-desktop"
-version = "2026.10.5"
+version = "2026.10.6"
 dependencies = [
  "knx-core",
  "log",

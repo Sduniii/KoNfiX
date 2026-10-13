@@ -523,7 +523,7 @@ export const en: Translations = {
     tabTemplates: 'Quick Templates',
     tabCustom: 'Manual / Custom Actuator',
     localSaved: 'Locally Saved ({count})',
-    onlineCatalog: 'Online Catalog (konfix.sduni.de)',
+    onlineCatalog: 'Online Catalog (db.konfix.sduni.de)',
     searchLocalPlaceholder: 'Search locally (product, order number, brand)...',
     searchOnlinePlaceholder: 'Search online (e.g. AKS, MDT, Gira, actuator)...',
     loadDatabaseBtn: 'Load Database',

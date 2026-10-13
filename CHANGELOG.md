@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.6] - 2026-10-13 (Mobile Responsiveness, Wire Animation Toggle, db.konfix.sduni.de Catalog & Header Settings Shortcut)
+
+### Mobile Responsiveness & Ergonomics (`MobileBottomNav.tsx`, `LeftSidebar.tsx`, `RightSidebar.tsx`, `Header.tsx`, `index.html`)
+- **Native Mobile Bottom Navigation Bar:** Introduced a dedicated thumb-friendly bottom nav bar on smartphones (`< md`) for instant switching between *Logik*, *Topologie*, *Diagnose*, and *Hausplan* with iOS safe area support (`pb-[env(safe-area-inset-bottom)]`).
+- **Responsive Slide-Over Drawers:** Converted `LeftSidebar` (Rooms/Blocks/Devices) and `RightSidebar` (Inspector/GAs) into touch-friendly slide-over drawers with backdrops on mobile (`< lg` and `< xl`), providing 100% viewport width for the visual canvas. Added quick toggle buttons (`PanelLeft`, `SlidersHorizontal`) in the header.
+- **Header Collision Elimination:** Compacted workspace switcher in Zone 2 to icon-only buttons on tablets and laptops (`md` to `< xl`), shrinking width from 480px to 140px and preventing collisions.
+- **Mobile Viewport Optimization:** Updated `viewport-fit=cover` and double-tap prevention in `index.html`.
+- **Bounded Bus Monitor:** Restricted expanded bus monitor to `max-h-[50vh]` on small screens so canvas remains accessible.
+
+### Header Cleanup & Wire Animation Toggle (`Header.tsx`, `FlowCanvas.tsx`, `App.tsx`)
+- **Removed Misleading Simulation Button:** Removed the prominent `Simulation / Entwurf` header button which only toggled SVG dash animations on canvas wires.
+- **Canvas Wire Animation Toggle:** Added a sleek energy bolt button (⚡ `Zap`) directly to `FlowCanvas`'s top-right toolbar alongside Minimap and FitView, with `localStorage` persistence (`konfix_wire_animated`).
+
+### UI & Layout Polish (`Header.tsx`, `BusMonitor.tsx`, `RightSidebar.tsx`, `FlowCanvas.tsx`, `RoomTabBar.tsx`)
+- **Responsive Workspace Switcher:** Replaced fragile absolute centering with native flex flow (`flex-1 min-w-0`), eliminating button collisions with toolbar actions at all viewport widths.
+- **1-Click Settings Shortcut:** Added a dedicated gear button (`Settings` ⚙️) to the header's right toolbar next to the language switcher with smooth hover animation and tooltip.
+- **Startup Bus Monitor State:** Minimized bus monitor by default (`isOpen: false`), granting 100% vertical canvas viewport on application launch, with all title badges and load gauges protected against multi-line text wrapping (`whitespace-nowrap shrink-0`).
+- **Expanded Right Inspector:** Widened inspector panel (`w-80 xl:w-84`) and introduced 2-row card layout for Group Addresses (address & DPT pill on top, full name below) plus clean badge overview.
+- **Cleaner Flow Canvas:** Removed React Flow watermark (`hideAttribution: true`), streamlined zoom and snap indicator into a compact status badge (`128px Raster · Fang 64px · 32%`), and made MiniMap collapsible via a new top-right toolbar toggle button.
+- **Room Tab Protection:** Added `truncate max-w-[130px]` and tooltips to room tabs, preventing tab layout overflow on long room names.
+
+### Online Catalog URL Update & Storage Migration (`db.konfix.sduni.de`)
+- **New Catalog Database URL:** Updated the default online device catalog repository URL to `https://db.konfix.sduni.de`.
+- **Automatic Settings Migration:** `StorageManager::new()` in `storage.rs` automatically detects legacy `https://konfix.sduni.de` entries in `~/.konfix/settings.json` and migrates them to the new endpoint on launch.
+- **Dynamic Configuration:** Added `KONFIX_CATALOG_URL` environment variable support for runtime catalog overrides.
+- **Frontend & Locales:** Synchronized `StorageSettingsModal`, `AddDeviceModal`, and German/English translation files (`de.ts`, `en.ts`).
+
 ## [2026.10.5] - 2026-10-13 (Native Desktop Application & Multi-Platform CI/CD Pipeline)
 
 ### Native Desktop Application (`src-tauri`, `konfix-desktop`, `wry`/`tao`)
@@ -48,7 +75,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ### Catalog YAML & Online Catalog Integration (`catalog_yaml.rs`, `AddDeviceModal.tsx`)
 - **Native YAML Catalog Support:** Integrated high-performance parser for KoNfiX `.yaml` catalog definitions and SQLite database manager (`~/.konfix/catalog.db`).
-- **Online Catalog Browser:** Instant search and 1-click import from remote catalog repository (`konfix.sduni.de`).
+- **Online Catalog Browser:** Instant search and 1-click import from remote catalog repository (`db.konfix.sduni.de`).
 
 ### Canvas Performance & Interaction
 - **Smooth Drag & Pan Performance (`FlowCanvas.tsx`):** Eliminated lag and handle dragging drag-behind on canvas nodes through optimized render batching and throttling.

@@ -23,7 +23,7 @@ fn default_true() -> bool {
 }
 
 fn default_online_catalog_url() -> String {
-    "https://konfix.sduni.de".to_string()
+    "https://db.konfix.sduni.de".to_string()
 }
 
 impl Default for StorageSettings {
@@ -171,6 +171,22 @@ impl StorageManager {
                         settings.signing_key = Some(trimmed.to_string());
                     }
                 }
+            }
+        }
+
+        // Auto-migrate legacy online catalog URL (https://konfix.sduni.de -> https://db.konfix.sduni.de)
+        if settings.online_catalog_url == "https://konfix.sduni.de"
+            || settings.online_catalog_url == "http://konfix.sduni.de"
+            || settings.online_catalog_url.trim().is_empty()
+        {
+            settings.online_catalog_url = default_online_catalog_url();
+        }
+
+        // Check environment variable for catalog URL if provided
+        if let Ok(env_catalog) = std::env::var("KONFIX_CATALOG_URL") {
+            let trimmed = env_catalog.trim();
+            if !trimmed.is_empty() {
+                settings.online_catalog_url = trimmed.to_string();
             }
         }
 
@@ -328,7 +344,7 @@ impl StorageManager {
         Ok(self.get_settings().await)
     }
 
-    /// Updates the online catalog base URL (e.g. "https://konfix.sduni.de")
+    /// Updates the online catalog base URL (e.g. "https://db.konfix.sduni.de")
     pub async fn update_online_catalog_url(&self, url: &str) -> Result<StorageSettings, String> {
         let trimmed = url.trim();
         if trimmed.is_empty() {
@@ -918,6 +934,29 @@ mod tests {
         }
 
         // Clean up
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_online_catalog_url_default_and_migration() {
+        let default_settings = StorageSettings::default();
+        assert_eq!(default_settings.online_catalog_url, "https://db.konfix.sduni.de");
+
+        let temp_dir = std::env::temp_dir().join(format!("konfix_test_cat_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let settings_file = temp_dir.join("settings.json");
+        std::fs::write(&settings_file, r#"{"data_dir":"/tmp","online_catalog_url":"https://konfix.sduni.de"}"#).unwrap();
+
+        let content = std::fs::read_to_string(&settings_file).unwrap();
+        let mut loaded: StorageSettings = serde_json::from_str(&content).unwrap();
+        if loaded.online_catalog_url == "https://konfix.sduni.de"
+            || loaded.online_catalog_url == "http://konfix.sduni.de"
+            || loaded.online_catalog_url.trim().is_empty()
+        {
+            loaded.online_catalog_url = default_online_catalog_url();
+        }
+        assert_eq!(loaded.online_catalog_url, "https://db.konfix.sduni.de");
+
         let _ = std::fs::remove_dir_all(temp_dir);
     }
 }

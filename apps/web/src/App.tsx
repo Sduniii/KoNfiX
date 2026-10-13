@@ -32,6 +32,7 @@ import { LeftSidebar } from './components/sidebar/LeftSidebar'
 import { RightSidebar } from './components/inspector/RightSidebar'
 import { FlowCanvas } from './components/canvas/FlowCanvas'
 import { BusMonitor } from './components/monitor/BusMonitor'
+import { MobileBottomNav } from './components/layout/MobileBottomNav'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { Loader2 } from 'lucide-react'
 
@@ -105,9 +106,28 @@ export function App() {
   const [compareModalInitialDeviceId, setCompareModalInitialDeviceId] = useState<string | null>(null)
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [isMobileLeftOpen, setIsMobileLeftOpen] = useState<boolean>(false)
+  const [isMobileRightOpen, setIsMobileRightOpen] = useState<boolean>(false)
 
   const [gatewayStatus, setGatewayStatus] = useState<GatewayConnectionStatus | null>(null)
-  const [isSimulating, setIsSimulating] = useState<boolean>(true)
+  const [isSimulating, setIsSimulating] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('konfix_wire_animated')
+      if (stored !== null) return stored === 'true'
+    }
+    return true
+  })
+
+  const handleToggleSimulate = useCallback(() => {
+    setIsSimulating((prev) => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('konfix_wire_animated', next ? 'true' : 'false')
+      }
+      return next
+    })
+  }, [])
+
   const [isRouting, setIsRouting] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
@@ -260,6 +280,12 @@ export function App() {
     }, 500)
     return () => clearTimeout(timer)
   }, [project?.name, activeWorkspace, selectedRoomId, selectedBlockId])
+
+  // Automatically close mobile drawers on workspace change
+  useEffect(() => {
+    setIsMobileLeftOpen(false)
+    setIsMobileRightOpen(false)
+  }, [activeWorkspace])
 
   const handleSaveProject = useCallback(async () => {
     if (!project) return
@@ -1145,7 +1171,6 @@ export function App() {
       <Header
         project={project}
         appVersion={appVersion}
-        isSimulating={isSimulating}
         isWsConnected={isWsConnected}
         gatewayStatus={gatewayStatus}
         activeWorkspace={activeWorkspace}
@@ -1153,7 +1178,6 @@ export function App() {
           setActiveWorkspace(ws)
           if (ws === 'canvas') setDiagnosticsInitialAddress(null)
         }}
-        onToggleSimulate={() => setIsSimulating(!isSimulating)}
         onAutoRoute={handleAutoRoute}
         isRouting={isRouting}
         onOpenGaManager={() => setIsGaModalOpen(true)}
@@ -1168,6 +1192,10 @@ export function App() {
         isSaving={isSaving}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
+        isLeftSidebarOpen={isMobileLeftOpen}
+        isRightSidebarOpen={isMobileRightOpen}
+        onToggleLeftSidebar={() => setIsMobileLeftOpen((prev) => !prev)}
+        onToggleRightSidebar={() => setIsMobileRightOpen((prev) => !prev)}
       />
 
       {/* 2. Main Work Area: Either ETS Diagnostics Workspace, KNX Topology, or KoNfiX Logic Canvas */}
@@ -1243,6 +1271,8 @@ export function App() {
               onSelectDevice={(id) => setSelectedBlockId(id)}
               onDeleteDevice={handleDeleteDevice}
               onPlaceDevice={(id) => handlePlaceDevice(id)}
+              isOpen={isMobileLeftOpen}
+              onClose={() => setIsMobileLeftOpen(false)}
             />
 
             {/* Center: Visual Node Flow Canvas */}
@@ -1263,6 +1293,7 @@ export function App() {
                   selectedRoomId={selectedRoomId}
                   selectedBlockId={selectedBlockId}
                   isSimulating={isSimulating}
+                  onToggleSimulate={handleToggleSimulate}
                   onSelectBlock={setSelectedBlockId}
                   onBlockAction={handleBlockAction}
                   onTriggerSwitch={handleTriggerSwitch}
@@ -1317,6 +1348,8 @@ export function App() {
                 setCompareModalInitialDeviceId(devId || null)
                 setIsProjectCompareModalOpen(true)
               }}
+              isOpen={isMobileRightOpen}
+              onClose={() => setIsMobileRightOpen(false)}
             />
           </div>
         </ErrorBoundary>
@@ -1333,6 +1366,15 @@ export function App() {
           project={project}
         />
       </ErrorBoundary>
+
+      {/* 3b. Mobile Bottom Navigation Bar (< md) */}
+      <MobileBottomNav
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={(ws) => {
+          setActiveWorkspace(ws)
+          if (ws === 'canvas') setDiagnosticsInitialAddress(null)
+        }}
+      />
 
       <React.Suspense fallback={null}>
         {/* 4. Hardware Catalog & Device Management Modal */}

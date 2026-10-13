@@ -1,6 +1,6 @@
 [package]
 name = "konfix-desktop"
-version = "2026.10.5"
+version = "2026.10.6"
 description = "KoNfiX — Der visuelle KNX-Konfigurator (Desktop Application)"
 authors = ["Torsten Sdun", "KoNfiX Team"]
 license = "AGPL-3.0-or-later"

@@ -19,6 +19,7 @@ import {
   Clock,
   Sliders,
   Trash2,
+  X,
 } from 'lucide-react'
 import { Project, Room, Floor, FunctionBlockType } from '../../types/knx'
 import { useTranslation } from '../../i18n/I18nContext'
@@ -33,6 +34,8 @@ interface LeftSidebarProps {
   onSelectDevice?: (deviceId: string) => void
   onDeleteDevice?: (deviceId: string) => void
   onPlaceDevice?: (deviceId: string) => void
+  isOpen?: boolean
+  onClose?: () => void
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -45,6 +48,8 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   onSelectDevice,
   onDeleteDevice,
   onPlaceDevice,
+  isOpen = false,
+  onClose,
 }) => {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'rooms' | 'blocks' | 'devices'>('rooms')
@@ -71,9 +76,45 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   }
 
   return (
-    <aside className="w-72 border-r border-slate-800 bg-slate-900/95 flex flex-col select-none shrink-0 z-20">
-      {/* Sidebar Tabs */}
-      <div className="grid grid-cols-3 border-b border-slate-800 text-xs font-medium text-slate-400 bg-slate-950/40">
+    <>
+      {/* Mobile / Tablet Backdrop when opened as drawer */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        className={`bg-slate-900/95 flex flex-col select-none z-40 transition-transform ${
+          isOpen
+            ? 'fixed inset-y-0 left-0 w-80 max-w-[85vw] shadow-2xl border-r border-slate-800 flex translate-x-0'
+            : 'hidden lg:flex lg:w-72 lg:border-r lg:border-slate-800 lg:shrink-0'
+        }`}
+      >
+        {/* Mobile Header with Close Button */}
+        {onClose && (
+          <div className="lg:hidden h-10 border-b border-slate-800 px-3 flex items-center justify-between bg-slate-950/80 shrink-0">
+            <span className="text-xs font-semibold text-slate-300">
+              {activeTab === 'rooms'
+                ? t('rooms.title')
+                : activeTab === 'blocks'
+                ? t('sidebar.blocks')
+                : t('sidebar.devices')}
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Schließen"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Sidebar Tabs */}
+        <div className="grid grid-cols-3 border-b border-slate-800 text-xs font-medium text-slate-400 bg-slate-950/40">
         <button
           onClick={() => setActiveTab('rooms')}
           className={`py-2.5 flex items-center justify-center gap-1.5 transition-colors border-b-2 ${
@@ -816,5 +857,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         )}
       </div>
     </aside>
+    </>
   )
 }

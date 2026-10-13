@@ -42,7 +42,7 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
   const [migrate, setMigrate] = useState(true)
   const [signingKey, setSigningKey] = useState('')
   const [showSigningKey, setShowSigningKey] = useState(false)
-  const [onlineCatalogUrl, setOnlineCatalogUrl] = useState('https://konfix.sduni.de')
+  const [onlineCatalogUrl, setOnlineCatalogUrl] = useState('https://db.konfix.sduni.de')
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +57,7 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
       setSettings(s)
       setDataDir(s.data_dir)
       setSigningKey(s.signing_key || '')
-      setOnlineCatalogUrl(s.online_catalog_url || 'https://konfix.sduni.de')
+      setOnlineCatalogUrl(s.online_catalog_url || 'https://db.konfix.sduni.de')
     } catch (err: any) {
       setError(err?.message || 'Fehler beim Laden der Speicher-Einstellungen')
     } finally {
@@ -91,12 +91,12 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
         trimmed,
         migrate,
         keyToSend,
-        onlineCatalogUrl.trim() || 'https://konfix.sduni.de'
+        onlineCatalogUrl.trim() || 'https://db.konfix.sduni.de'
       )
       setSettings(updated)
       setDataDir(updated.data_dir)
       setSigningKey(updated.signing_key || '')
-      setOnlineCatalogUrl(updated.online_catalog_url || 'https://konfix.sduni.de')
+      setOnlineCatalogUrl(updated.online_catalog_url || 'https://db.konfix.sduni.de')
       setSuccessMsg('Einstellungen erfolgreich aktualisiert!')
       if (onSettingsUpdated) {
         onSettingsUpdated(updated)
@@ -301,10 +301,10 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
                       <Globe className="w-4 h-4 text-sky-400" />
                       <span>Online-Gerätedatenbank (Katalog-URL)</span>
                     </label>
-                    {onlineCatalogUrl !== 'https://konfix.sduni.de' && (
+                    {onlineCatalogUrl !== 'https://db.konfix.sduni.de' && (
                       <button
                         type="button"
-                        onClick={() => setOnlineCatalogUrl('https://konfix.sduni.de')}
+                        onClick={() => setOnlineCatalogUrl('https://db.konfix.sduni.de')}
                         className="text-[10px] text-sky-400 hover:text-sky-300 transition-colors"
                       >
                         Auf Standard zurücksetzen
@@ -316,12 +316,12 @@ export const StorageSettingsModal: React.FC<StorageSettingsModalProps> = ({
                       type="text"
                       value={onlineCatalogUrl}
                       onChange={(e) => setOnlineCatalogUrl(e.target.value)}
-                      placeholder="https://konfix.sduni.de"
+                      placeholder="https://db.konfix.sduni.de"
                       className="w-full px-3.5 py-2.5 bg-slate-950/80 border border-slate-700 rounded-xl text-xs font-mono text-slate-100 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 leading-relaxed">
-                    REST-API Server für Online-Gerätesuche und YAML-Downloads im Gerätekatalog (Standard: <code>https://konfix.sduni.de</code>).
+                    REST-API Server für Online-Gerätesuche und YAML-Downloads im Gerätekatalog (Standard: <code>https://db.konfix.sduni.de</code>).
                   </p>
                 </div>
 
