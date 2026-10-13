@@ -1,6 +1,15 @@
 {
-  "dependencies": {},
+  "name": "konfix",
+  "private": true,
+  "scripts": {
+    "build": "bun run --cwd apps/web build",
+    "dev": "bun run --cwd apps/web dev",
+    "tauri": "tauri",
+    "desktop:build": "tauri build",
+    "desktop:dev": "tauri dev"
+  },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.2",
     "puppeteer-core": "^25.13.0"
   }
 }
