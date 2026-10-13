@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "KoNfiX",
-  "version": "2026.10.6",
+  "version": "2026.10.7",
   "identifier": "org.knx.konfix",
   "build": {
     "frontendDist": "../apps/web/dist",

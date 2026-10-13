@@ -1,6 +1,5 @@
-import React, { useState, memo } from 'react'
+import React, { useState, useRef, useCallback, useEffect, memo } from 'react'
 import {
-  BaseEdge,
   EdgeLabelRenderer,
   EdgeProps,
   getSmoothStepPath,
@@ -16,8 +15,9 @@ export interface KnxWireEdgeData {
   [key: string]: unknown
 }
 
-const getWireColor = (dpt?: string, isHighlighted?: boolean) => {
-  if (isHighlighted) return '#38bdf8'
+const getWireColor = (dpt?: string, isHovered?: boolean, isSelected?: boolean) => {
+  if (isSelected) return '#fbbf24' // Markiert / Ausgewählt: Warmgold / Bernstein
+  if (isHovered) return '#ffffff'  // Hover: Reines Neon-Weiß mit maximalem Kontrast
   if (!dpt) return '#0284c7'
   if (dpt.startsWith('1.')) return '#10b981' // Bool / Schalten: Smaragdgrün
   if (dpt.startsWith('3.') || dpt.startsWith('5.')) return '#f59e0b' // Dimmen / Position: Bernstein
@@ -42,6 +42,33 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
 }) => {
   const { t } = useTranslation()
   const [isHovered, setIsHovered] = useState(false)
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleMouseEnter = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+    setIsHovered(true)
+  }, [])
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false)
+      hoverTimeoutRef.current = null
+    }, 120) // 120ms Grace-Period für nahtlosen Übergang zwischen Linie und Badge
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Professionelles orthogonales SmoothStep-Routing mit abgerundeten Ecken
   const [edgePath, labelX, labelY] = getSmoothStepPath({
@@ -62,98 +89,132 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
   const onDelete = edgeData?.onDelete
 
   const isHighlighted = selected || isHovered
-  const strokeColor = getWireColor(dpt, isHighlighted)
+  const strokeColor = getWireColor(dpt, isHovered, selected)
 
   return (
     <>
-      {/* Unsichtbarer breiterer Klick-/Hover-Pfad (24px) für einfaches Anklicken */}
-      <path
-        d={edgePath}
-        fill="none"
-        stroke="transparent"
-        strokeWidth={24}
-        className="cursor-pointer"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      />
-
-      {/* Haupt-Leitungspfad */}
-      <BaseEdge
-        path={edgePath}
-        markerEnd={markerEnd}
-        style={{
-          ...style,
-          stroke: isHighlighted ? '#38bdf8' : (style.stroke || strokeColor),
-          strokeWidth: isHighlighted ? 3 : 2,
-          strokeDasharray: animated ? '6 6' : undefined,
-          filter: isHighlighted ? 'drop-shadow(0 0 5px rgba(56, 189, 248, 0.8))' : undefined,
-          transition: 'stroke 0.15s ease, stroke-width 0.15s ease',
-        }}
-      />
-
-      {/* n8n-Style Signal-Puls: Glühender Wanderimpuls bei aktiver Telegramm-Übertragung */}
-      {animated && (
+      {/* Gruppierte SVG-Elemente mit gemeinsamem Hover-Management */}
+      <g
+        className="knx-wire-group cursor-pointer"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {/* Unsichtbarer breiterer Klick-/Hover-Pfad (24px) für komfortables Treffen */}
         <path
           d={edgePath}
           fill="none"
-          stroke="#7dd3fc"
-          strokeWidth={3}
-          strokeDasharray="8 24"
+          stroke="transparent"
+          strokeWidth={24}
           strokeLinecap="round"
-          className="pointer-events-none animate-pulse"
+          strokeLinejoin="round"
+          className="cursor-pointer"
         />
-      )}
 
-      {/* Kompaktes, performantes GA-Badge in Leitungsmitte */}
+        {/* Haupt-Leitungspfad: Reine Style-Transition (Geometrie 'd' aktualisiert latenzfrei mit 0ms) */}
+        <path
+          d={edgePath}
+          fill="none"
+          markerEnd={markerEnd}
+          className="react-flow__edge-path pointer-events-none"
+          style={{
+            ...style,
+            stroke: strokeColor,
+            strokeWidth: selected ? 3.5 : isHovered ? 3 : 2,
+            strokeDasharray: animated ? '6 6' : undefined,
+            filter: selected
+              ? 'drop-shadow(0 0 6px rgba(251, 191, 36, 0.9))'
+              : isHovered
+              ? 'drop-shadow(0 0 7px rgba(255, 255, 255, 0.95))'
+              : undefined,
+            transition: 'stroke 0.15s ease, stroke-width 0.15s ease, filter 0.15s ease',
+          }}
+        />
+
+        {/* n8n-Style Signal-Puls: Glühender Wanderimpuls bei aktiver Telegramm-Übertragung */}
+        {animated && (
+          <path
+            d={edgePath}
+            fill="none"
+            stroke={selected ? '#fde68a' : isHovered ? '#ffffff' : '#38bdf8'}
+            strokeWidth={3}
+            strokeDasharray="8 24"
+            strokeLinecap="round"
+            className="pointer-events-none animate-pulse"
+          />
+        )}
+      </g>
+
+      {/* Kompaktes GA-Badge: Äußeres Div folgt Position mit 0ms Latenz, Inneres Div zoomt weich */}
       {gaAddress && (
         <EdgeLabelRenderer>
           <div
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate3d(${labelX}px,${labelY}px, 0)`,
+              transformOrigin: 'center center',
               pointerEvents: 'all',
-              willChange: 'transform',
             }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            className={`nodrag nopan flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono border transition-all select-none ${
-              isHighlighted
-                ? 'bg-slate-900 text-sky-200 border-sky-400 shadow-md shadow-sky-500/30 ring-1 ring-sky-400/50 scale-105 z-30'
-                : 'bg-slate-900/95 text-slate-300 border-slate-700/80 hover:border-slate-500 shadow-sm shadow-black/40 z-10'
-            }`}
-            title={`KNX GA ${gaAddress}${gaName ? ` (${gaName})` : ''} - [Del]`}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            className="nodrag nopan"
           >
-            <span className="font-bold text-sky-400 bg-sky-950/80 px-1 py-0.2 rounded border border-sky-800/40">
-              {gaAddress}
-            </span>
+            <div
+              style={{
+                transform: isHighlighted ? 'scale(1.22)' : 'scale(1)',
+                transformOrigin: 'center center',
+                transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, border-color 0.15s ease',
+              }}
+              className={`relative flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-mono border select-none ${
+                selected
+                  ? 'bg-slate-900 text-amber-200 border-amber-400 shadow-md shadow-amber-500/30 ring-2 ring-amber-400/50 z-30'
+                  : isHovered
+                  ? 'bg-slate-900 text-white border-white shadow-md shadow-white/40 ring-2 ring-white/60 z-20'
+                  : 'bg-slate-900/95 text-slate-300 border-slate-700/80 shadow-sm shadow-black/40 z-10'
+              }`}
+              title={`KNX GA ${gaAddress}${gaName ? ` (${gaName})` : ''}${dpt ? ` [${dpt}]` : ''} - [Del]`}
+            >
+              {/* Schwebendes Namens-Label oberhalb, ohne den Bezeichner zu verschieben */}
+              {isHighlighted && gaName && (
+                <div
+                  className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-1.5 py-0.2 rounded bg-slate-900/95 border text-[9px] font-sans shadow-md shadow-black/60 pointer-events-none select-none ${
+                    selected
+                      ? 'border-amber-700/60 text-amber-200'
+                      : 'border-slate-500 text-white shadow-white/20'
+                  }`}
+                >
+                  {gaName}
+                </div>
+              )}
 
-            {/* Zusätzliche Details erscheinen dezent bei Hover/Auswahl */}
-            {isHighlighted && gaName && (
-              <span className="text-slate-300 max-w-[85px] truncate font-sans text-[10px]">
-                {gaName}
-              </span>
-            )}
-
-            {isHighlighted && dpt && (
-              <span className="text-slate-500 text-[9px] hidden sm:inline">
-                {dpt}
-              </span>
-            )}
-
-            {/* Schneller Lösch-Button nur bei Hover oder Selektion */}
-            {isHighlighted && onDelete && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDelete(id)
-                }}
-                title={t('nodes.wire.deleteTooltip')}
-                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-rose-500 transition-colors ml-0.5 shrink-0"
+              {/* Ortsfester GA-Bezeichner */}
+              <span
+                className={`font-bold px-1 py-0.2 rounded border transition-colors ${
+                  selected
+                    ? 'text-amber-300 bg-amber-950/80 border-amber-700/50'
+                    : isHovered
+                    ? 'text-white bg-slate-800 border-white/60'
+                    : 'text-sky-400 bg-sky-950/80 border-sky-800/40'
+                }`}
               >
-                <X className="w-2.5 h-2.5" />
-              </button>
-            )}
+                {gaAddress}
+              </span>
+
+              {/* Schneller Lösch-Button als Corner-Pin oben rechts – belässt Bezeichner exakt im Zentrum */}
+              {isHighlighted && onDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    e.preventDefault()
+                    onDelete(id)
+                  }}
+                  title={t('nodes.wire.deleteTooltip')}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-950 transition-transform active:scale-90 cursor-pointer"
+                >
+                  <X className="w-2.5 h-2.5 stroke-[2.5]" />
+                </button>
+              )}
+            </div>
           </div>
         </EdgeLabelRenderer>
       )}
@@ -162,3 +223,4 @@ export const KnxWireEdgeComponent: React.FC<EdgeProps> = ({
 }
 
 export const KnxWireEdge = memo(KnxWireEdgeComponent)
+

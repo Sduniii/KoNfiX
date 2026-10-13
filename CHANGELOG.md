@@ -5,6 +5,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 
 ---
 
+## [2026.10.7] - 2026-10-13 (Language Dropdown Z-Index Fix, Barycentric Wire Auto-Layout & Edge UX Polish)
+
+### Header & UI Layering Fixes (`Header.tsx`, `RightSidebar.tsx`, `LeftSidebar.tsx`)
+- **Language & Project Dropdown Z-Index Fix:** Resolved a stacking context inversion where the language switcher (`[🇩🇪 DE ^]`) and project dropdowns disappeared behind the right inspector (`RightSidebar`) and left sidebar.
+- **Header Elevation (`z-40`):** Elevated the top bar `<header>` to `z-40`, ensuring dropdowns reliably float above all canvases, toolbars, and desktop sidebars while remaining subordinate to full-screen modals (`z-50`).
+- **Dismiss Backdrop Containing Block Fix:** Removed `backdrop-blur` from `<header>`. Per CSS specification, `backdrop-filter` creates a containing block for `fixed` descendants, which previously restricted the transparent click-outside backdrop to the 56px header height. The backdrop now spans the entire viewport.
+- **Conditional Drawer Layering:** Scoped `z-40` on `RightSidebar` and `LeftSidebar` exclusively to mobile drawer mode (`isOpen: true`), leaving desktop sidebars in standard flex document flow (`z-auto`).
+- **Typo Fix:** Corrected duplicate Tailwind breakpoint `xl:xl:w-84` to `xl:w-84` in `RightSidebar.tsx`.
+
+### Flow Canvas Barycentric Auto-Layout (`FlowCanvas.tsx`)
+- **Crossing-Free Wire Routing:** Implemented barycentric vertical node placement in the auto-layout engine. Upstream and downstream nodes align dynamically with connected terminal pins, generating clean, parallel, horizontal wire routes without overlapping crossings.
+- **Deterministic Column Hierarchy:** Maintained primary column anchor for local sensors and sorted unplaced nodes predictably by individual address and name.
+
+### Knx Wire Edge Ergonomics (`KnxWireEdge.tsx`)
+- **Zero-Latency Badge Tracking:** Separated instantaneous geometry positioning (`0ms` transform) from smooth hover transitions, eliminating badge drag lag during canvas pans and node moves.
+- **Center-Stable Corner-Pin Delete Button:** Converted the wire deletion button into a corner-pin badge (`top: -6px; right: -6px`), preserving the GA text's exact geometrical center during hover and selection.
+- **24px Interactive Hit Area:** Added an invisible 24px wide stroke geometry (`knx-wire-group`) for effortless mouse clicks and hover detection on thin wires.
+
 ## [2026.10.6] - 2026-10-13 (Mobile Responsiveness, Wire Animation Toggle, db.konfix.sduni.de Catalog & Header Settings Shortcut)
 
 ### Mobile Responsiveness & Ergonomics (`MobileBottomNav.tsx`, `LeftSidebar.tsx`, `RightSidebar.tsx`, `Header.tsx`, `index.html`)

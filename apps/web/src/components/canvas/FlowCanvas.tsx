@@ -938,10 +938,18 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
     [reactFlowInstance, project.devices, onPlaceChannel, onPlaceDevice, onAddBlockAt]
   )
 
-  // Auto-Layout: Intelligenter hierarchischer Signalfluss mit topologischer Zeilenausrichtung (Swimlanes)
-  // Strenges Gesetz: Für jede Verbindung liegt der OUT-Pin links neben dem IN-Pin der Ziel-Node!
-  // Signale fließen ausnahmslos von Links nach Rechts (Eingänge ➔ Logik/Aktor ➔ Ausgänge/Portale).
-  // Dynamische Spaltenbreiten & Höhen verhindern jegliche Überlappungen.
+  // Auto-Layout: Intelligente hierarchische Signalfluss-Architektur mit topologischer Zeilenausrichtung
+  // 1. Spaltenaufteilung (X-Achse):
+  //    - Spalte 0 (Links): Bediengeräte / Taster / Sensoren / Portale (IN)
+  //    - Spalte 1..k (Mitte): Verknüpfungsblöcke / Logik (Licht, Jalousie, Klima, Astro, etc.)
+  //    - Spalte k+1 (Rechts): Aktoren / Ausgänge / Portale (OUT)
+  // 2. Sortierung (Y-Achse):
+  //    - Funktionale Gruppierung: Bediengeräte/Taster zuerst, dann Aktoren
+  //    - Innerhalb der Kategorien numerisch nach physikalischer Adresse (1.1.1, 1.1.2, ...) aufsteigend
+  // 3. Zeilenausrichtung:
+  //    - Zusammenhängende Schaltungsketten und semantisch assoziierte Paare (über Name/GA)
+  //      liegen auf gleicher Zeilenhöhe für horizontale Leitungen
+  //    - Verbleibende freie Knoten ordnen sich kompakt in ihre jeweilige Funktionsspalte ein
   const handleAutoLayout = useCallback(() => {
     const updatedPositions: { id: string; x: number; y: number }[] = []
     const placedIds = new Set<string>()
@@ -966,13 +974,13 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
         const isCollapsed = (node.data as any)?.isCollapsed
         return isCollapsed ? 320 : 420
       }
-      if (node.type === 'roomPortal') return 280
+      if (node.type === 'roomPortal') return 260
       if (node.type === 'channelTerminal') return 260
       if (node.type === 'sceneBlock' || node.type === 'astroBlock') return 340
       return 320
     }
 
-    // Exakte / sichere Höhenberechnung ohne künstliche Begrenzung
+    // Exakte / sichere Höhenberechnung
     const getNodeHeight = (node: Node): number => {
       if (node.measured?.height && node.measured.height > 40) {
         return Math.ceil(node.measured.height)
@@ -981,7 +989,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
         return Math.ceil((node as any).height)
       }
 
-      if (node.type === 'roomPortal') return 125
+      if (node.type === 'roomPortal') return 110
       if (node.type === 'channelTerminal') return 145
       if (node.type === 'knxDevice') {
         const dev = (node.data as any)?.device as KnxDevice | undefined
@@ -994,7 +1002,7 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
           : dev?.communication_objects?.filter((k) => (k.group_addresses?.length || 0) > 0).length || 0
 
         if (pinCount === 0) return 180
-        return 120 + pinCount * 56
+        return 120 + pinCount * 42
       }
 
       if (node.type === 'astroBlock') return 440
@@ -1010,213 +1018,333 @@ const FlowCanvasInternal: React.FC<FlowCanvasProps> = ({
       return 300
     }
 
-    // Nur Kanten betrachten, bei denen Quelle und Ziel aktuell auf dem Canvas vorhanden sind
-    const validEdges = edges.filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target))
+    // Präziser Handle Y-Offset bezogen auf die Oberkante des Knotens
+    const getHandleRelativeY = (node: Node, handleId?: string | null, isSource?: boolean): number => {
+      const h = getNodeHeight(node)
+      if (!handleId) return h / 2
 
-    // Klassifizierung für Rückmelde-Erkennung (z.B. Aktor-Status zurück auf Taster-LED)
-    const isInputDevice = (node: Node): boolean => {
-      if (node.type === 'roomPortal' && (node.data as any)?.direction === 'in') return true
+      if (node.type === 'knxDevice') {
+        const dev = (node.data as any)?.device as KnxDevice | undefined
+        const isCollapsed = (node.data as any)?.isCollapsed
+        if (isCollapsed) return 36
+
+        if (dev && handleId.startsWith('ko-')) {
+          const koNum = parseInt(handleId.replace('ko-', ''), 10)
+          const kos = dev.communication_objects || []
+          const visibleNums = dev.visible_ko_numbers && dev.visible_ko_numbers.length > 0
+            ? dev.visible_ko_numbers
+            : kos.filter((k) => (k.group_addresses?.length || 0) > 0 || (k.group_address_ids?.length || 0) > 0).map((k) => k.number)
+
+          const visibleKos = kos.filter((k) => visibleNums.includes(k.number))
+          const inputKos = visibleKos.filter((k) => k.flags?.write || (!k.flags?.transmit && !k.flags?.write))
+          const outputKos = visibleKos.filter((k) => k.flags?.transmit)
+
+          const HEADER_H = 110
+          const ROW_H = 38
+          const SECTION_TITLE_H = 28
+
+          // Input Pin Suche (linke Seite)
+          if (!isSource || inputKos.some((k) => k.number === koNum)) {
+            const idx = inputKos.findIndex((k) => k.number === koNum)
+            if (idx !== -1) {
+              return HEADER_H + SECTION_TITLE_H + idx * ROW_H + ROW_H / 2
+            }
+          }
+
+          // Output Pin Suche (rechte Seite)
+          const inputSectionH = inputKos.length > 0 ? (SECTION_TITLE_H + inputKos.length * ROW_H + 8) : 0
+          const outIdx = outputKos.findIndex((k) => k.number === koNum)
+          if (outIdx !== -1) {
+            return HEADER_H + inputSectionH + SECTION_TITLE_H + outIdx * ROW_H + ROW_H / 2
+          }
+        }
+      }
+
+      return h / 2
+    }
+
+    // Numerischer Parser für physikalische KNX-Adressen (z.B. 1.1.1, 1.1.10)
+    const parseIndividualAddress = (addr?: string): number => {
+      if (!addr) return 999999
+      const parts = addr.split('.').map((p) => parseInt(p, 10))
+      if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+        return (parts[0] << 12) | (parts[1] << 8) | parts[2]
+      }
+      return 999999
+    }
+
+    // 5-Stufen Signalfluss-Klassifizierung:
+    // 0: external_input  (AUS RAUM)
+    // 1: local_sensor    (Taster, Sensor, Binäreingang, Präsenz im Raum)
+    // 2: logic           (LightBlock, BlindBlock, LogicBlock, SceneBlock...)
+    // 3: local_actuator  (Schaltaktor, Dimmaktor, Jalousieaktor lokal im Raum)
+    // 4: external_output (NACH RAUM)
+    type LayoutTier = 'external_input' | 'local_sensor' | 'logic' | 'local_actuator' | 'external_output'
+
+    const getNodeTier = (node: Node): LayoutTier => {
+      if (node.type === 'roomPortal') {
+        const dir = (node.data as any)?.direction
+        return dir === 'out' ? 'external_output' : 'external_input'
+      }
       if (node.type === 'channelTerminal') {
-        const type = (node.data as any)?.channelType
-        return type === 'PushButtonInput' || type === 'PresenceSensorInput'
+        const t = (node.data as any)?.channelType
+        if (t === 'PushButtonInput' || t === 'PresenceSensorInput') return 'local_sensor'
+        return 'local_actuator'
       }
       if (node.type === 'knxDevice') {
         const dev = (node.data as any)?.device as KnxDevice | undefined
         const name = (dev?.name || '').toLowerCase()
         const model = (dev?.model || '').toLowerCase()
-        return (
+        const isSens =
           name.includes('taster') ||
           model.includes('taster') ||
           name.includes('sensor') ||
           name.includes('wetter') ||
           name.includes('präsenz') ||
-          name.includes('bewegung')
-        )
+          name.includes('bewegung') ||
+          name.includes('binär') ||
+          name.includes('interface')
+        return isSens ? 'local_sensor' : 'local_actuator'
       }
-      return false
+      return 'logic'
     }
 
-    const isActuator = (node: Node): boolean => {
-      if (node.type === 'roomPortal' && (node.data as any)?.direction === 'out') return false
-      if (node.type === 'channelTerminal') {
-        const type = (node.data as any)?.channelType
-        return type === 'BlindOutput' || type === 'SwitchOutput' || type === 'DimmingOutput'
-      }
-      if (node.type === 'knxDevice') {
-        const dev = (node.data as any)?.device as KnxDevice | undefined
-        const name = (dev?.name || '').toLowerCase()
-        const model = (dev?.model || '').toLowerCase()
-        return (
-          name.includes('aktor') ||
-          model.includes('aktor') ||
-          name.includes('dimm') ||
-          name.includes('schalt') ||
-          name.includes('rolladen') ||
-          name.includes('jalousie')
-        )
-      }
-      return false
+    const getNodeIa = (node: Node): number => {
+      const dev = (node.data as any)?.device as KnxDevice | undefined
+      if (dev?.individual_address) return parseIndividualAddress(dev.individual_address)
+      const chAddr = (node.data as any)?.deviceAddress
+      if (chAddr) return parseIndividualAddress(chAddr)
+      const tgtAddr = (node.data as any)?.targetIndividualAddress
+      if (tgtAddr) return parseIndividualAddress(tgtAddr)
+      return 999999
     }
 
-    // Vorwärts-Kanten vs. Rückmelde-Kanten trennen (Rückmeldekanten ignorieren wir für die X-Layer-Berechnung)
+    const getNodeName = (node: Node): string => {
+      return (
+        (node.data as any)?.block?.name ||
+        (node.data as any)?.device?.name ||
+        (node.data as any)?.channelName ||
+        (node.data as any)?.targetDeviceName ||
+        (node.data as any)?.gaAddress ||
+        node.id
+      )
+    }
+
+    // Gültige Kanten auf dem Canvas
+    const validEdges = edges.filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target))
+
+    // Vorwärts-Kanten vs. Rückmelde-Kanten
     const forwardEdges: Edge[] = []
     validEdges.forEach((e) => {
       const srcNode = nodeMap.get(e.source)
       const tgtNode = nodeMap.get(e.target)
-      if (srcNode && tgtNode && isActuator(srcNode) && isInputDevice(tgtNode)) {
-        // Rückmelde-Linie: z.B. Aktor-Status KO -> Taster LED KO
+      if (
+        srcNode &&
+        tgtNode &&
+        (getNodeTier(srcNode) === 'local_actuator' || getNodeTier(srcNode) === 'external_output') &&
+        (getNodeTier(tgtNode) === 'local_sensor' || getNodeTier(tgtNode) === 'external_input')
+      ) {
+        // Rückmelde-Linie Aktor -> Taster-Status LED ignorieren
       } else {
         forwardEdges.push(e)
       }
     })
 
-    // Topologische Layer-Berechnung via Longest-Path auf dem gerichteten azyklischen Vorwärtsgraphen
-    const layers = new Map<string, number>()
-    nodes.forEach((n) => layers.set(n.id, 0))
-
-    let changed = true
-    let it = 0
-    while (changed && it < 30) {
-      changed = false
-      it++
-      forwardEdges.forEach((e) => {
-        const sL = layers.get(e.source) || 0
-        const tL = layers.get(e.target) || 0
-        if (sL + 1 > tL) {
-          layers.set(e.target, sL + 1)
-          changed = true
-        }
-      })
-    }
-
-    // Zusammenhängende Komponenten (Weakly Connected Components) für Zeilen/Swimlanes bilden
-    const adj = new Map<string, string[]>()
-    nodes.forEach((n) => adj.set(n.id, []))
-    validEdges.forEach((e) => {
-      adj.get(e.source)!.push(e.target)
-      adj.get(e.target)!.push(e.source)
+    // Topologische Tiefenberechnung innerhalb der Logik-Ebene
+    const logicDepths = new Map<string, number>()
+    nodes.forEach((n) => {
+      if (getNodeTier(n) === 'logic') {
+        logicDepths.set(n.id, 0)
+      }
     })
 
-    const visited = new Set<string>()
-    const components: Node[][] = []
-
-    nodes.forEach((n) => {
-      if (visited.has(n.id)) return
-      if ((adj.get(n.id) || []).length === 0) return // Unverbunden
-
-      const comp: Node[] = []
-      const queue: string[] = [n.id]
-      visited.add(n.id)
-      while (queue.length > 0) {
-        const curr = queue.shift()!
-        const nodeObj = nodeMap.get(curr)
-        if (nodeObj) comp.push(nodeObj)
-        for (const next of adj.get(curr) || []) {
-          if (!visited.has(next)) {
-            visited.add(next)
-            queue.push(next)
+    let logicChanged = true
+    let logicIt = 0
+    while (logicChanged && logicIt < 20) {
+      logicChanged = false
+      logicIt++
+      forwardEdges.forEach((e) => {
+        const srcNode = nodeMap.get(e.source)
+        const tgtNode = nodeMap.get(e.target)
+        if (
+          srcNode &&
+          tgtNode &&
+          getNodeTier(srcNode) === 'logic' &&
+          getNodeTier(tgtNode) === 'logic'
+        ) {
+          const sD = logicDepths.get(srcNode.id) || 0
+          const tD = logicDepths.get(tgtNode.id) || 0
+          if (sD + 1 > tD) {
+            logicDepths.set(tgtNode.id, sD + 1)
+            logicChanged = true
           }
         }
-      }
-      components.push(comp)
-    })
-
-    // Layout-Platzierung mit dynamischen Abständen
-    const VERTICAL_GAP = 28
-    const HORIZONTAL_GAP = 100
-    const START_X = 80
-    let currentY = 80
-
-    // 1. Verbundene Komponenten als horizontale Swimlanes platzieren
-    components.forEach((compNodes) => {
-      const minLayer = Math.min(...compNodes.map((n) => layers.get(n.id) || 0))
-
-      // Nach relativer Ebene (Spalte) gruppieren
-      const layerGroups = new Map<number, Node[]>()
-      compNodes.forEach((n) => {
-        const relL = (layers.get(n.id) || 0) - minLayer
-        if (!layerGroups.has(relL)) layerGroups.set(relL, [])
-        layerGroups.get(relL)!.push(n)
       })
-
-      // Innerhalb jeder Spalte deterministisch sortieren (nach Name) für gerade, parallele Leitungen
-      layerGroups.forEach((group) => {
-        group.sort((a, b) => {
-          const nameA =
-            (a.data as any)?.block?.name ||
-            (a.data as any)?.device?.name ||
-            (a.data as any)?.channelName ||
-            a.id
-          const nameB =
-            (b.data as any)?.block?.name ||
-            (b.data as any)?.device?.name ||
-            (b.data as any)?.channelName ||
-            b.id
-          return nameA.localeCompare(nameB)
-        })
-      })
-
-      // Maximale relative Spaltenebene ermitteln
-      const maxRelL = Math.max(...Array.from(layerGroups.keys()))
-
-      // Dynamische X-Position je Spalte anhand der tatsächlichen Breite der Nodes in der vorherigen Spalte
-      const colXMap = new Map<number, number>()
-      let curColX = START_X
-      for (let l = 0; l <= maxRelL; l++) {
-        colXMap.set(l, curColX)
-        const group = layerGroups.get(l) || []
-        const colWidth = group.length > 0 ? Math.max(...group.map(getNodeWidth), 280) : 280
-        curColX += colWidth + HORIZONTAL_GAP
-      }
-
-      // Maximale Höhe dieser Kette ermitteln
-      let maxChainHeight = 0
-      layerGroups.forEach((group) => {
-        const h = group.reduce((acc, n) => acc + getNodeHeight(n), 0) + (group.length - 1) * VERTICAL_GAP
-        if (h > maxChainHeight) maxChainHeight = h
-      })
-
-      const chainHeight = Math.max(maxChainHeight, 120)
-
-      // Nodes der Kette in ihren dynamisch berechneten Spalten und vertikal zentriert platzieren
-      layerGroups.forEach((group, relL) => {
-        const x = colXMap.get(relL) ?? (START_X + relL * 480)
-        const layerH = group.reduce((acc, n) => acc + getNodeHeight(n), 0) + (group.length - 1) * VERTICAL_GAP
-        let y = currentY + (chainHeight - layerH) / 2
-
-        group.forEach((n) => {
-          updatedPositions.push({ id: n.id, x, y: Math.round(y) })
-          placedIds.add(n.id)
-          y += getNodeHeight(n) + VERTICAL_GAP
-        })
-      })
-
-      currentY += chainHeight + 80 // Großzügiger Abstand zur nächsten Zeile
-    })
-
-    // 2. Unverbundene Elemente in einer geordneten Ablage-Zone darunter platzieren
-    const unconnectedNodes = nodes.filter((n) => !placedIds.has(n.id))
-    if (unconnectedNodes.length > 0) {
-      if (placedIds.size > 0) {
-        currentY += 60 // Klarer Abstand von den Schaltungsketten
-      }
-      const COLS = 3
-      const maxUnconnWidth = Math.max(...unconnectedNodes.map(getNodeWidth), 340)
-      const UNCONN_COL_STEP = maxUnconnWidth + 60
-
-      for (let i = 0; i < unconnectedNodes.length; i += COLS) {
-        const slice = unconnectedNodes.slice(i, i + COLS)
-        const rowHeight = Math.max(...slice.map(getNodeHeight), 120)
-
-        slice.forEach((node, colIdx) => {
-          const x = START_X + colIdx * UNCONN_COL_STEP
-          updatedPositions.push({ id: node.id, x, y: Math.round(currentY) })
-          placedIds.add(node.id)
-        })
-
-        currentY += rowHeight + 40
-      }
     }
+
+    const maxLogicDepth = Math.max(0, ...Array.from(logicDepths.values()))
+
+    // Roh-Spaltenindex (0: ExtIn, 1: Sensor, 2..2+d: Logic, 2+d+1: Actuator, 2+d+2: ExtOut)
+    const getNodeRawColumn = (node: Node): number => {
+      const tier = getNodeTier(node)
+      if (tier === 'external_input') return 0
+      if (tier === 'local_sensor') return 1
+      if (tier === 'logic') return 2 + (logicDepths.get(node.id) || 0)
+      if (tier === 'local_actuator') return 2 + maxLogicDepth + 1
+      return 2 + maxLogicDepth + 2
+    }
+
+    // Kompaktierung: Nur tatsächlich vorkommende Spalten erhalten X-Koordinaten
+    const populatedRawCols = Array.from(new Set(nodes.map(getNodeRawColumn))).sort((a, b) => a - b)
+    const rawToCompactCol = new Map<number, number>()
+    populatedRawCols.forEach((rawCol, idx) => rawToCompactCol.set(rawCol, idx))
+
+    const getNodeColumn = (node: Node): number => {
+      return rawToCompactCol.get(getNodeRawColumn(node)) ?? 0
+    }
+
+    const totalCompactCols = populatedRawCols.length
+    const START_X = 60
+    const HORIZONTAL_GAP = 120
+    const VERTICAL_GAP = 28
+
+    const colWidths = new Array<number>(totalCompactCols).fill(280)
+    nodes.forEach((n) => {
+      const col = getNodeColumn(n)
+      const w = getNodeWidth(n)
+      if (w > colWidths[col]) colWidths[col] = w
+    })
+
+    const colXMap = new Map<number, number>()
+    let curX = START_X
+    for (let c = 0; c < totalCompactCols; c++) {
+      colXMap.set(c, curX)
+      curX += colWidths[c] + HORIZONTAL_GAP
+    }
+
+    // Nodes nach kompakter Spalte gruppieren
+    const nodesByCol = new Map<number, Node[]>()
+    for (let c = 0; c < totalCompactCols; c++) {
+      nodesByCol.set(c, [])
+    }
+    nodes.forEach((n) => {
+      const col = getNodeColumn(n)
+      nodesByCol.get(col)!.push(n)
+    })
+
+    // Map zur Speicherung der endgültig berechneten Y-Koordinaten
+    const assignedYMap = new Map<string, number>()
+
+    // Finden der "primären" Spalte (Local Sensors falls vorhanden, sonst Spalte 0)
+    const sensorColIndex = rawToCompactCol.has(1) ? rawToCompactCol.get(1)! : 0
+    const primaryColIndex = nodesByCol.get(sensorColIndex)?.length ? sensorColIndex : 0
+
+    // 1. Primäre Spalte platzieren (Lokale Sensoren / Hauptgeräte)
+    const primaryNodes = nodesByCol.get(primaryColIndex) || []
+    primaryNodes.sort((a, b) => {
+      const iaA = getNodeIa(a)
+      const iaB = getNodeIa(b)
+      if (iaA !== iaB) return iaA - iaB
+      return getNodeName(a).localeCompare(getNodeName(b))
+    })
+
+    let curPrimaryY = 80
+    primaryNodes.forEach((n) => {
+      assignedYMap.set(n.id, curPrimaryY)
+      placedIds.add(n.id)
+      curPrimaryY += getNodeHeight(n) + VERTICAL_GAP + 16
+    })
+
+    // 2. Linke Spalten platzieren (z. B. external_input vor primaryColIndex)
+    for (let c = primaryColIndex - 1; c >= 0; c--) {
+      const colNodes = nodesByCol.get(c) || []
+
+      // Für jeden Knoten idealen Y-Wert basierend auf verbundenen Ziel-Pins berechnen
+      const idealYList = colNodes.map((n) => {
+        // Kanten von diesem Knoten zu bereits platzierten Knoten
+        const outEdges = validEdges.filter((e) => e.source === n.id && placedIds.has(e.target))
+        if (outEdges.length > 0) {
+          const wireTargets = outEdges.map((e) => {
+            const tgtNode = nodeMap.get(e.target)!
+            const tgtY = assignedYMap.get(tgtNode.id) || 80
+            const tgtHandleRelY = getHandleRelativeY(tgtNode, e.targetHandle, false)
+            return tgtY + tgtHandleRelY
+          })
+          const avgWireY = wireTargets.reduce((a, b) => a + b, 0) / wireTargets.length
+          const myHandleRelY = getHandleRelativeY(n, outEdges[0]?.sourceHandle, true)
+          return { node: n, idealY: avgWireY - myHandleRelY }
+        }
+        return { node: n, idealY: 80 }
+      })
+
+      // Barycenter-Sortierung: Exakt nach idealY sortieren -> KREUZUNGSFREI!
+      idealYList.sort((a, b) => {
+        if (Math.abs(a.idealY - b.idealY) > 5) return a.idealY - b.idealY
+        return getNodeName(a.node).localeCompare(getNodeName(b.node))
+      })
+
+      let curY = 80
+      idealYList.forEach(({ node, idealY }) => {
+        const y = Math.max(idealY, curY)
+        assignedYMap.set(node.id, Math.round(y))
+        placedIds.add(node.id)
+        curY = y + getNodeHeight(node) + VERTICAL_GAP
+      })
+    }
+
+    // 3. Rechte Spalten platzieren (Spalten nach primaryColIndex von links nach rechts)
+    for (let c = primaryColIndex + 1; c < totalCompactCols; c++) {
+      const colNodes = nodesByCol.get(c) || []
+
+      // Für jeden Knoten idealen Y-Wert basierend auf Quell-Pins berechnen
+      const idealYList = colNodes.map((n) => {
+        // Eingehende Kanten von bereits platzierten Vorgängern
+        const inEdges = validEdges.filter((e) => e.target === n.id && placedIds.has(e.source))
+        if (inEdges.length > 0) {
+          const wireSources = inEdges.map((e) => {
+            const srcNode = nodeMap.get(e.source)!
+            const srcY = assignedYMap.get(srcNode.id) || 80
+            const srcHandleRelY = getHandleRelativeY(srcNode, e.sourceHandle, true)
+            return srcY + srcHandleRelY
+          })
+          const avgWireY = wireSources.reduce((a, b) => a + b, 0) / wireSources.length
+          const myHandleRelY = getHandleRelativeY(n, inEdges[0]?.targetHandle, false)
+          return { node: n, idealY: avgWireY - myHandleRelY }
+        }
+
+        // Falls unverbunden: Prüfen ob es ausgehende Kanten gibt
+        const outEdges = validEdges.filter((e) => e.source === n.id && placedIds.has(e.target))
+        if (outEdges.length > 0) {
+          const tgt = nodeMap.get(outEdges[0].target)!
+          const tgtY = assignedYMap.get(tgt.id) || 80
+          return { node: n, idealY: tgtY }
+        }
+
+        return { node: n, idealY: 80 }
+      })
+
+      // Barycenter-Sortierung: Exakt nach idealY sortieren -> KREUZUNGSFREI!
+      idealYList.sort((a, b) => {
+        if (Math.abs(a.idealY - b.idealY) > 5) return a.idealY - b.idealY
+        return getNodeName(a.node).localeCompare(getNodeName(b.node))
+      })
+
+      let curY = 80
+      idealYList.forEach(({ node, idealY }) => {
+        const y = Math.max(idealY, curY)
+        assignedYMap.set(node.id, Math.round(y))
+        placedIds.add(node.id)
+        curY = y + getNodeHeight(node) + VERTICAL_GAP
+      })
+    }
+
+    // 4. Alle berechneten Positionen zusammenführen
+    nodes.forEach((n) => {
+      const col = getNodeColumn(n)
+      const x = colXMap.get(col) ?? (START_X + col * 420)
+      const y = assignedYMap.get(n.id) ?? 80
+      updatedPositions.push({ id: n.id, x, y })
+    })
 
     // Update state immediately
     setNodes((currentNodes) =>

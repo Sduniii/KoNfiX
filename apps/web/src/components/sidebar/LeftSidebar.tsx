@@ -86,9 +86,9 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
       )}
 
       <aside
-        className={`bg-slate-900/95 flex flex-col select-none z-40 transition-transform ${
+        className={`bg-slate-900/95 flex flex-col select-none transition-transform ${
           isOpen
-            ? 'fixed inset-y-0 left-0 w-80 max-w-[85vw] shadow-2xl border-r border-slate-800 flex translate-x-0'
+            ? 'fixed inset-y-0 left-0 w-80 max-w-[85vw] shadow-2xl border-r border-slate-800 flex translate-x-0 z-40'
             : 'hidden lg:flex lg:w-72 lg:border-r lg:border-slate-800 lg:shrink-0'
         }`}
       >

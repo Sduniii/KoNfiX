@@ -88,7 +88,7 @@ export const Header: React.FC<HeaderProps> = ({
   const deviceCount = project?.devices?.length ?? 0
 
   return (
-    <header className="h-14 border-b border-slate-800 bg-slate-900/95 backdrop-blur px-4 flex items-center justify-between select-none z-30 shrink-0 relative">
+    <header className="h-14 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between select-none z-40 shrink-0 relative">
       {/* ========================================================================= */}
       {/* ZONE 1: LINKS (Branding & Zentrales Projekt & ETS Menü)                   */}
       {/* ========================================================================= */}

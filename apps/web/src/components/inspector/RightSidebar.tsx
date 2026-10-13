@@ -281,10 +281,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
       )}
 
       <aside
-        className={`bg-slate-900/95 flex flex-col select-none z-40 transition-transform ${
+        className={`bg-slate-900/95 flex flex-col select-none transition-transform ${
           isOpen
-            ? 'fixed inset-y-0 right-0 w-88 max-w-[90vw] shadow-2xl border-l border-slate-800 flex translate-x-0'
-            : 'hidden xl:flex xl:w-80 xl:xl:w-84 xl:border-l xl:border-slate-800 xl:shrink-0'
+            ? 'fixed inset-y-0 right-0 w-88 max-w-[90vw] shadow-2xl border-l border-slate-800 flex translate-x-0 z-40'
+            : 'hidden xl:flex xl:w-84 xl:border-l xl:border-slate-800 xl:shrink-0'
         }`}
       >
         {/* Header */}
