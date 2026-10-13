@@ -10,9 +10,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "tauri": "tauri",
-    "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build",
+    "tauri": "bun run --cwd ../.. tauri",
+    "desktop:dev": "bun run --cwd ../.. desktop:dev",
+    "desktop:build": "bun run --cwd ../.. desktop:build",
     "bump": "../../tools/bump-version.sh"
   },
   "dependencies": {

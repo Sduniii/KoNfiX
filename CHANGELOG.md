@@ -22,7 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) 
 - **Automated Multi-Platform Packaging:** Added official `tauri-action` GitHub workflow triggering on release tags (`v*`) and manual workflow dispatch across `ubuntu-22.04`, `windows-latest`, and `macos-latest`.
 - **Native Installer Outputs:**
   - **Linux:** Standalone portable `.AppImage` (runs on any Linux distribution without installation) and Debian/Ubuntu `.deb` packages.
-  - **Windows:** Full NSIS Setup-Wizard `.exe` installer and enterprise `.msi` package.
+  - **Windows:** Full NSIS Setup-Wizard `.exe` installer (supports CalVer 2026.x without MSI 255-major limitation).
   - **macOS:** Standard `.dmg` disk image and `.app` bundle.
 - **CI Build Hardening (`ci.yml`):** Added Linux WebKitGTK and GTK development headers to automated CI workflows to guarantee workspace compilation on every commit and pull request.
 

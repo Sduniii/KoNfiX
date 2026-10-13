@@ -201,6 +201,8 @@ if [ "$DO_COMMIT" = true ]; then
     echo "-> Erstelle Git-Commit..."
     git -C "$ROOT_DIR" add \
         crates/knx-core/Cargo.toml \
+        src-tauri/Cargo.toml \
+        src-tauri/tauri.conf.json \
         Cargo.lock \
         apps/web/package.json \
         crates/knx-core/src/server.rs \
